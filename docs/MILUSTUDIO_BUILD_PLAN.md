@@ -1,0 +1,1449 @@
+# MiLuStudio 建设方案与下一会话实施手册
+
+更新时间：2026-05-12  
+定位：给下一次开发会话使用的详细执行依据。  
+硬约束：MiLuStudio 是新的 Windows 原生 AI 漫剧 Agent 产品，不继续套壳旧 MiLuAssistantWeb / MiLuAssistantDesktop，也不把 ArcReel、LumenX、AIComicBuilder 等项目整体搬进来。
+
+## 1. 产品结论
+
+MiLuStudio 要做的是：
+
+> 一个面向普通用户的 Windows 原生 AI 漫剧生产 Agent。用户只通过对话框输入故事、小说片段或创作要求，系统自动完成剧本改编、角色设定、分镜、图片生成、视频生成、配音、字幕、剪辑、质检和导出。用户只在关键节点做确认或修改。
+
+不是：
+
+- 不是通用 AI 助手。
+- 不是无限画布工作台。
+- 不是开放 Skills 市场。
+- 不是要求用户理解模型、参数、工作流节点的专业工具。
+- 不是 Linux / Docker / Web SaaS 优先项目。
+- 不是直接二开 ArcReel / LumenX / AIComicBuilder / LocalMiniDrama。
+
+第一版 MVP：
+
+> 输入 500 到 2000 字中文故事或小说片段，输出 30 到 60 秒竖屏 AI 漫剧视频，并同时提供脚本卡、角色卡、分镜表、图片素材、视频片段、字幕文件和最终 MP4。
+
+## 2. 当前本地目录状态
+
+必须保留的主干与参考项目：
+
+| 本地目录 | 用途 |
+| --- | --- |
+| `D:\code\XiaoLouAI` | 公司现有 Windows 原生主干，作为 MiLuStudio 的架构和工程风格主参考。 |
+| `D:\code\MiLuStudio` | 新项目目录。总控文档统一位于 `D:\code\MiLuStudio\docs`。 |
+| `D:\code\AIComicBuilder` | 漫剧生产链路主参考。重点看剧本导入、角色、分镜、首尾帧、视频合成。 |
+| `D:\code\LocalMiniDrama` | Windows 本地一键体验参考。重点看桌面交付、项目形态、用户低门槛流程。 |
+| `D:\code\lumenx` | 行业 SOP 参考。重点看资产提取、风格定调、分镜图、分镜视频、合成。 |
+| `D:\code\ArcReel-main` | Agent / 任务调度 / SSE / 供应商抽象参考。仅参考思路，不做商业主干。 |
+| `D:\code\Toonflow-app` | Electron 分发、短剧工作台、Skill 文件化思路参考。 |
+| `D:\code\huobao-drama` | 一句话生成短剧、Mastra Agent + skills 参考。注意授权不适合直接商用复制。 |
+| `D:\code\OpenMontage` | Skills、pipeline_defs、FFmpeg / Remotion / 质检 / 成本记录参考。注意 AGPL，仅作概念参考。 |
+
+已清理的本地目录：
+
+- `D:\code\MiLuAssistantWeb`
+- `D:\code\MiLuAssistantDesktop`
+- `D:\code\QwenPaw`
+
+说明：以上删除仅指本地目录清理，不代表删除 GitHub 远端仓库。
+
+## 3. 联网与本地调研结论
+
+### 3.1 推荐主干
+
+主干必须基于 `XiaoLouAI / MiLu` 自有体系：
+
+- React / Vite / TypeScript 前端。
+- Windows 原生部署和交付。
+- `.NET 8 / ASP.NET Core` Control API。
+- PostgreSQL 作为业务事实来源。
+- Windows Worker 负责长任务。
+- Python Sidecar 负责模型工具、文件处理、FFmpeg、AI provider 适配等。
+- Electron / electron-builder / NSIS 负责最终桌面安装包。
+
+原因：
+
+- 老板要的是稳定、简单、可售卖的 Windows 应用。
+- 你已经在 XiaoLouAI 中做过相关架构整理、ChatPanel / Agent Canvas、模型/Skills 菜单、媒体附件、视频设置、项目授权、Windows 原生边界等工作。
+- 自有体系最适合沉淀到公司产品和你的履历里。
+
+### 3.2 参考项目定位
+
+| 项目 | 参考价值 | 是否作为代码主干 | 授权/风险 |
+| --- | --- | --- | --- |
+| [AIComicBuilder](https://github.com/LingyiChen-AI/AIComicBuilder) | 剧本导入、角色提取、角色四视图、智能分镜、首尾帧、视频合成，是最接近漫剧流水线的参考。 | 否 | Apache-2.0，可参考结构和流程，但仍建议自研实现。 |
+| [LocalMiniDrama](https://github.com/xuanyustudio/LocalMiniDrama) | Windows 本地、下载即用、一键流水线，最贴近老板要的易用性。 | 否 | MIT，可参考产品形态。技术栈不作为主干。 |
+| [LumenX](https://github.com/alibaba/lumenx) | 资产提取、风格定调、资产生成、分镜脚本、分镜图、分镜视频、拼接成片 SOP 清晰。 | 否 | MIT，可参考业务流程。UI 不直接照搬。 |
+| [ArcReel](https://github.com/ArcReel/ArcReel) | Agent workflow、SSE 进度、供应商抽象、任务队列、成本追踪可参考。 | 否 | AGPL-3.0，不适合作为商业主干或直接复制代码。 |
+| [Toonflow](https://github.com/HBAI-Ltd/Toonflow-app) | Electron 桌面端、短剧工厂、可编排 Skill 思路。 | 否 | Apache-2.0，可参考打包和产品叙事。 |
+| [Huobao Drama](https://github.com/chatfire-AI/huobao-drama) | 一句话到完整短剧、Mastra Agent + skills。 | 否 | GitHub licenseInfo 为空，README 标注 CC BY-NC-SA 4.0，商业使用风险高，只参考理念。 |
+| [OpenMontage](https://github.com/calesthio/OpenMontage) | 500+ skills、pipeline_defs、FFmpeg、字幕、成本追踪、质检、导出包思路。 | 否 | AGPL-3.0，只参考结构和概念。 |
+
+### 3.3 关键判断
+
+MiLuStudio 不应问“继续二开 ArcReel 还是 LumenX”，而应定为：
+
+> XiaoLouAI / MiLu 自研 Windows 原生主干 + AIComicBuilder 漫剧流程 + LocalMiniDrama 一键桌面体验 + LumenX 行业 SOP + ArcReel / Toonflow / OpenMontage 的 Agent / Skills 调度思想。
+
+## 4. 产品形态
+
+### 4.1 普通用户界面只保留四块
+
+用户界面必须极简：
+
+1. 对话输入区
+   - 用户输入一句话、故事、小说片段、风格要求。
+   - 支持上传 TXT / DOCX / PDF / 图片 / 音频。
+   - 支持选择“极速模式”和“导演模式”。
+
+2. 任务进度流
+   - 显示当前阶段：分析故事、改编脚本、生成角色、生成分镜、生成图片、生成视频、生成配音、生成字幕、剪辑成片、质检、导出。
+   - 使用 SSE 或 WebSocket 实时更新。
+   - 每个阶段显示状态、耗时、费用、是否需要用户确认。
+
+3. 中间结果卡片
+   - 默认折叠。
+   - 高级用户可展开编辑脚本、角色、风格、分镜、图像提示词、视频提示词。
+   - 每张卡都能重新生成、锁定、编辑、确认。
+
+4. 最终交付区
+   - 下载 MP4。
+   - 下载 SRT 字幕。
+   - 下载分镜表。
+   - 下载角色设定。
+   - 下载图片素材包。
+   - 下载工程文件。
+
+### 4.2 不做复杂工作台
+
+第一版不要做：
+
+- 无限画布。
+- 节点拖拽编排。
+- 复杂时间线。
+- 公开 Skill 市场。
+- 第三方插件安装。
+- 多用户协同编辑。
+- SaaS 管理后台。
+
+这些能力可以在第二阶段作为高级模式，但不能阻塞 MVP。
+
+## 5. 技术主线
+
+### 5.1 推荐技术栈
+
+前端：
+
+- React
+- Vite
+- TypeScript
+- Zustand 或 TanStack Query
+- ECharts 仅用于统计，不用于核心创作 UI
+- lucide-react 图标
+
+桌面：
+
+- Electron
+- electron-builder
+- NSIS
+- Windows Installer
+- 本地端口随机分配
+- 托盘和后台进程管理
+
+后端：
+
+- `.NET 8`
+- ASP.NET Core Minimal API 或 Controller API
+- EF Core / Dapper 二选一，优先 EF Core 建模，关键查询可 Dapper
+- PostgreSQL
+
+Worker：
+
+- .NET BackgroundService / Windows Service
+- PostgreSQL `FOR UPDATE SKIP LOCKED` 任务领取
+- PostgreSQL `LISTEN/NOTIFY` 或轮询退化策略
+- 不依赖 Linux、Docker、Celery、Redis 作为核心链路
+
+Python Sidecar：
+
+- Python 3.11
+- FastAPI 或 stdio subprocess 协议二选一
+- FFmpeg 调用
+- 文档解析
+- 模型 provider SDK
+- 图片/视频/音频处理
+- 质量检查
+
+打包：
+
+- 生产目标为 Windows 安装包。
+- 不把 Linux / Docker 写成主要部署方式。
+- 开发期可保留脚本，但产品 README 必须以 Windows 为主。
+
+### 5.2 架构边界
+
+```text
+用户
+  ↓
+MiLuStudio Desktop Shell
+  ↓
+React/Vite UI
+  ↓
+ASP.NET Core Control API
+  ↓
+PostgreSQL: projects / jobs / tasks / assets / skills / costs
+  ↓
+Windows Worker
+  ↓
+Python Sidecar Skills Runtime
+  ↓
+LLM / Image / Video / TTS / STT / FFmpeg / QC Providers
+  ↓
+Artifacts: MP4 / SRT / storyboards / character bible / asset pack
+```
+
+原则：
+
+- UI 只负责展示、确认、编辑，不直接跑模型。
+- Control API 负责权限、项目、任务、状态、成本、资产索引。
+- Worker 负责编排任务和阶段流转。
+- Python Sidecar 负责具体模型调用和文件处理。
+- Skills 是内部生产能力，不开放给用户安装。
+
+## 6. 核心数据模型
+
+第一版建议数据库表按以下顺序设计。
+
+### 6.1 项目与输入
+
+`projects`
+
+- `id`
+- `name`
+- `description`
+- `mode`: `fast` / `director`
+- `status`: `draft` / `running` / `paused` / `completed` / `failed`
+- `target_duration_seconds`
+- `aspect_ratio`: `9:16` / `16:9` / `1:1`
+- `style_preset`
+- `created_at`
+- `updated_at`
+
+`story_inputs`
+
+- `id`
+- `project_id`
+- `source_type`: `text` / `file` / `url`
+- `original_text`
+- `file_asset_id`
+- `language`
+- `word_count`
+- `parsed_at`
+
+### 6.2 剧本与角色
+
+`episodes`
+
+- `id`
+- `project_id`
+- `episode_index`
+- `title`
+- `summary`
+- `script_text`
+- `status`
+
+`characters`
+
+- `id`
+- `project_id`
+- `name`
+- `role_type`: `main` / `supporting` / `extra`
+- `gender`
+- `age_range`
+- `personality`
+- `appearance`
+- `costume`
+- `voice_profile`
+- `consistency_notes`
+
+`character_assets`
+
+- `id`
+- `character_id`
+- `asset_type`: `front` / `three_quarter` / `side` / `back` / `portrait` / `reference`
+- `asset_id`
+- `prompt`
+- `is_locked`
+
+`style_bibles`
+
+- `id`
+- `project_id`
+- `visual_style`
+- `color_palette`
+- `camera_language`
+- `negative_prompt`
+- `reference_asset_ids`
+- `locked`
+
+### 6.3 分镜与生成
+
+`shots`
+
+- `id`
+- `project_id`
+- `episode_id`
+- `shot_index`
+- `duration_seconds`
+- `scene_summary`
+- `dialogue`
+- `narration`
+- `characters`
+- `camera_angle`
+- `camera_motion`
+- `lighting`
+- `composition`
+- `image_prompt`
+- `video_prompt`
+- `status`
+- `user_locked`
+
+`shot_assets`
+
+- `id`
+- `shot_id`
+- `asset_type`: `storyboard_image` / `first_frame` / `last_frame` / `video_clip` / `audio` / `subtitle`
+- `asset_id`
+- `provider`
+- `generation_task_id`
+- `selected`
+
+### 6.4 任务与成本
+
+`production_jobs`
+
+- `id`
+- `project_id`
+- `current_stage`
+- `status`
+- `progress_percent`
+- `started_at`
+- `finished_at`
+- `error_message`
+
+`generation_tasks`
+
+- `id`
+- `job_id`
+- `project_id`
+- `shot_id`
+- `skill_name`
+- `provider`
+- `input_json`
+- `output_json`
+- `status`
+- `attempt_count`
+- `cost_estimate`
+- `cost_actual`
+- `started_at`
+- `finished_at`
+- `error_message`
+
+`cost_ledger`
+
+- `id`
+- `project_id`
+- `task_id`
+- `provider`
+- `model`
+- `unit`
+- `quantity`
+- `estimated_cost`
+- `actual_cost`
+- `created_at`
+
+### 6.5 资产与导出
+
+`assets`
+
+- `id`
+- `project_id`
+- `kind`: `text` / `image` / `video` / `audio` / `subtitle` / `archive`
+- `local_path`
+- `mime_type`
+- `file_size`
+- `sha256`
+- `metadata_json`
+- `created_at`
+
+`export_packages`
+
+- `id`
+- `project_id`
+- `mp4_asset_id`
+- `srt_asset_id`
+- `storyboard_asset_id`
+- `character_bible_asset_id`
+- `asset_zip_id`
+- `created_at`
+
+## 7. 内置 Production Skills 设计
+
+不要叫“插件”，内部叫：
+
+> Production Skills / 生产技能
+
+用户不需要知道这些技能存在，开发者可以维护和版本化它们。
+
+### 7.1 Skill 目录结构
+
+```text
+skills/
+  story_intake/
+    skill.yaml
+    prompt.md
+    schema.input.json
+    schema.output.json
+    executor.py
+    validators.py
+    examples/
+  plot_adaptation/
+  episode_writer/
+  character_bible/
+  style_bible/
+  storyboard_director/
+  image_prompt_builder/
+  video_prompt_builder/
+  image_generation/
+  video_generation/
+  voice_casting/
+  subtitle_generator/
+  music_sfx/
+  auto_editor/
+  quality_checker/
+  export_packager/
+```
+
+### 7.2 每个 Skill 必须包含
+
+`skill.yaml`
+
+- `name`
+- `display_name`
+- `description`
+- `stage`
+- `input_schema`
+- `output_schema`
+- `timeout_seconds`
+- `max_retries`
+- `cost_policy`
+- `required_provider_capabilities`
+- `checkpoint_policy`
+
+`prompt.md`
+
+- 当前技能的系统提示词。
+- 输入字段解释。
+- 输出 JSON 要求。
+- 质量标准。
+- 禁止项。
+
+`schema.input.json`
+
+- 输入 JSON Schema。
+- 禁止自由文本透传到下游。
+
+`schema.output.json`
+
+- 输出 JSON Schema。
+- 所有输出必须可被后续阶段稳定消费。
+
+`executor.py`
+
+- 只做具体执行。
+- 不直接操作数据库。
+- 读入 input JSON，返回 output JSON。
+
+`validators.py`
+
+- 检查字段完整性。
+- 检查角色一致性。
+- 检查分镜数量、时长、字幕长度。
+
+`examples/`
+
+- 放最小输入输出样例。
+- 作为单元测试 fixture。
+
+### 7.3 第一版 Skill 清单
+
+| Skill | 输入 | 输出 | 用户是否停顿 |
+| --- | --- | --- | --- |
+| `story_intake` | 原文、目标时长、风格 | 故事摘要、类型、风险提示 | 否 |
+| `plot_adaptation` | 故事摘要、目标时长 | 短视频剧情结构 | 可选 |
+| `episode_writer` | 剧情结构 | 单集脚本、旁白、对白 | 是 |
+| `character_bible` | 脚本 | 角色卡、外貌、服装、性格 | 是 |
+| `style_bible` | 脚本、角色 | 画风、色调、镜头语言 | 是 |
+| `storyboard_director` | 脚本、角色、风格 | 分镜列表、景别、运镜、时长 | 是 |
+| `image_prompt_builder` | 分镜、角色、风格 | 图像提示词、负向提示词 | 否 |
+| `image_generation` | 图像提示词、参考图 | 分镜图/首帧/尾帧 | 可选 |
+| `video_prompt_builder` | 分镜图、分镜信息 | 视频提示词 | 否 |
+| `video_generation` | 首帧/尾帧、视频提示词 | 视频片段 | 可选 |
+| `voice_casting` | 角色、台词 | 配音任务、音色映射 | 是 |
+| `subtitle_generator` | 旁白、对白、音频 | SRT 字幕 | 否 |
+| `music_sfx` | 风格、剧情节奏 | BGM / SFX 建议或素材 | 可选 |
+| `auto_editor` | 视频片段、音频、字幕 | 粗剪成片 | 否 |
+| `quality_checker` | 所有中间结果 | 问题报告、可自动重试项 | 是 |
+| `export_packager` | 最终成片和素材 | MP4/SRT/ZIP/工程文件 | 否 |
+
+## 8. 工作流状态机
+
+第一版必须做成强状态机，不能让 Agent 随意跳步骤。
+
+```text
+CREATED
+  -> STORY_INGESTING
+  -> PLOT_ADAPTING
+  -> SCRIPT_READY_FOR_REVIEW
+  -> CHARACTER_BUILDING
+  -> CHARACTER_READY_FOR_REVIEW
+  -> STYLE_BUILDING
+  -> STYLE_READY_FOR_REVIEW
+  -> STORYBOARD_BUILDING
+  -> STORYBOARD_READY_FOR_REVIEW
+  -> IMAGE_PROMPTS_BUILDING
+  -> IMAGES_GENERATING
+  -> IMAGES_READY_FOR_REVIEW
+  -> VIDEO_PROMPTS_BUILDING
+  -> VIDEOS_GENERATING
+  -> VIDEOS_READY_FOR_REVIEW
+  -> AUDIO_GENERATING
+  -> SUBTITLES_GENERATING
+  -> EDITING
+  -> QUALITY_CHECKING
+  -> READY_FOR_FINAL_REVIEW
+  -> EXPORTING
+  -> COMPLETED
+```
+
+失败状态：
+
+- `FAILED_RETRYABLE`
+- `FAILED_NEEDS_USER`
+- `FAILED_FATAL`
+
+暂停状态：
+
+- `PAUSED_BY_USER`
+- `PAUSED_FOR_COST_CONFIRMATION`
+- `PAUSED_FOR_CONTENT_REVIEW`
+
+## 9. API 设计
+
+### 9.1 项目 API
+
+- `POST /api/projects`
+  - 创建项目。
+  - 输入：项目名、故事文本、目标时长、比例、模式。
+  - 输出：`projectId`。
+
+- `GET /api/projects`
+  - 项目列表。
+
+- `GET /api/projects/{projectId}`
+  - 项目详情。
+
+- `PATCH /api/projects/{projectId}`
+  - 更新项目名称、目标时长、风格、模式。
+
+### 9.2 生产任务 API
+
+- `POST /api/projects/{projectId}/production-jobs`
+  - 启动生产。
+
+- `GET /api/production-jobs/{jobId}`
+  - 获取当前状态。
+
+- `GET /api/production-jobs/{jobId}/events`
+  - SSE 进度流。
+  - 事件类型：`stage_changed`、`task_started`、`task_progress`、`task_completed`、`task_failed`、`checkpoint_required`、`cost_updated`、`artifact_ready`。
+
+- `POST /api/production-jobs/{jobId}/pause`
+
+- `POST /api/production-jobs/{jobId}/resume`
+
+- `POST /api/production-jobs/{jobId}/retry`
+
+### 9.3 审核与编辑 API
+
+- `GET /api/projects/{projectId}/script`
+- `PATCH /api/projects/{projectId}/script`
+- `GET /api/projects/{projectId}/characters`
+- `PATCH /api/projects/{projectId}/characters/{characterId}`
+- `GET /api/projects/{projectId}/storyboard`
+- `PATCH /api/projects/{projectId}/shots/{shotId}`
+- `POST /api/projects/{projectId}/shots/{shotId}/regenerate`
+
+### 9.4 资产 API
+
+- `POST /api/assets/upload`
+- `GET /api/assets/{assetId}`
+- `GET /api/assets/{assetId}/download`
+- `GET /api/projects/{projectId}/assets`
+
+### 9.5 导出 API
+
+- `POST /api/projects/{projectId}/export`
+- `GET /api/export-packages/{packageId}`
+- `GET /api/export-packages/{packageId}/download`
+
+## 10. 前端页面设计
+
+### 10.1 第一版路由
+
+```text
+/
+  项目列表
+/project/:projectId
+  对话入口 + 任务进度 + 中间结果 + 最终交付
+/settings/providers
+  模型供应商配置
+/settings/storage
+  本地存储路径、缓存、清理
+/settings/about
+  版本、日志、诊断
+```
+
+### 10.2 项目页布局
+
+左栏：对话与输入
+
+- 文本输入框。
+- 文件上传按钮。
+- 模式切换：极速 / 导演。
+- 目标时长选择。
+- 比例选择：默认 9:16。
+- “开始生成”按钮。
+
+中栏：任务进度
+
+- 阶段时间线。
+- 每个阶段状态。
+- 当前正在执行的 Skill。
+- 成本预估。
+- 错误提示和重试按钮。
+
+右栏：结果卡片
+
+- 脚本卡。
+- 角色卡。
+- 风格卡。
+- 分镜卡。
+- 图片卡。
+- 视频卡。
+- 配音/字幕卡。
+- 成片卡。
+
+底部或右下：最终交付
+
+- 下载 MP4。
+- 下载 SRT。
+- 下载素材包。
+- 打开输出目录。
+
+### 10.3 用户停顿点
+
+默认只在这些节点停顿：
+
+1. 脚本确认。
+2. 角色确认。
+3. 风格确认。
+4. 分镜确认。
+5. 图片结果确认。
+6. 视频结果确认。
+7. 最终质检确认。
+
+极速模式可以跳过中间确认，但必须在成本明显增加前提示用户。
+
+### 10.4 前端质量约束
+
+如果当前 Codex 会话可用，前端代码和视觉验收前优先调用这些前端优化 Skills：
+
+- `frontend-skill`
+- `playwright-interactive`
+- `impeccable`
+- `taste-skill` / `gpt-taste`
+
+使用目标：
+
+- 检查布局是否稳定、文本是否溢出、控件是否清晰。
+- 检查页面是否像可用工作台，而不是营销页。
+- 检查移动端和桌面端是否都能正常阅读和操作。
+- 检查视觉风格是否克制、专业、符合 Windows 原生 AI 漫剧生产工具定位。
+
+如果这些 Skills 在当前会话不可见，必须至少完成本地构建、可运行页面验证和人工视觉自检。
+
+## 11. 后端目录建议
+
+下一会话如果开始搭建，建议目录：
+
+```text
+D:\code\MiLuStudio\
+  README.md
+  docs\
+    MILUSTUDIO_BUILD_PLAN.md
+    MILUSTUDIO_PHASE_PLAN.md
+    MILUSTUDIO_TASK_RECORD.md
+    MILUSTUDIO_HANDOFF.md
+    ARCHITECTURE.md
+    PRODUCT_SPEC.md
+    SKILLS_SPEC.md
+    DATA_MODEL.md
+    WINDOWS_PACKAGING.md
+    REFERENCE_PROJECTS.md
+  apps\
+    desktop\
+      package.json
+      electron\
+      src\
+    web\
+      package.json
+      src\
+  backend\
+    control-plane\
+      MiLuStudio.ControlPlane.sln
+      src\
+        MiLuStudio.Api\
+        MiLuStudio.Application\
+        MiLuStudio.Domain\
+        MiLuStudio.Infrastructure\
+        MiLuStudio.Worker\
+      tests\
+    sidecars\
+      python-skills\
+        pyproject.toml
+        milu_studio_skills\
+        skills\
+  packages\
+    shared-types\
+    ui\
+  scripts\
+    windows\
+    dev\
+  storage\
+    .gitkeep
+  samples\
+    stories\
+    outputs\
+```
+
+注意：
+
+- `storage/` 只存本地运行数据，默认加入 `.gitignore`。
+- `samples/outputs/` 可以保存无敏感样例，真实用户素材必须忽略。
+- 后端不要拆得过细，先保证 MVP 贯通。
+
+## 12. 详细实施步骤
+
+### 阶段 0：项目初始化
+
+目标：让 MiLuStudio 成为独立项目，而不是旧项目改名。
+
+步骤：
+
+1. 在 `D:\code\MiLuStudio` 初始化 Git。
+2. 添加根 `.gitignore`。
+3. 添加 `README.md`，只写项目定位和开发状态。
+4. 确认总控文档保留在 `docs/`。
+5. 添加 `docs/REFERENCE_PROJECTS.md`，记录参考项目和授权边界。
+6. 添加 `docs/PRODUCT_SPEC.md`，记录 MVP 范围。
+7. 不复制参考项目源码。
+8. 不引入旧 MiLuAssistantWeb / Desktop 代码。
+
+验收：
+
+- `git status` 干净。
+- 根目录没有 Node / Python / .NET 混乱依赖。
+- 文档能说明 MiLuStudio 与旧 MiLuAssistant 项目的区别。
+
+### 阶段 1：前端壳
+
+目标：先做可运行的 UI 壳，不接模型。
+
+步骤：
+
+1. 创建 `apps/web`。
+2. 使用 Vite + React + TypeScript。
+3. 建立三栏项目页。
+4. 创建静态 mock 数据。
+5. 实现任务进度流 mock。
+6. 实现结果卡片 mock。
+7. 实现“极速模式 / 导演模式”切换。
+8. 实现“开始生成”按钮，但只触发 mock 状态变化。
+9. 如果可用，调用前端优化 Skills 做视觉和交互自检。
+
+验收：
+
+- `npm run dev` 可启动。
+- 首页能进入项目页。
+- 项目页能显示对话区、进度区、结果区、交付区。
+- 无大段说明性营销文案。
+- UI 不出现复杂画布。
+
+参考：
+
+- `D:\code\XiaoLouAI\XIAOLOU-main\src\features\canvas-agent-canvas`
+- `D:\code\AIComicBuilder\src\app\[locale]\project\[id]`
+- `D:\code\LocalMiniDrama\frontweb`
+
+### 阶段 2：数据模型和 Control API
+
+目标：建立项目、任务、资产、分镜、角色的最小可用后端。
+
+步骤：
+
+1. 创建 `backend/control-plane`。
+2. 建立 `.NET 8` solution。
+3. 创建 `Api`、`Application`、`Domain`、`Infrastructure`、`Worker` 项目。
+4. 配置 PostgreSQL 连接。
+5. 添加 migrations。
+6. 建立 `projects`、`story_inputs`、`characters`、`shots`、`assets`、`production_jobs`、`generation_tasks` 表。
+7. 实现 `POST /api/projects`。
+8. 实现 `GET /api/projects/{id}`。
+9. 实现 `POST /api/projects/{id}/production-jobs`。
+10. 实现 `GET /api/production-jobs/{id}`。
+11. 实现 `GET /api/production-jobs/{id}/events` SSE。
+
+验收：
+
+- 可以创建项目。
+- 可以启动生产任务。
+- 前端可以看到真实 jobId。
+- SSE 能推送 mock 进度。
+
+参考：
+
+- `D:\code\XiaoLouAI\backend\dotnet\control-plane`
+- `D:\code\ArcReel-main\server`
+
+### 阶段 3：任务状态机
+
+目标：让生产流程可控、可恢复、可暂停。
+
+步骤：
+
+1. 定义 `ProductionStage` enum。
+2. 定义合法状态迁移表。
+3. 实现 `ProductionJobService`。
+4. 实现 `TaskQueueService`。
+5. Worker 使用 PostgreSQL 领取待执行 task。
+6. 每个 task 失败后记录错误、attempt_count、是否可重试。
+7. 实现暂停、恢复、重试。
+8. 实现阶段 checkpoint。
+
+验收：
+
+- 任意阶段失败不会导致项目状态丢失。
+- 刷新前端后仍能恢复进度。
+- 用户确认后才能继续 checkpoint 阶段。
+
+参考：
+
+- ArcReel 的 async task queue / SSE 思路。
+- OpenMontage 的 checkpoint protocol 思路。
+
+### 阶段 4：Python Skills Runtime
+
+目标：跑通第一个内部 Skill。
+
+步骤：
+
+1. 创建 `backend/sidecars/python-skills`。
+2. 使用 Python 3.11。
+3. 创建 `milu_studio_skills` 包。
+4. 定义统一 CLI：
+   - `python -m milu_studio_skills run --skill story_intake --input input.json --output output.json`
+5. 创建 `skills/story_intake`。
+6. 添加 `skill.yaml`。
+7. 添加 `schema.input.json` 和 `schema.output.json`。
+8. 添加 `prompt.md`。
+9. 添加 `executor.py`。
+10. 添加 `validators.py`。
+11. 添加单元测试。
+
+验收：
+
+- .NET Worker 能调用 Python skill。
+- 输入 JSON 输出 JSON。
+- 输出能被写回数据库。
+
+参考：
+
+- `D:\code\huobao-drama\skills`
+- `D:\code\OpenMontage\skills`
+- `D:\code\ArcReel-main\agent_runtime_profile\.claude\skills`
+
+### 阶段 5：故事解析到脚本
+
+目标：输入故事，生成可审阅脚本。
+
+步骤：
+
+1. 实现 `story_intake`。
+2. 实现 `plot_adaptation`。
+3. 实现 `episode_writer`。
+4. 保存 `episodes.script_text`。
+5. 前端显示脚本卡。
+6. 用户可编辑脚本。
+7. 用户确认后进入角色阶段。
+
+验收：
+
+- 输入 500 字故事，能得到 30 到 60 秒脚本。
+- 脚本包含旁白和对白。
+- 句子长度适合配音和字幕。
+
+参考：
+
+- AIComicBuilder 的 `src/app/api/projects/[id]/import`
+- LumenX 的 Script / entity extraction SOP。
+
+### 阶段 6：角色和风格
+
+目标：生成稳定的角色设定和统一画风。
+
+步骤：
+
+1. 实现 `character_bible`。
+2. 输出角色名、身份、性格、外貌、服装、声音。
+3. 实现 `style_bible`。
+4. 输出画风、色调、镜头语言、负向提示词。
+5. 前端显示角色卡和风格卡。
+6. 支持用户锁定角色设定。
+7. 支持上传角色参考图。
+
+验收：
+
+- 主角能保持跨镜头一致性描述。
+- 风格提示词能被后续图片和视频阶段复用。
+- 用户修改角色后下游分镜能使用新设定。
+
+参考：
+
+- AIComicBuilder 角色四视图。
+- LumenX 资产提取和 Art Direction。
+- LocalMiniDrama 角色库和场景库。
+
+### 阶段 7：分镜
+
+目标：生成可执行的镜头列表。
+
+步骤：
+
+1. 实现 `storyboard_director`。
+2. 每个镜头包含：时长、场景、角色、景别、运镜、灯光、对白、旁白。
+3. 对总时长做校验。
+4. 前端显示分镜表。
+5. 支持用户增删改分镜。
+6. 支持单个镜头重新生成。
+
+验收：
+
+- 30 到 60 秒项目默认 6 到 12 个镜头。
+- 每个镜头都能单独生成图片和视频。
+- 镜头时长总和接近目标时长。
+
+参考：
+
+- AIComicBuilder 的 `src/app/api/projects/[id]/shots`
+- LumenX StoryBoard。
+- OpenMontage pipeline_defs。
+
+### 阶段 8：图片生成
+
+目标：生成分镜图、角色图、首帧/尾帧。
+
+步骤：
+
+1. 实现 `image_prompt_builder`。
+2. 实现 provider abstraction：
+   - OpenAI image
+   - Gemini Imagen
+   - Kling image
+   - 可扩展国产模型
+3. 实现 `image_generation`。
+4. 保存每个镜头的首帧/尾帧。
+5. 记录成本。
+6. 前端允许用户选中最佳图片。
+7. 支持失败重试。
+
+验收：
+
+- 每个分镜至少有一张可用图。
+- 图像资产写入 `assets`。
+- `shot_assets.selected=true` 只允许一个当前有效版本。
+
+参考：
+
+- AIComicBuilder 首尾帧生成。
+- LumenX Assets / StoryBoard。
+- ArcReel 多 provider 抽象。
+
+### 阶段 9：视频生成
+
+目标：根据分镜图生成视频片段。
+
+步骤：
+
+1. 实现 `video_prompt_builder`。
+2. 实现 video provider interface。
+3. 支持图生视频优先。
+4. 支持文生视频作为退化方案。
+5. 支持单镜头重试。
+6. 记录模型、耗时、费用。
+7. 保存视频片段到资产库。
+
+验收：
+
+- 每个镜头有独立视频片段。
+- 失败镜头不影响其他镜头完成。
+- 用户可以重新生成单个镜头。
+
+参考：
+
+- AIComicBuilder 视频生成。
+- LumenX Motion。
+- ArcReel multi-provider video generation。
+- OpenMontage video-gen prompting。
+
+### 阶段 10：音频、字幕、剪辑
+
+目标：输出完整 MP4。
+
+步骤：
+
+1. 实现 `voice_casting`。
+2. 支持角色音色选择。
+3. 实现 TTS provider interface。
+4. 实现 `subtitle_generator`。
+5. 生成 SRT。
+6. 实现 `auto_editor`。
+7. 使用 FFmpeg 拼接视频。
+8. 混入配音、BGM、SFX。
+9. 烧录或外挂字幕可选。
+10. 输出 MP4。
+
+验收：
+
+- 生成 MP4 可播放。
+- 字幕时间轴基本对齐。
+- 音量不过载。
+- 输出目录包含 MP4、SRT、素材包。
+
+参考：
+
+- OpenMontage `skills/core/ffmpeg.md`
+- OpenMontage `skills/core/subtitle-sync.md`
+- LumenX Assembly。
+
+### 阶段 11：质量检查
+
+目标：避免“一键生成”变成“一键失败”。
+
+步骤：
+
+1. 实现 `quality_checker`。
+2. 检查角色是否前后矛盾。
+3. 检查分镜时长是否达标。
+4. 检查字幕是否过长。
+5. 检查视频是否黑屏、卡顿、水印、尺寸错误。
+6. 检查文件是否缺失。
+7. 输出可读报告。
+8. 对可自动修复项自动重试。
+
+验收：
+
+- 用户能看到失败原因。
+- 可重试项能从失败镜头继续，不重跑全流程。
+- 报告能保存到项目资产。
+
+参考：
+
+- OpenMontage reviewer / quality skills。
+- ArcReel checkpoint resume 思路。
+
+### 阶段 12：桌面打包
+
+目标：形成老板可演示、可售卖的 Windows 安装包。
+
+步骤：
+
+1. 创建 `apps/desktop`。
+2. 使用 Electron 承载 Web UI。
+3. 启动本地 Control API。
+4. 启动 Windows Worker。
+5. 启动 Python Sidecar。
+6. 随机端口绑定。
+7. 首次启动初始化数据库和 storage。
+8. 托盘菜单：打开、重启服务、打开输出目录、查看日志、退出。
+9. 使用 electron-builder + NSIS 打包。
+10. 生成 `MiLuStudio-Setup-<version>.exe`。
+
+验收：
+
+- 干净 Windows 环境安装后可启动。
+- 用户无需手动启动后端。
+- 卸载不删除用户生成素材，除非用户选择。
+- 日志可定位错误。
+
+参考：
+
+- XiaoLouAI Windows 原生方向。
+- MiLuAssistantDesktop 的经验，但不复制旧项目。
+- Toonflow electron-builder 配置。
+- LocalMiniDrama 桌面本地体验。
+
+## 13. 模型与供应商策略
+
+### 13.1 Provider 分类
+
+`TextProvider`
+
+- 剧本解析。
+- 角色抽取。
+- 分镜生成。
+- 提示词生成。
+- 质检。
+
+`ImageProvider`
+
+- 角色图。
+- 场景图。
+- 分镜图。
+- 首帧/尾帧。
+
+`VideoProvider`
+
+- 文生视频。
+- 图生视频。
+- 首尾帧视频。
+
+`AudioProvider`
+
+- TTS。
+- 音色试听。
+- BGM / SFX。
+
+`EditProvider`
+
+- FFmpeg。
+- Remotion 可选。
+- 字幕对齐。
+
+### 13.2 第一版配置页
+
+只暴露：
+
+- API Key。
+- 默认文本模型。
+- 默认图片模型。
+- 默认视频模型。
+- 默认配音模型。
+- 单项目成本上限。
+- 失败重试次数。
+
+不要暴露：
+
+- Prompt 工程细节。
+- Skill 文件路径。
+- 复杂 pipeline 图。
+- provider 内部参数全集。
+
+## 14. 成本与安全
+
+必须从第一版开始记录成本。
+
+每个任务记录：
+
+- 使用了哪个 provider。
+- 使用了哪个 model。
+- 输入 token / 图片张数 / 视频秒数 / 音频秒数。
+- 预计费用。
+- 实际费用。
+- 失败次数。
+- 是否重试。
+
+安全要求：
+
+- API Key 只存在本机。
+- 不把用户故事、图片、音频上传到自有服务器。
+- 不提交 `.env`、真实素材、输出视频、服务账号。
+- 所有本地生成数据放入 `storage/` 或用户数据目录。
+- Git 默认忽略 `storage/`、`outputs/`、`logs/`、`.env*`、`*.mp4`、`*.wav` 等。
+
+## 15. 下一会话建议执行顺序
+
+下一会话不要直接大规模写业务逻辑。按这个顺序做：
+
+1. 确认本文件。
+2. 初始化 MiLuStudio Git 仓库。
+3. 添加根 `.gitignore`。
+4. 添加 `README.md`。
+5. 添加 `docs/REFERENCE_PROJECTS.md`。
+6. 添加 `docs/PRODUCT_SPEC.md`。
+7. 搭 `apps/web` 前端壳。
+8. 做 mock 流程。
+9. 再搭 `.NET Control API`。
+10. 再搭 Python Skills Runtime。
+11. 再接第一条真实 skill：`story_intake`。
+
+如果时间不够，第一轮只做 1 到 8。
+
+## 16. 下一会话开工提示词
+
+可以直接对 Codex 说：
+
+```text
+读取 D:\code\MiLuStudio\docs\MILUSTUDIO_BUILD_PLAN.md，按文档阶段 0 和阶段 1 开始搭建 MiLuStudio。先初始化项目、添加 .gitignore、README、docs/REFERENCE_PROJECTS.md、docs/PRODUCT_SPEC.md，然后搭建 apps/web 的 Vite React TypeScript UI 壳。注意不要复制参考项目源码，不要引入 Linux/Docker 作为生产依赖，不要实现复杂无限画布，优先完成可运行的 Windows 原生 AI 漫剧 Agent 产品骨架。
+```
+
+## 17. 需要避免的偏离
+
+- 不要把 ArcReel 当主仓库。
+- 不要把 LumenX UI 直接搬过来。
+- 不要把 AIComicBuilder 的 Next.js 架构作为主干。
+- 不要把 LocalMiniDrama 的 Vue / Express 技术栈作为主干。
+- 不要开放公共 skill 市场。
+- 不要让用户配置复杂模型参数。
+- 不要第一版做完整长剧。
+- 不要第一版做多用户协作。
+- 不要第一版做云端 SaaS。
+- 不要把 Docker 写成生产必需。
+
+## 18. MVP 完成标准
+
+技术上：
+
+- Windows 本地启动。
+- 前端可用。
+- 后端可用。
+- Worker 可跑。
+- Python Skill 可执行。
+- SSE 进度可显示。
+- PostgreSQL 数据可恢复。
+- 资产可下载。
+
+产品上：
+
+- 用户输入故事。
+- 系统生成脚本。
+- 系统生成角色。
+- 系统生成分镜。
+- 系统生成图片。
+- 系统生成视频。
+- 系统生成字幕。
+- 系统合成 MP4。
+- 用户可以在关键节点确认和修改。
+
+简历表达上：
+
+> 负责从 0 到 1 规划并搭建 Windows 原生 AI 漫剧 Agent 产品 MiLuStudio，基于 XiaoLouAI 现有工程体系，调研 AIComicBuilder、LumenX、LocalMiniDrama、ArcReel、Toonflow、OpenMontage 等开源项目后，沉淀出内置 Production Skills、任务状态机、SSE 进度、成本追踪和一键成片工作流。
+
+## 19. 文档、任务记录和阶段自检约束
+
+本节是长期协作约束。除非产品方向、架构边界、阶段验收标准或联网自检结果发生变化，否则不要轻易修改本文件。
+
+### 19.1 文件分工
+
+- `docs\MILUSTUDIO_BUILD_PLAN.md` 是总参考。
+- `docs\MILUSTUDIO_PHASE_PLAN.md` 是总任务阶段安排。
+- `docs\MILUSTUDIO_TASK_RECORD.md` 是修改总记录和阶段自检记录。
+- `docs\MILUSTUDIO_HANDOFF.md` 是短棒交接，只记录当前阶段、下一棒提示词和最新风险。
+
+更新顺序：
+
+1. 先读总参考。
+2. 再读总任务阶段安排。
+3. 再读修改总记录。
+4. 最后读短棒交接。
+5. 大阶段结束后先更新总任务阶段安排。
+6. 再把本地验证、联网自检和修改原因写入总任务记录。
+7. 如果联网自检发现方向偏差，先最小修改总参考和总任务阶段安排。
+8. 最后更新短棒交接。
+
+### 19.2 PowerShell 友好文档格式
+
+项目内所有 Markdown 文档必须便于 PowerShell 阅读。
+
+要求：
+
+- 使用 UTF-8 Markdown。
+- 优先使用普通标题、短段落、普通列表和 `text` 代码块。
+- 尽量避免宽表格、超长单行、隐藏折叠块和依赖网页渲染的格式。
+- 路径使用 Windows 路径，例如 `D:\code\MiLuStudio`。
+- 除根 `README.md` 外，长期说明、阶段计划和专题文档优先放入 `docs/`。
+- 关键 owner、决策、验证命令、下一步任务尽量一事一行。
+- 新增文档后必须能用 `Get-Content -Encoding UTF8` 正常阅读。
+
+### 19.3 大阶段结束后的联网自检
+
+每个大阶段结束后必须联网搜索一次，确认下一步没有偏离当前开源生态、模型能力、授权边界和 Windows 原生目标。
+
+自检步骤：
+
+1. 总结本阶段实际完成内容。
+2. 联网搜索同类 AI 漫剧、AI 视频 Agent、桌面端一键生成、Production Skills、模型 provider 或 Windows 打包方案的最新变化。
+3. 对照本文件的产品定位和技术约束。
+4. 如果发现偏差，先更新 `docs\MILUSTUDIO_BUILD_PLAN.md` 的相关总约束。
+5. 再更新 `docs\MILUSTUDIO_PHASE_PLAN.md` 的阶段任务、验收和下一步安排。
+6. 将本地验证、联网自检、偏差原因和修改摘要写入 `docs\MILUSTUDIO_TASK_RECORD.md`。
+7. 最后更新 `docs\MILUSTUDIO_HANDOFF.md`，给下一棒留下短记录。
+
+注意：
+
+- 联网自检不是为了追新功能，而是为了防止方向跑偏。
+- 发现 AGPL、非商业授权、云端 SaaS 优先、Linux/Docker 依赖增强等风险时，必须在记录中明确标注。
+- 没有偏差也要在总任务记录中留下自检摘要。
+
+### 19.4 总需求覆盖
+
+总需求必须长期保持：
+
+- MiLuStudio 是新的项目，不覆盖旧 MiLuAssistantWeb / MiLuAssistantDesktop。
+- 旧 MiLuAssistant 项目只作为历史经验，不作为新项目代码来源。
+- XiaoLouAI / MiLu 自有体系是主干。
+- 产品优先 Windows 原生、稳定、简单、可售卖。
+- 用户角色是决策层，不是技术配置者。
+- Skills 是内置 Production Skills，不开放为公共插件市场。
+- 参考项目只参考流程、数据结构、调度思想和交付形态。
+- 每个阶段都要有明确验收标准、验证记录和下一棒提示词。
+- 根目录保持简洁，长期文档统一归入 `docs/`，实现目录优先按路由或功能聚合。
+- 依赖、配置、运行文件、缓存、日志、数据库、上传素材和生成结果必须约束在 `D:\code\MiLuStudio` 或明确的 D 盘工具目录内。
+- Python、Node.js、.NET、Electron 等外部依赖如需安装或下载缓存，必须限制在 D 盘，不得污染 C 盘。
+
+### 19.5 软件设计硬约束
+
+实际编码必须符合高内聚、低耦合、职责单一、关注点分离和依赖倒置等原则。  
+这些原则是编码期硬约束，但不能变成阻碍功能落地的空转抽象。
+
+核心约束：
+
+- 一个模块只围绕一个稳定业务能力组织代码，例如 project、chat、task、skill、asset、provider、packaging。
+- 前端、后端和内部 Production Skills 的目录优先按路由或功能域聚合，不按零散文件类型铺开。
+- 高频变化点必须隐藏在模块边界后，例如模型供应商、图片/视频生成 API、FFmpeg 调用、文件存储、任务队列、Windows 打包方式。
+- UI 不直接访问数据库、文件系统、模型 SDK、FFmpeg 或 Python 脚本。
+- 前端只通过 Control API 和清晰 DTO 获取状态、提交操作和展示结果。
+- .NET Control API 负责鉴权、任务编排、状态推进、资产索引和 Sidecar 调用，不承载具体 AI 生成细节。
+- Python Sidecar / Skills Runtime 只负责具体生产技能执行，通过稳定输入输出协议和主系统通信。
+- 模型 provider、存储 provider、队列 provider、视频处理 provider 必须作为 adapter 或 service 边界隔离。
+- 禁止跨层反向依赖和循环依赖。
+- 禁止为了省事让 UI、Control API、Worker、Python Skill 共享隐式全局状态。
+- 新增抽象必须服务于真实变化点、测试隔离或重复逻辑收敛；不要为了“看起来架构完整”提前堆接口。
+- 如果 MVP 为了先跑通功能必须临时直连某能力，必须把直连限制在单一 adapter / gateway 内，并在 `docs\MILUSTUDIO_TASK_RECORD.md` 记录技术债和后续收敛点。
+
+编码检查项：
+
+- 这个文件或模块的职责能不能用一句话说清。
+- 修改一个 provider 是否不会影响 UI 和业务编排。
+- 修改一个页面是否不会影响任务状态机和 Python Skill。
+- 修改一个 Skill 是否只需要调整 Skill 输入输出协议和 adapter。
+- 是否存在跨层直接 new、直接读写文件、直接调用外部 SDK、直接拼接协议字段的泄漏。
+- 是否存在为了复用而把无关业务塞进同一个 helper / utils 的低内聚模块。
+- 是否存在功能还没出现就提前设计的大型抽象。
+
+参考原则来源：
+
+- Parnas, On the Criteria To Be Used in Decomposing Systems into Modules: `https://citeseerx.ist.psu.edu/document?doi=5d752e29e29b42cc509417699a98d9dca8212c83&repid=rep1&type=pdf`
+- Robert C. Martin, The Single Responsibility Principle: `https://blog.cleancoder.com/uncle-bob/2014/05/08/SingleReponsibilityPrinciple.html`
+- Martin Fowler, YAGNI: `https://martinfowler.com/bliki/Yagni.html`
+
+### 19.6 D 盘封闭环境约束
+
+MiLuStudio 的依赖、配置、运行文件和生成数据必须尽量封闭在主项目目录内。  
+如果某些基础运行时必须放在项目外，也只能放在 D 盘，例如 `D:\dev` 或 `D:\tools`。  
+无论如何不得主动向 C 盘写入项目依赖、缓存、配置、运行数据或生成素材。
+
+项目内优先目录：
+
+```text
+D:\code\MiLuStudio\.tools
+D:\code\MiLuStudio\.venv
+D:\code\MiLuStudio\.cache
+D:\code\MiLuStudio\.config
+D:\code\MiLuStudio\.tmp
+D:\code\MiLuStudio\.nuget
+D:\code\MiLuStudio\.ms-playwright
+D:\code\MiLuStudio\node_modules
+D:\code\MiLuStudio\runtime
+D:\code\MiLuStudio\storage
+D:\code\MiLuStudio\uploads
+D:\code\MiLuStudio\outputs
+D:\code\MiLuStudio\logs
+```
+
+外部工具目录只允许使用 D 盘：
+
+```text
+D:\dev
+D:\tools
+D:\models
+```
+
+运行环境必须显式约束常见缓存位置：
+
+```text
+TMP=D:\code\MiLuStudio\.tmp
+TEMP=D:\code\MiLuStudio\.tmp
+npm_config_cache=D:\code\MiLuStudio\.cache\npm
+PNPM_HOME=D:\code\MiLuStudio\.cache\pnpm
+COREPACK_HOME=D:\code\MiLuStudio\.cache\corepack
+YARN_CACHE_FOLDER=D:\code\MiLuStudio\.cache\yarn
+PIP_CACHE_DIR=D:\code\MiLuStudio\.cache\pip
+PIP_CONFIG_FILE=D:\code\MiLuStudio\.config\pip\pip.ini
+PYTHONUSERBASE=D:\code\MiLuStudio\.python-userbase
+NUGET_PACKAGES=D:\code\MiLuStudio\.nuget\packages
+DOTNET_CLI_HOME=D:\code\MiLuStudio\.dotnet
+ELECTRON_CACHE=D:\code\MiLuStudio\.cache\electron
+ELECTRON_BUILDER_CACHE=D:\code\MiLuStudio\.cache\electron-builder
+PLAYWRIGHT_BROWSERS_PATH=D:\code\MiLuStudio\.ms-playwright
+HF_HOME=D:\code\MiLuStudio\.cache\huggingface
+TRANSFORMERS_CACHE=D:\code\MiLuStudio\.cache\huggingface\transformers
+```
+
+禁止事项：
+
+- 不使用默认会写入 `C:\Users\...\AppData` 的全局 npm / pip / NuGet / Electron 缓存。
+- 不使用全局 `npm install -g`、全局 pip 安装或写入用户目录的工具配置。
+- 不把 PostgreSQL、Redis、任务队列、模型缓存、上传素材和生成结果放到 C 盘。
+- 不把 Windows 安装包生成过程中的临时目录、下载缓存和构建产物放到 C 盘。
+- 不把真实用户数据、素材、模型密钥和运行日志提交到 Git。
+
+如果某个工具无法避免写入 C 盘，必须先停下并记录原因，由用户确认是否继续。
+
+### 19.7 目录组织约束
+
+项目目录应保持简洁，参考 `D:\code\XiaoLouAI` 的顶层克制风格。
+
+根目录只放少量入口文件和一级能力目录：
+
+- `README.md`
+- `.gitignore`
+- `docs\`
+- `apps\`
+- `backend\`
+- `packages\`
+- `scripts\`
+- `runtime\`
+- `storage\`
+- `uploads\`
+- `outputs\`
+- `logs\`
+
+组织原则：
+
+- 长期文档、阶段计划、专题说明和交接记录统一放在 `docs\`。
+- 前端目录按路由、页面或业务 feature 聚合，例如 `projects`、`production-console`、`settings`。
+- 后端目录按业务能力和层边界聚合，例如 `project`、`production-job`、`asset`、`provider`、`skill`。
+- Production Skills 按技能目录聚合，每个技能保留自己的 schema、prompt、executor、validator 和 examples。
+- 不为了“分类整齐”把同一个功能拆散到多个低信息量目录。
+- 新增顶层目录前必须确认它代表稳定的一类能力，而不是临时文件收纳箱。
