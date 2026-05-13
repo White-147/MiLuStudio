@@ -1091,3 +1091,199 @@ Next phase:
 - Stage 10 音频、字幕、剪辑边界。
 - 建议基于 `video_generation` mock clips、`episode_writer` subtitle cues 和现有 storyboard timing 先实现 `voice_casting` / `subtitle_generator` / `auto_editor` 的内部边界。
 - 继续不接真实 TTS、BGM、FFmpeg 或数据库；真实音视频文件写入和最终 MP4 仍留给后续 provider / adapter / packaging 阶段。
+
+### 2026-05-13 Stage 10 完成
+
+Date:
+
+- 2026-05-13
+
+Stage:
+
+- Stage 10 音频、字幕、剪辑边界。
+
+Local verification:
+
+- 已新增 `skills\voice_casting`，包含 `skill.yaml`、`prompt.md`、input/output schema、executor、validators 和 examples。
+- 已新增 `skills\subtitle_generator`，包含 `skill.yaml`、`prompt.md`、input/output schema、executor、validators 和 examples。
+- 已新增 `skills\auto_editor`，包含 `skill.yaml`、`prompt.md`、input/output schema、executor、validators 和 examples。
+- `SkillGateway.default()` 已注册 `voice_casting`、`subtitle_generator` 和 `auto_editor`。
+- `voice_casting` 输入 `episode_writer` 和 `storyboard_director` envelopes，输出 narrator / speaker voice profiles、逐段 `voice_tasks`、逻辑音频 asset intent、零成本估算和 `checkpoint.required=true`。
+- `subtitle_generator` 输入 `episode_writer`、`storyboard_director` 和 `voice_casting` envelopes，输出 `subtitle_cues`、SRT 文本结构、逻辑字幕 asset intent 和 review warnings。
+- `auto_editor` 输入 `storyboard_director`、`video_generation`、`voice_casting` 和 `subtitle_generator` envelopes，输出 video / audio / subtitle timeline tracks、rough edit `render_plan`、逻辑 MP4 output intent 和 review warnings。
+- Stage 10 输出均明确 `provider=none`、`model=none`、`file_written=false`、`writes_files=false`、`writes_database=false`、`uses_ffmpeg=false`。
+- 已新增 `tests\test_stage10_audio_subtitle_edit_pipeline.py`，覆盖 Stage 4-10 完整 envelope 链路和三个新 skill 的失败 envelope。
+- 已运行 `D:\soft\program\Python\Python313\python.exe -m compileall -q milu_studio_skills skills tests`，通过。
+- 已运行 `D:\soft\program\Python\Python313\python.exe -m unittest discover -s tests -v`，23 个测试通过。
+- 已运行 `voice_casting`、`subtitle_generator` 和 `auto_editor` examples CLI smoke，均通过并生成 examples output。
+- 已运行 `D:\soft\program\nodejs\npm.ps1 run build`，通过。
+- 默认 `D:\soft\program\dotnet\dotnet.exe build backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore` 曾因正在运行的 `MiLuStudio.Api (7832)` 锁定 Debug DLL 失败；随后改用临时 D 盘输出目录 `-p:OutputPath=D:\code\MiLuStudio\.codex-tmp\control-plane-build\` 验证通过，0 warning / 0 error，并已清理临时目录。
+
+Design check:
+
+- cohesion: `voice_casting` 只负责把脚本段落和分镜 timing 转成配音任务；`subtitle_generator` 只负责把配音任务转成 subtitle cue / SRT-ready 文本；`auto_editor` 只负责把 mock 视频、配音任务和字幕 cue 转成粗剪 timeline / render plan。
+- coupling: Stage 10 仍只通过 `SkillGateway` / CLI envelope 串联；UI 未直接访问数据库、文件系统、模型 SDK、Python 脚本或 FFmpeg。
+- boundaries: 本阶段不写数据库，不写 WAV / SRT / MP4 文件，不调用真实 TTS / BGM / SFX provider，不触发 FFmpeg，不做前端预览或下载。
+- dependency inversion: 真实 `AudioProvider`、BGM/SFX、FFmpeg render adapter、存储 provider、成本记录、重试和资产持久化保留在后续 adapter / Control API / export packaging 边界。
+- temporary debt: 音色试听、真实配音、音量标准化、字幕文件写入、BGM/SFX、最终 MP4、下载区 UI 和数据库资产索引均未做，已在阶段计划中延后。
+
+Environment check:
+
+- project-local files: 新增源码、schema、examples、CLI 输出和测试均位于 `D:\code\MiLuStudio\backend\sidecars\python-skills`。
+- D drive only: Python 使用 `D:\soft\program\Python\Python313\python.exe`；.NET 使用 `D:\soft\program\dotnet\dotnet.exe`；npm 使用 `D:\soft\program\nodejs\npm.ps1`；构建和缓存继续通过 `scripts\windows\Set-MiLuStudioEnv.ps1` 约束在 D 盘和项目目录。
+- C drive risk: 未安装依赖、未下载缓存、未生成项目外产物。临时 .NET 输出目录位于 `D:\code\MiLuStudio\.codex-tmp`，验证后已删除。
+
+Skills check:
+
+- 本阶段没有前端实现，未调用 `frontend-skill`、`playwright-interactive`、`impeccable` 或 `gpt-taste`。
+
+Web searches:
+
+- OpenAI Audio and speech docs: `https://developers.openai.com/api/docs/guides/audio`
+- OpenAI Text to speech docs: `https://developers.openai.com/api/docs/guides/text-to-speech`
+- FFmpeg official docs: `https://ffmpeg.org/ffmpeg.html`
+- Auto-Editor v3 timeline docs: `https://auto-editor.com/docs/v3`
+- SRT cue format reference: `https://wiki.x266.mov/docs/subtitles/SRT`
+
+Internet self-check:
+
+- OpenAI Audio docs show audio systems can separate text prompts, text transcripts, audio input and audio output; Stage 10 keeps script text, voice task and subtitle cue boundaries explicit before any real speech generation.
+- OpenAI Text-to-speech docs show real speech generation is a provider call that can stream or write audio formats; Stage 10 intentionally outputs `provider=none` and logical audio intents only.
+- FFmpeg docs show filtering / muxing is an explicit media-processing boundary; Stage 10 keeps `uses_ffmpeg=false` and only emits a render plan for later adapter work.
+- Auto-Editor v3 docs model editing as a JSON timeline with video and audio layers; Stage 10 mirrors that shape with deterministic video / audio / subtitle tracks instead of rendering media.
+- SRT format references use ordered cues with start/end timestamps and text; Stage 10 emits ordered cue structures plus SRT-ready text without writing a `.srt` file.
+
+Deviation reason:
+
+- 原 Stage 10 文档把 TTS provider、真实配音、SRT 文件、FFmpeg 拼接、BGM/SFX 和完整 MP4 都放在同一阶段。
+- 本轮用户明确要求先基于 `episode_writer`、`storyboard_director` 和 `video_generation` envelopes 收敛 `voice_casting` / `subtitle_generator` / `auto_editor` 内部 Production Skill 边界，后续保存到数据库仍留给 PostgreSQL adapter / EF Core DbContext 阶段。
+- 联网自检也确认真实 TTS、字幕文件写入、音频处理、FFmpeg 渲染、最终 MP4 和下载 UI 应位于计划结构之后的 provider / adapter / export 阶段。
+
+Build plan changes:
+
+- Stage 10 目标改为生成后续阶段可消费的配音任务、SRT-ready 字幕结构和粗剪计划结构。
+- Stage 10 明确不接真实 TTS / BGM / SFX provider、不写 WAV / SRT / MP4、不写数据库、不调用 FFmpeg、不做前端预览或下载。
+- Stage 10 步骤补充 `voice_casting`、`subtitle_generator`、`auto_editor`、gateway 注册、schema、examples、tests 和 CLI smoke。
+- Stage 10 延后项补充真实 `AudioProvider` / TTS adapter、音色试听、BGM/SFX、音量标准化、字幕文件落盘、FFmpeg、MP4、资产持久化和 UI 下载。
+
+Phase plan changes:
+
+- Stage 10 标记为 `done`。
+- 当前焦点改为 Stage 11。
+- Stage 10 落地状态补充三个新 skill、完整 envelope 链路、mock asset intent 不写文件 / 不写数据库 / 不触发 FFmpeg 约束和 deferred 项。
+
+Handoff changes:
+
+- 当前接棒状态更新为 Stage 11 preparation。
+- 记录 Stage 10 三个 skill、验证命令、约束、技术债和下一阶段边界。
+
+Next phase:
+
+- Stage 11 质量检查边界。
+- 建议基于 Stage 10 的 rough edit timeline、subtitle cues、voice tasks、mock video clips 和上游角色 / 分镜结构实现 `quality_checker` 的内部 Production Skill boundary。
+- 继续不接真实视觉 / 音频检测 provider，不读取真实文件，不触发 FFmpeg，不写数据库，不让 UI 绕过 Control API / Worker。
+
+### 2026-05-13 桌面打包和账号授权方案确认
+
+Date:
+
+- 2026-05-13
+
+Decision:
+
+- Stage 12 桌面打包唯一方案收敛为 `Electron + electron-builder + NSIS assisted installer + 自定义 installer.nsh`。
+- 保留现有 Web UI 和 Control API 作为可独立迭代的前后端；Electron 只作为桌面宿主、安装器入口和本地进程管理层。
+- 账号系统不阻塞 Stage 12 桌面安装包 MVP，作为桌面 MVP 后下一大阶段；届时对齐 QQ 类体验：应用打开只显示登录 / 注册 / 激活入口，登录后才能进入工作台。
+- 安装器可加入付费码 / 激活码输入页，校验通过后才能继续安装；但这只作为安装前门槛，正式授权仍必须由 Control API / Auth & Licensing adapter 在应用内校验。
+
+Web searches:
+
+- electron-builder NSIS docs: `https://www.electron.build/nsis.html`
+- NSIS custom page reference: `https://nsis.sourceforge.io/Reference/Page`
+- NSIS nsDialogs docs: `https://nsis.sourceforge.io/Docs/nsDialogs/Readme.html`
+- NSIS best practices: `https://nsis.sourceforge.io/Best_practices`
+
+Internet self-check:
+
+- electron-builder NSIS 官方文档支持 `include` 自定义 NSIS 脚本，并保留默认 NSIS 安装器能力；适合在 MVP 中作为唯一安装器方案。
+- NSIS `Page custom` 和 nsDialogs 支持自定义输入页、输入框和 leave function 校验，因此安装器内付费码 / 激活码门槛技术上可实现。
+- electron-builder NSIS 支持 assisted installer 相关配置，例如非 one-click、选择安装目录、安装器图标、卸载器图标、桌面快捷方式和开始菜单快捷方式。
+- NSIS best practices 明确不推荐程序化固定任务栏；因此文档将任务栏要求调整为正确 AppUserModelID / 快捷方式 / 用户引导，允许用户自行固定，不做静默强制 pin。
+
+Build plan changes:
+
+- 桌面技术栈改为唯一 `Electron + electron-builder + NSIS assisted installer + 自定义 installer.nsh`。
+- 新增 QQ / Adobe 类安装器要求：自定义图标、安装目录选择、桌面快捷方式、开始菜单快捷方式、开机自启动、安装进度条、安装完成后启动、付费码 / 激活码输入页。
+- 新增登录与授权原则：账号系统作为桌面 MVP 后下一大阶段；安装器激活码不是唯一安全边界；正式授权由 Control API / Auth & Licensing adapter 执行。
+- 新增账号、会话、设备和许可证数据模型草案，但不作为 Stage 12 阻塞项。
+- Stage 12 步骤和验收更新为唯一 NSIS assisted installer 方案。
+
+Phase plan changes:
+
+- Stage 12 目标、任务、验收和阶段自检重点同步更新。
+
+Handoff changes:
+
+- 固定约束和技术债补充桌面打包、登录授权和任务栏 pin 的决策。
+
+### 2026-05-13 数据库与桌面端解耦方案确认
+
+Date:
+
+- 2026-05-13
+
+Decision:
+
+- 数据库能力不和桌面端绑定。
+- Stage 11 质量检查完成后，先进入 Stage 12 PostgreSQL 持久化与后端收敛。
+- 原桌面打包阶段后移为 Stage 13，并作为独立交付 part，在 Web UI、Control API、Worker、PostgreSQL adapter 和核心生产功能相对稳定后推进。
+- Electron 不直接访问 PostgreSQL，不执行 migrations，不定义数据库表，不负责数据库初始化。
+- 桌面端只通过 Control API health / preflight 和业务 API 检查、展示和使用后端数据库状态。
+
+Build plan changes:
+
+- 新增“数据库属于后端基础设施，必须先在 Control API / Worker / Infrastructure 内完成，不和桌面安装器绑定”的架构原则。
+- 新增 Stage 12：PostgreSQL 持久化与后端收敛。
+- 原 Stage 12 桌面打包改为 Stage 13 桌面打包。
+- Stage 13 删除“首次启动初始化数据库和 storage”作为 Electron 职责，改为调用 Control API health / preflight；storage 检查也由后端 service 处理。
+
+Phase plan changes:
+
+- 新增 Stage 12 PostgreSQL 持久化与后端收敛，任务包括 EF Core / Npgsql adapter、RepositoryProvider 切换、migration runner、preflight、Worker durable claiming 和数据库集成测试。
+- 原 Stage 12 桌面打包改为 Stage 13 桌面打包，明确桌面端不直接访问数据库、文件系统业务目录、Python 脚本或 FFmpeg。
+
+Handoff changes:
+
+- 固定约束补充 Stage 12 数据库先行、Stage 13 桌面后置。
+- 技术债补充 PostgreSQL adapter / EF Core DbContext、migration runner、preflight 和 Worker durable claiming 尚未实现。
+
+Next phase order:
+
+- Stage 11 质量检查。
+- Stage 12 PostgreSQL 持久化与后端收敛。
+- Stage 13 桌面打包。
+
+### 2026-05-13 README 维护规则更新
+
+Date:
+
+- 2026-05-13
+
+Decision:
+
+- 在现有阶段结束联网自检、任务记录和 handoff 更新要求之外，新增长期规则：每次代码或文档修改完成后，都必须自行检查根 `README.md` 是否需要同步更新。
+- 根 `README.md` 必须使用中文，必须 PowerShell 友好，并面向后续面试展示。
+- README 内容风格参考 `D:\code\BookRecommendation\README.md` 和 `https://github.com/White-147/BookRecommendation`，重点覆盖项目背景、功能、技术栈、系统架构、目录结构、核心链路、运行说明、项目亮点、文档导航和后续改进方向。
+
+Local check:
+
+- 已读取本地 `D:\code\BookRecommendation\README.md`。
+- 已打开 GitHub 项目 `White-147/BookRecommendation` 核对 README 展示结构。
+- 已用 `Get-Content D:\code\MiLuStudio\README.md -Encoding UTF8` 检查当前 README 可在 PowerShell 中阅读。
+
+Changes:
+
+- `docs\MILUSTUDIO_BUILD_PLAN.md` 新增根 README 维护要求。
+- `docs\MILUSTUDIO_PHASE_PLAN.md` 新增每棒先读 README、README check 字段和阶段完成后的 README 检查步骤。
+- `docs\MILUSTUDIO_HANDOFF.md` 新增固定约束：每次修改完成后检查 README 是否需要同步更新。
+- 根 `README.md` 已改为中文面试展示版，结构对齐 BookRecommendation 风格，同时保留 MiLuStudio 当前阶段、边界、数据库与桌面端解耦路线。

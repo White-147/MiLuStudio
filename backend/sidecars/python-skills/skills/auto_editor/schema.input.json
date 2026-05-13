@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/auto_editor/input.schema.json",
+  "title": "auto_editor input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["storyboard_director", "video_generation", "voice_casting", "subtitle_generator"],
+  "properties": {
+    "storyboard_director": {
+      "type": "object",
+      "description": "A successful storyboard_director runtime envelope."
+    },
+    "video_generation": {
+      "type": "object",
+      "description": "A successful mock video_generation runtime envelope for the same project and episode."
+    },
+    "voice_casting": {
+      "type": "object",
+      "description": "A successful voice_casting runtime envelope for the same project and episode."
+    },
+    "subtitle_generator": {
+      "type": "object",
+      "description": "A successful subtitle_generator runtime envelope for the same project and episode."
+    }
+  }
+}

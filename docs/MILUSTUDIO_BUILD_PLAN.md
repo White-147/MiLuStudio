@@ -145,10 +145,22 @@ MiLuStudio 不应问“继续二开 ArcReel 还是 LumenX”，而应定为：
 
 - Electron
 - electron-builder
-- NSIS
-- Windows Installer
+- NSIS assisted installer 是唯一 Windows 安装器方案
+- 自定义 NSIS `installer.nsh`
 - 本地端口随机分配
 - 托盘和后台进程管理
+
+桌面安装器必须按 QQ / Adobe 一类成熟 Windows 桌面软件体验设计：
+
+- 自定义应用图标、安装器图标、卸载器图标和快捷方式图标。
+- 用户可选择安装目录。
+- 用户可选择创建桌面快捷方式。
+- 用户可选择创建开始菜单快捷方式。
+- 用户可选择开机自启动。
+- 安装过程必须有可见实时进度条。
+- 安装完成页可选择立即启动应用。
+- 安装器可加入付费码 / 激活码输入页，校验通过后才能继续安装。
+- 任务栏固定不能作为静默强制行为实现；Windows pin 列表属于用户控制。必须保证 AppUserModelID、图标和快捷方式正确，让用户能手动固定，并在安装完成页或首次启动时给出用户可控引导。
 
 后端：
 
@@ -204,15 +216,77 @@ Artifacts: MP4 / SRT / storyboards / character bible / asset pack
 
 原则：
 
+- Electron 只是桌面宿主、安装与本地进程管理层，不替代 Web UI 和 Control API。
+- Web 前端和 Control API 必须继续保持可独立迭代，桌面端只通过本地 HTTP / DTO 使用 Control API。
+- 数据库属于后端基础设施，必须先在 Control API / Worker / Infrastructure 内完成，不和桌面安装器绑定。
+- Electron 不直接访问 PostgreSQL，不直接执行 migrations，不定义数据库表，不承担数据库初始化职责。
 - UI 只负责展示、确认、编辑，不直接跑模型。
 - Control API 负责权限、项目、任务、状态、成本、资产索引。
 - Worker 负责编排任务和阶段流转。
 - Python Sidecar 负责具体模型调用和文件处理。
 - Skills 是内部生产能力，不开放给用户安装。
 
+登录与授权原则：
+
+- 账号系统不阻塞 Stage 13 桌面安装包 MVP，作为桌面端落地后的下一大阶段推进。
+- 下一大阶段对齐 QQ 一类体验：应用启动默认只显示登录 / 注册 / 激活入口，未登录用户不能访问项目、素材、生产任务或设置页。
+- 登录注册、会话、授权状态、设备绑定和账号套餐必须由 Control API / Auth & Licensing adapter 统一处理，不放进 Electron 主进程或安装器脚本里。
+- 安装器里的付费码 / 激活码校验只能作为安装前门槛和商业体验，不作为唯一安全边界；安装完成后应用仍必须在登录态和授权态下访问功能。
+- 离线激活码如需支持，必须使用服务端签发的签名许可证或本机授权文件，安装器和客户端不得内置可逆的付费码算法或私钥。
+
 ## 6. 核心数据模型
 
 第一版建议数据库表按以下顺序设计。
+
+### 6.0 账号与授权
+
+`accounts`
+
+- `id`
+- `phone`
+- `email`
+- `display_name`
+- `password_hash`
+- `status`: `active` / `locked` / `deleted`
+- `created_at`
+- `last_login_at`
+
+`sessions`
+
+- `id`
+- `account_id`
+- `device_id`
+- `refresh_token_hash`
+- `expires_at`
+- `revoked_at`
+
+`devices`
+
+- `id`
+- `account_id`
+- `machine_fingerprint_hash`
+- `device_name`
+- `first_seen_at`
+- `last_seen_at`
+- `trusted`
+
+`licenses`
+
+- `id`
+- `account_id`
+- `license_type`: `trial` / `paid` / `offline_signed`
+- `plan`
+- `activation_code_hash`
+- `status`: `active` / `expired` / `revoked`
+- `starts_at`
+- `expires_at`
+- `max_devices`
+
+说明：
+
+- 账号系统作为桌面 MVP 后的下一大阶段：应用打开先登录 / 注册，登录后才进入创作工作台。
+- 桌面安装器可做激活码输入页，但真正的授权判断必须落在 Control API / Auth & Licensing adapter。
+- 本阶段不设计 SaaS 管理后台；只预留本地 Control API 与未来授权服务的 adapter 边界。
 
 ### 6.1 项目与输入
 
@@ -1048,33 +1122,38 @@ D:\code\MiLuStudio\
 
 ### 阶段 10：音频、字幕、剪辑
 
-目标：输出完整 MP4。
+目标：在 Python Skills Runtime 内生成后续音频、字幕和剪辑阶段可消费的配音任务、SRT-ready 字幕结构和粗剪计划结构。
+
+本阶段不接真实 TTS / BGM / SFX provider，不写 WAV / SRT / MP4 文件，不写数据库，不调用 FFmpeg，不做前端预览或下载，不让 UI 直接访问 Python、文件系统或 FFmpeg。
 
 步骤：
 
-1. 实现 `voice_casting`。
-2. 支持角色音色选择。
-3. 实现 TTS provider interface。
-4. 实现 `subtitle_generator`。
-5. 生成 SRT。
-6. 实现 `auto_editor`。
-7. 使用 FFmpeg 拼接视频。
-8. 混入配音、BGM、SFX。
-9. 烧录或外挂字幕可选。
-10. 输出 MP4。
+1. 基于 `episode_writer` 和 `storyboard_director` 成功 envelope 实现 `voice_casting`。
+2. 输出 narrator / speaker voice profiles、逐段 `voice_tasks`、逻辑 `milu://mock-assets/...wav` 音频意图、零成本估算和人工确认 checkpoint。
+3. 基于 `episode_writer`、`storyboard_director` 和 `voice_casting` 成功 envelope 实现 `subtitle_generator`。
+4. 输出 `subtitle_cues`、SRT 文本结构、逻辑 `milu://mock-assets/...srt` 字幕意图和 review warnings；本阶段只生成可消费文本，不写真实 SRT 文件。
+5. 基于 `storyboard_director`、`video_generation`、`voice_casting` 和 `subtitle_generator` 成功 envelope 实现 `auto_editor`。
+6. 输出 video / audio / subtitle timeline tracks、rough edit `render_plan`、逻辑 `milu://mock-assets/...mp4` 输出意图和 review warnings；本阶段不调用 FFmpeg、不生成真实 MP4。
+7. 在 `SkillGateway.default()` 注册三个 skill，并补齐 schema、examples、单元测试和 CLI smoke。
 
 验收：
 
-- 生成 MP4 可播放。
-- 字幕时间轴基本对齐。
-- 音量不过载。
-- 输出目录包含 MP4、SRT、素材包。
+- `voice_casting` 可从脚本段落和分镜 timing 生成配音任务，输出明确 `provider=none`、`model=none`、`file_written=false`。
+- `subtitle_generator` 可从配音任务生成按时间排序的字幕 cue 和 SRT 文本结构，输出明确 `writes_files=false`、`writes_database=false`。
+- `auto_editor` 可从 mock 视频片段、配音任务和字幕 cue 生成粗剪 timeline / render plan，输出明确 `uses_ffmpeg=false`、`writes_files=false`、`writes_database=false`。
+- Stage 10 不绕过 Control API / Worker / Python Skills Runtime 边界。
+
+延后：
+
+- `AudioProvider` / TTS adapter、音色试听、真实 WAV 写入、BGM / SFX、音量标准化、字幕文件落盘、FFmpeg 拼接、MP4 输出、资产持久化和下载区 UI 留给后续 provider / adapter / export packaging 阶段。
 
 参考：
 
 - OpenMontage `skills/core/ffmpeg.md`
 - OpenMontage `skills/core/subtitle-sync.md`
 - LumenX Assembly。
+- OpenAI Audio / Text-to-speech docs。
+- Auto-Editor timeline v3。
 
 ### 阶段 11：质量检查
 
@@ -1102,9 +1181,53 @@ D:\code\MiLuStudio\
 - OpenMontage reviewer / quality skills。
 - ArcReel checkpoint resume 思路。
 
-### 阶段 12：桌面打包
+### 阶段 12：PostgreSQL 持久化与后端收敛
+
+目标：先把数据库、持久化、迁移和 Worker durable claiming 作为后端能力做好，不和桌面端绑定。
+
+本阶段不做 Electron，不做安装器，不做桌面端进程管理。桌面端后续只调用 Control API health / preflight 和业务 API。
+
+步骤：
+
+1. 在 `MiLuStudio.Infrastructure` 中新增 PostgreSQL / EF Core DbContext adapter。
+2. 引入必要的 EF Core / Npgsql 依赖，并继续约束 NuGet 缓存到 D 盘项目目录。
+3. 将现有 SQL migration 与 EF Core model 对齐，必要时建立 migration runner 或明确的 migration 命令。
+4. 实现 `ProjectRepository`、`ProductionJobRepository`、`GenerationTaskRepository`、`AssetRepository`、`CostLedgerRepository` 的 PostgreSQL adapter。
+5. 通过配置切换 `RepositoryProvider=InMemory` / `RepositoryProvider=PostgreSQL`，开发期可保留 InMemory 作为快速 mock。
+6. 实现 API 启动 preflight：检查连接串、数据库可达性、migration 状态和 storage 路径。
+7. 实现 Worker durable claiming，优先使用 PostgreSQL `FOR UPDATE SKIP LOCKED`，必要时保留轮询退化。
+8. 将 Stage 5-11 的 Production Skill envelope 输出通过 Control API / Worker 写入 `generation_tasks.output_json`、`assets`、`cost_ledger` 等表。
+9. 补齐数据库集成测试，覆盖 API 重启后的项目、任务、checkpoint、失败重试和成本记录恢复。
+10. 明确本地数据库安装方式和连接配置文档；不要把 PostgreSQL 安装、端口、账号或 migrations 藏进 Electron 安装器。
+
+验收：
+
+- API 和 Worker 能在 PostgreSQL provider 下共享同一份项目、任务、资产和成本状态。
+- API 重启后仍能恢复项目进度、checkpoint、失败原因和已完成 skill 输出。
+- Worker 重启后能继续领取未完成任务，不重复执行已完成任务。
+- InMemory provider 仍可用于开发 smoke，不影响 PostgreSQL provider。
+- 所有数据库连接、migration、日志和 storage 配置都属于后端配置，不由 Electron 直接管理。
+- UI 只通过 Control API 展示数据库状态和错误；不直接访问数据库。
+
+延后：
+
+- 账号注册、登录、设备绑定、许可证和云端授权服务留给桌面 MVP 后的账号授权阶段。
+- Electron 安装器只在 Stage 13 作为交付壳接入已有后端，不承担数据库 schema 或 migration 设计。
+
+参考：
+
+- PostgreSQL `FOR UPDATE SKIP LOCKED` durable queue。
+- EF Core DbContext / migrations。
+- XiaoLouAI Windows 本地后端配置经验。
+- ArcReel task queue / cost ledger 思路。
+
+### 阶段 13：桌面打包
 
 目标：形成老板可演示、可售卖的 Windows 安装包。
+
+桌面端采用唯一方案：`Electron + electron-builder + NSIS assisted installer + 自定义 installer.nsh`。不再并列 Inno Setup、MSIX、Squirrel 或 Velopack 作为 MVP 主方案。
+
+桌面端是独立交付 part，必须在 Web UI、Control API、Worker、PostgreSQL adapter 和核心生产功能相对稳定后推进。它不定义数据库，不执行 migrations，不直接访问 PostgreSQL。
 
 步骤：
 
@@ -1114,15 +1237,28 @@ D:\code\MiLuStudio\
 4. 启动 Windows Worker。
 5. 启动 Python Sidecar。
 6. 随机端口绑定。
-7. 首次启动初始化数据库和 storage。
-8. 托盘菜单：打开、重启服务、打开输出目录、查看日志、退出。
-9. 使用 electron-builder + NSIS 打包。
-10. 生成 `MiLuStudio-Setup-<version>.exe`。
+7. 调用 Control API health / preflight 检查数据库、storage、Python runtime 和 Worker 状态；桌面端只展示结果和修复引导。
+8. 初始化或检查 storage 目录只能通过 Control API / 后端 service 完成，Electron 不直接写业务目录。
+9. 托盘菜单：打开、重启服务、打开输出目录、查看日志、退出。
+10. 使用 electron-builder + NSIS 打包，设置 `oneClick=false`、`allowToChangeInstallationDirectory=true`、`runAfterFinish=true`。
+11. 配置 `win.icon`、`nsis.installerIcon`、`nsis.uninstallerIcon`、`nsis.installerHeaderIcon`、`shortcutName` 和应用 AppUserModelID。
+12. 增加自定义 `build/installer.nsh`，用于付费码 / 激活码输入页、开机自启动选项、安装完成页文案和必要的安装后动作。
+13. 安装器必须提供用户可选项：桌面快捷方式、开始菜单快捷方式、开机自启动、安装完成后运行。
+14. 安装器必须显示安装进度条。
+15. 预留登录 / 注册 / 授权入口和前端路由，但不作为桌面安装包 MVP 的阻塞项。
+16. 生成 `MiLuStudio-Setup-<version>.exe`。
 
 验收：
 
 - 干净 Windows 环境安装后可启动。
 - 用户无需手动启动后端。
+- 桌面端只通过 Control API 检查和使用数据库，不直接访问数据库、文件系统业务目录、Python 脚本或 FFmpeg。
+- 如果数据库未就绪，桌面端展示 Control API preflight 返回的错误和修复建议，不自行创建或迁移数据库。
+- 用户可选择安装目录、桌面快捷方式、开始菜单快捷方式、开机自启动和安装后启动。
+- 安装器图标、卸载器图标、应用图标和快捷方式图标均使用 MiLuStudio 自定义图标。
+- 安装器可配置付费码 / 激活码门槛；无效码不能继续安装。
+- 激活码门槛不作为唯一授权安全边界；应用内登录注册和账号授权留给桌面 MVP 后下一大阶段。
+- 任务栏固定不做静默强制 pin；必须提供正确快捷方式和用户引导，允许用户自行固定。
 - 卸载不删除用户生成素材，除非用户选择。
 - 日志可定位错误。
 
@@ -1132,6 +1268,9 @@ D:\code\MiLuStudio\
 - MiLuAssistantDesktop 的经验，但不复制旧项目。
 - Toonflow electron-builder 配置。
 - LocalMiniDrama 桌面本地体验。
+- electron-builder NSIS 官方文档。
+- NSIS custom page / nsDialogs 官方文档。
+- NSIS best practices 中关于不要程序化固定任务栏的要求。
 
 ## 13. 模型与供应商策略
 
@@ -1299,7 +1438,8 @@ D:\code\MiLuStudio\
 5. 大阶段结束后先更新总任务阶段安排。
 6. 再把本地验证、联网自检和修改原因写入总任务记录。
 7. 如果联网自检发现方向偏差，先最小修改总参考和总任务阶段安排。
-8. 最后更新短棒交接。
+8. 每次修改完成后自行检查根 `README.md` 是否需要同步更新。
+9. 最后更新短棒交接。
 
 ### 19.2 PowerShell 友好文档格式
 
@@ -1314,6 +1454,16 @@ D:\code\MiLuStudio\
 - 除根 `README.md` 外，长期说明、阶段计划和专题文档优先放入 `docs/`。
 - 关键 owner、决策、验证命令、下一步任务尽量一事一行。
 - 新增文档后必须能用 `Get-Content -Encoding UTF8` 正常阅读。
+
+根 `README.md` 额外要求：
+
+- 必须使用中文，便于后续面试展示。
+- 必须 PowerShell 友好，能用 `Get-Content .\README.md -Encoding UTF8` 顺畅阅读。
+- 内容风格参考 `D:\code\BookRecommendation\README.md` 和 `https://github.com/White-147/BookRecommendation`：项目背景、项目功能、技术栈、系统架构、目录结构、核心链路、运行说明、项目亮点、文档导航和后续改进方向。
+- README 要面向“面试官快速理解项目价值”，不要只写开发状态流水账。
+- 可以使用小型 Markdown 表格和 `mermaid` 代码块，但避免超宽表格、长链接堆砌、HTML 折叠块和只能靠网页渲染理解的内容。
+- 每次完成代码或文档修改后，都要判断 README 是否因项目状态、架构路线、运行命令、阶段计划或面试展示内容变化而需要同步更新。
+- 如果需要更新 README，优先更新根 `README.md`；如果不需要，也要在最终回复或任务记录中说明已检查。
 
 ### 19.3 大阶段结束后的联网自检
 

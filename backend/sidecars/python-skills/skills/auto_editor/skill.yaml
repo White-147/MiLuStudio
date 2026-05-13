@@ -1,0 +1,15 @@
+name: auto_editor
+display_name: Auto Editor
+description: Builds a rough edit timeline plan from mock video clips, voice tasks, subtitles, and storyboard timing.
+stage: EDIT_PLAN_READY_FOR_QUALITY_CHECK
+input_schema: schema.input.json
+output_schema: schema.output.json
+timeout_seconds: 20
+max_retries: 1
+cost_policy:
+  model_required: false
+  estimated_cost: 0
+required_provider_capabilities: []
+checkpoint_policy:
+  required: false
+  policy: auto_continue_to_quality_check

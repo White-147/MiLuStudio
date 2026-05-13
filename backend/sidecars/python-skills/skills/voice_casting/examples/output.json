@@ -1,0 +1,185 @@
+{
+  "ok": true,
+  "skill_name": "voice_casting",
+  "schema_version": "1.0",
+  "data": {
+    "project_id": "demo-episode-01",
+    "episode_index": 1,
+    "title": "雨夜纸鹤",
+    "language": "zh-CN",
+    "provider": "none",
+    "model": "none",
+    "mode": "deterministic-plan",
+    "voice_profiles": [
+      {
+        "voice_profile_id": "voice_narrator",
+        "speaker": "旁白",
+        "role": "narrator",
+        "tone": "克制、清晰、略带悬疑感；每句不拖长。",
+        "gender_hint": "unspecified",
+        "age_hint": "adult",
+        "provider_voice_id": null,
+        "locked": false
+      },
+      {
+        "voice_profile_id": "voice_speaker_01",
+        "speaker": "林溪",
+        "role": "dialogue",
+        "tone": "对白短促，优先服务画面节奏。",
+        "gender_hint": "unspecified",
+        "age_hint": "adult",
+        "provider_voice_id": null,
+        "locked": false
+      }
+    ],
+    "voice_tasks": [
+      {
+        "task_id": "voice_task_001",
+        "source_segment_id": "seg_01",
+        "source_type": "narration",
+        "speaker": "旁白",
+        "voice_profile_id": "voice_narrator",
+        "text": "林溪以为这只是普通的一晚。",
+        "delivery": "克制、清晰、略带悬疑感；每句不拖长。",
+        "start_second": 0,
+        "end_second": 2,
+        "duration_seconds": 2,
+        "target_shot_ids": [
+          "shot_01"
+        ],
+        "provider": "none",
+        "model": "none",
+        "output_audio_intent": {
+          "kind": "audio",
+          "intended_use": "narration",
+          "asset_uri": "milu://mock-assets/demo-episode-01/voice_task_001.wav",
+          "file_written": false,
+          "storage_intent": {
+            "root": "D:\\code\\MiLuStudio\\storage",
+            "relative_path": "projects/demo-episode-01/audio/voice_task_001.wav",
+            "will_write_in_future_adapter": true
+          }
+        }
+      },
+      {
+        "task_id": "voice_task_002",
+        "source_segment_id": "seg_01",
+        "source_type": "dialogue",
+        "speaker": "林溪",
+        "voice_profile_id": "voice_speaker_01",
+        "text": "你到底想带我去哪？",
+        "delivery": "压低声音，带一点试探。",
+        "start_second": 2,
+        "end_second": 4,
+        "duration_seconds": 2,
+        "target_shot_ids": [
+          "shot_01"
+        ],
+        "provider": "none",
+        "model": "none",
+        "output_audio_intent": {
+          "kind": "audio",
+          "intended_use": "dialogue",
+          "asset_uri": "milu://mock-assets/demo-episode-01/voice_task_002.wav",
+          "file_written": false,
+          "storage_intent": {
+            "root": "D:\\code\\MiLuStudio\\storage",
+            "relative_path": "projects/demo-episode-01/audio/voice_task_002.wav",
+            "will_write_in_future_adapter": true
+          }
+        }
+      },
+      {
+        "task_id": "voice_task_003",
+        "source_segment_id": "seg_02",
+        "source_type": "narration",
+        "speaker": "旁白",
+        "voice_profile_id": "voice_narrator",
+        "text": "纸鹤的光照亮了旧巷尽头。",
+        "delivery": "克制、清晰、略带悬疑感；每句不拖长。",
+        "start_second": 4,
+        "end_second": 8,
+        "duration_seconds": 4,
+        "target_shot_ids": [
+          "shot_02"
+        ],
+        "provider": "none",
+        "model": "none",
+        "output_audio_intent": {
+          "kind": "audio",
+          "intended_use": "narration",
+          "asset_uri": "milu://mock-assets/demo-episode-01/voice_task_003.wav",
+          "file_written": false,
+          "storage_intent": {
+            "root": "D:\\code\\MiLuStudio\\storage",
+            "relative_path": "projects/demo-episode-01/audio/voice_task_003.wav",
+            "will_write_in_future_adapter": true
+          }
+        }
+      }
+    ],
+    "voice_manifest": {
+      "task_count": 3,
+      "profile_count": 2,
+      "total_voice_seconds": 8,
+      "by_segment": {
+        "seg_01": [
+          "voice_task_001",
+          "voice_task_002"
+        ],
+        "seg_02": [
+          "voice_task_003"
+        ]
+      },
+      "writes_files": false,
+      "writes_database": false,
+      "notes": [
+        "output_audio_intent is a future adapter target and does not mean a WAV exists.",
+        "Voice provider mapping and cost accounting stay deferred to the real TTS adapter stage."
+      ]
+    },
+    "generation_plan": {
+      "mode": "tts_request_boundary",
+      "provider": "none",
+      "model": "none",
+      "request_count": 3,
+      "writes_files": false,
+      "writes_database": false,
+      "notes": [
+        "Stage 10 only builds voice casting and TTS task requests.",
+        "Real TTS providers, audio files, retries, and persistence stay behind later adapters."
+      ]
+    },
+    "cost_estimate": {
+      "provider": "none",
+      "currency": "USD",
+      "unit": "audio_second",
+      "quantity": 8,
+      "estimated_cost": 0,
+      "actual_cost": 0
+    },
+    "review": {
+      "status": "ready_for_voice_review",
+      "editable_fields": [
+        "voice_profiles",
+        "voice_tasks"
+      ],
+      "notes": [
+        "Voice profiles and task timing can be reviewed before real TTS is introduced.",
+        "This output writes no audio files, no database rows, and calls no TTS provider."
+      ]
+    },
+    "checkpoint": {
+      "required": true,
+      "policy": "pause_for_voice_cast_review",
+      "reason": "voice_casting chooses narrator and speaker voices before downstream audio tasks."
+    }
+  },
+  "error": null,
+  "runtime": {
+    "duration_ms": 5.62,
+    "model": "none",
+    "mode": "deterministic-mock",
+    "cost_estimate": 0
+  }
+}

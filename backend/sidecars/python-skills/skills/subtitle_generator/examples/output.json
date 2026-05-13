@@ -1,0 +1,97 @@
+{
+  "ok": true,
+  "skill_name": "subtitle_generator",
+  "schema_version": "1.0",
+  "data": {
+    "project_id": "demo-episode-01",
+    "episode_index": 1,
+    "title": "雨夜纸鹤",
+    "language": "zh-CN",
+    "provider": "none",
+    "model": "none",
+    "mode": "deterministic-srt-plan",
+    "subtitle_cues": [
+      {
+        "cue_id": "subtitle_001",
+        "index": 1,
+        "start_second": 0,
+        "end_second": 2,
+        "text": "林溪以为这只是普通的一晚。",
+        "source": "narration",
+        "source_task_id": "voice_task_001",
+        "source_segment_id": "seg_01",
+        "speaker": "旁白",
+        "target_shot_ids": [
+          "shot_01"
+        ],
+        "line_break_policy": "single_line_mobile_safe"
+      },
+      {
+        "cue_id": "subtitle_002",
+        "index": 2,
+        "start_second": 2,
+        "end_second": 4,
+        "text": "你到底想带我去哪？",
+        "source": "dialogue",
+        "source_task_id": "voice_task_002",
+        "source_segment_id": "seg_01",
+        "speaker": "林溪",
+        "target_shot_ids": [
+          "shot_01"
+        ],
+        "line_break_policy": "single_line_mobile_safe"
+      }
+    ],
+    "srt_text": "1\n00:00:00,000 --> 00:00:02,000\n林溪以为这只是普通的一晚。\n\n2\n00:00:02,000 --> 00:00:04,000\n你到底想带我去哪？",
+    "subtitle_manifest": {
+      "cue_count": 2,
+      "target_duration_seconds": 4,
+      "coverage_start_second": 0,
+      "coverage_end_second": 4,
+      "subtitle_uri": "milu://mock-assets/demo-episode-01/subtitles_episode_01.srt",
+      "file_written": false,
+      "writes_files": false,
+      "writes_database": false,
+      "notes": [
+        "srt_text is a review preview and does not mean an SRT file exists.",
+        "Subtitle persistence and download assets stay deferred to storage and database adapters."
+      ]
+    },
+    "generation_plan": {
+      "mode": "srt_structure_boundary",
+      "provider": "none",
+      "model": "none",
+      "cue_count": 2,
+      "writes_files": false,
+      "writes_database": false,
+      "uses_audio_alignment": false,
+      "notes": [
+        "Stage 10 builds SRT-ready structures from script and voice timing.",
+        "Real subtitle file writes, audio alignment, and persistence stay deferred to later adapters."
+      ]
+    },
+    "review": {
+      "status": "ready_for_edit_plan",
+      "editable_fields": [
+        "subtitle_cues",
+        "srt_text"
+      ],
+      "notes": [
+        "Subtitle timing follows voice_casting tasks and can be consumed by auto_editor.",
+        "This output writes no SRT file, no database rows, and calls no FFmpeg or alignment service."
+      ]
+    },
+    "checkpoint": {
+      "required": false,
+      "policy": "auto_continue_to_edit_plan",
+      "reason": "subtitle structures can feed auto_editor without user pause in Stage 10."
+    }
+  },
+  "error": null,
+  "runtime": {
+    "duration_ms": 6.11,
+    "model": "none",
+    "mode": "deterministic-mock",
+    "cost_estimate": 0
+  }
+}

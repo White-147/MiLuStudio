@@ -1,0 +1,136 @@
+{
+  "ok": true,
+  "skill_name": "auto_editor",
+  "schema_version": "1.0",
+  "data": {
+    "project_id": "demo-episode-01",
+    "episode_index": 1,
+    "title": "雨夜纸鹤",
+    "language": "zh-CN",
+    "provider": "none",
+    "model": "none",
+    "mode": "deterministic-edit-plan",
+    "timeline": {
+      "timeline_id": "demo-episode-01:episode_1:rough_edit",
+      "aspect_ratio": "9:16",
+      "fps": 24,
+      "total_duration_seconds": 4,
+      "tracks": {
+        "video": [
+          {
+            "timeline_item_id": "video_shot_01",
+            "clip_id": "mock_video_01_001",
+            "shot_id": "shot_01",
+            "start_second": 0,
+            "end_second": 4,
+            "duration_seconds": 4,
+            "asset_uri": "milu://mock-assets/demo-episode-01/mock_video_01_001.mp4",
+            "file_written": false,
+            "transition_in": "cut",
+            "transition_out": "cut"
+          }
+        ],
+        "audio": [
+          {
+            "timeline_item_id": "audio_voice_task_001",
+            "task_id": "voice_task_001",
+            "source_segment_id": "seg_01",
+            "source_type": "narration",
+            "speaker": "旁白",
+            "start_second": 0,
+            "end_second": 4,
+            "duration_seconds": 4,
+            "asset_uri": "milu://mock-assets/demo-episode-01/voice_task_001.wav",
+            "file_written": false,
+            "mix_level_db": -6
+          }
+        ],
+        "subtitles": [
+          {
+            "timeline_item_id": "subtitle_subtitle_001",
+            "cue_id": "subtitle_001",
+            "start_second": 0,
+            "end_second": 4,
+            "text": "林溪以为这只是普通的一晚。",
+            "target_shot_ids": [
+              "shot_01"
+            ],
+            "placement": "lower_third_safe_area"
+          }
+        ]
+      }
+    },
+    "render_plan": {
+      "engine": "none",
+      "uses_ffmpeg": false,
+      "writes_files": false,
+      "writes_database": false,
+      "output_intent": {
+        "kind": "video",
+        "intended_use": "rough_cut_mp4",
+        "asset_uri": "milu://mock-assets/demo-episode-01/rough_cut_episode_01.mp4",
+        "file_written": false,
+        "storage_intent": {
+          "root": "D:\\code\\MiLuStudio\\storage",
+          "relative_path": "projects/demo-episode-01/exports/rough_cut_episode_01.mp4",
+          "will_write_in_future_adapter": true
+        }
+      },
+      "inputs": {
+        "video_track_count": 1,
+        "audio_track_count": 1,
+        "subtitle_cue_count": 1
+      },
+      "notes": [
+        "This is a render plan only and does not invoke FFmpeg.",
+        "Future edit adapters can translate the timeline into FFmpeg or another Windows-local render provider."
+      ]
+    },
+    "edit_manifest": {
+      "timeline_id": "demo-episode-01:episode_1:rough_edit",
+      "shot_count": 1,
+      "video_clip_count": 1,
+      "voice_task_count": 1,
+      "subtitle_cue_count": 1,
+      "total_duration_seconds": 4,
+      "writes_files": false,
+      "writes_database": false,
+      "uses_ffmpeg": false,
+      "notes": [
+        "All media URIs are logical placeholders until real adapters write files.",
+        "The rough edit plan can be stored later by PostgreSQL / EF Core adapters without changing skill outputs."
+      ]
+    },
+    "cost_estimate": {
+      "provider": "none",
+      "currency": "USD",
+      "unit": "render_second",
+      "quantity": 4,
+      "estimated_cost": 0,
+      "actual_cost": 0
+    },
+    "review": {
+      "status": "ready_for_quality_check_boundary",
+      "editable_fields": [
+        "timeline",
+        "render_plan"
+      ],
+      "notes": [
+        "Stage 10 emits a rough edit plan only; no media muxing or rendering is performed.",
+        "Real FFmpeg, file writes, preview playback, and persistence stay behind later adapters."
+      ]
+    },
+    "checkpoint": {
+      "required": false,
+      "policy": "auto_continue_to_quality_check",
+      "reason": "auto_editor produces a deterministic plan that can feed a later quality checker boundary."
+    }
+  },
+  "error": null,
+  "runtime": {
+    "duration_ms": 6.04,
+    "model": "none",
+    "mode": "deterministic-mock",
+    "cost_estimate": 0
+  }
+}

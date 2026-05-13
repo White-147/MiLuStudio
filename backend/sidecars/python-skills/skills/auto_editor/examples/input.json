@@ -1,0 +1,122 @@
+{
+  "storyboard_director": {
+    "ok": true,
+    "skill_name": "storyboard_director",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "title": "雨夜纸鹤",
+      "language": "zh-CN",
+      "aspect_ratio": "9:16",
+      "shots": [
+        {
+          "shot_id": "shot_01",
+          "source_segment_id": "seg_01",
+          "start_second": 0,
+          "duration_seconds": 4
+        }
+      ],
+      "timing_summary": {
+        "total_shot_seconds": 4,
+        "within_tolerance": true
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "video_generation": {
+    "ok": true,
+    "skill_name": "video_generation",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "clips": [
+        {
+          "clip_id": "mock_video_01_001",
+          "shot_id": "shot_01",
+          "duration_seconds": 4,
+          "asset_uri": "milu://mock-assets/demo-episode-01/mock_video_01_001.mp4",
+          "file_written": false
+        }
+      ],
+      "clip_manifest": {
+        "clip_count": 1,
+        "total_duration_seconds": 4,
+        "writes_files": false,
+        "writes_database": false,
+        "uses_ffmpeg": false
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "voice_casting": {
+    "ok": true,
+    "skill_name": "voice_casting",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "voice_tasks": [
+        {
+          "task_id": "voice_task_001",
+          "source_segment_id": "seg_01",
+          "source_type": "narration",
+          "speaker": "旁白",
+          "start_second": 0,
+          "end_second": 4,
+          "duration_seconds": 4,
+          "output_audio_intent": {
+            "asset_uri": "milu://mock-assets/demo-episode-01/voice_task_001.wav",
+            "file_written": false
+          }
+        }
+      ]
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "subtitle_generator": {
+    "ok": true,
+    "skill_name": "subtitle_generator",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "subtitle_cues": [
+        {
+          "cue_id": "subtitle_001",
+          "start_second": 0,
+          "end_second": 4,
+          "text": "林溪以为这只是普通的一晚。",
+          "target_shot_ids": ["shot_01"]
+        }
+      ],
+      "srt_text": "1\n00:00:00,000 --> 00:00:04,000\n林溪以为这只是普通的一晚。"
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  }
+}

@@ -30,6 +30,9 @@ class SkillGateway:
                 "image_generation": "skills.image_generation.executor:run",
                 "video_prompt_builder": "skills.video_prompt_builder.executor:run",
                 "video_generation": "skills.video_generation.executor:run",
+                "voice_casting": "skills.voice_casting.executor:run",
+                "subtitle_generator": "skills.subtitle_generator.executor:run",
+                "auto_editor": "skills.auto_editor.executor:run",
             }
         )
 

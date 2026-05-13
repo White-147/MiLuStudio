@@ -12,6 +12,7 @@
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+Get-Content .\README.md -Encoding UTF8
 Get-Content .\docs\MILUSTUDIO_BUILD_PLAN.md -Encoding UTF8
 Get-Content .\docs\MILUSTUDIO_PHASE_PLAN.md -Encoding UTF8
 Get-Content .\docs\MILUSTUDIO_TASK_RECORD.md -Encoding UTF8
@@ -40,6 +41,8 @@ MiLuStudio 是 Windows 原生 AI 漫剧 Agent 产品。
 - 第一版不做云端 SaaS。
 - 第一版不把 Linux / Docker 作为生产必需。
 - 所有文档必须 PowerShell 友好。
+- 根 `README.md` 必须使用中文，并采用类似 `D:\code\BookRecommendation\README.md` 的面试展示导向结构。
+- 每次修改完成后必须自行检查是否需要同步更新根 `README.md`。
 - 总控文档和后续专题文档统一放入 `docs\`，根目录保持简洁。
 - 前端、后端和内部 Production Skills 目录优先按路由或功能域聚合。
 - 每个大阶段结束后必须联网自检。
@@ -92,9 +95,9 @@ Environment check:
 ## 6. 当前焦点
 
 ```text
-Current phase: Stage 10
+Current phase: Stage 11
 Status: pending
-Goal: 基于 mock 视频片段继续收敛音频、字幕和粗剪边界。
+Goal: 基于 Stage 10 粗剪计划继续收敛质量检查边界。
 Next handoff owner: next session
 ```
 
@@ -647,34 +650,40 @@ Status: done
 
 ## 17. Stage 10 音频、字幕、剪辑
 
-Status: pending
+Status: done
 
 目标：
 
-- 输出完整 MP4。
+- 在 Python Skills Runtime 内生成后续音频、字幕和剪辑阶段可消费的配音任务、SRT-ready 字幕结构和粗剪计划结构。
+- 本阶段不接真实 TTS / BGM / SFX provider，不写 WAV / SRT / MP4 文件，不写数据库，不调用 FFmpeg，不做前端预览或下载。
 
 具体任务：
 
-1. 实现 `voice_casting`。
-2. 定义 TTS provider。
-3. 生成配音。
-4. 实现 `subtitle_generator`。
-5. 生成 SRT。
-6. 实现 `auto_editor`。
-7. FFmpeg 拼接视频。
-8. 混入配音、BGM、SFX。
-9. 输出 MP4。
+1. 已实现 `voice_casting`，输入为 `episode_writer` 和 `storyboard_director` 成功 envelope。
+2. 已实现 `subtitle_generator`，输入为 `episode_writer`、`storyboard_director` 和 `voice_casting` 成功 envelope。
+3. 已实现 `auto_editor`，输入为 `storyboard_director`、`video_generation`、`voice_casting` 和 `subtitle_generator` 成功 envelope。
+4. 已在 `SkillGateway.default()` 注册 `voice_casting`、`subtitle_generator` 和 `auto_editor`。
+5. 已补齐三个 skill 的 `skill.yaml`、`prompt.md`、input/output schema、executor、validators、examples 和 CLI output。
+6. 已新增 `tests\test_stage10_audio_subtitle_edit_pipeline.py`，覆盖 Stage 4-10 完整 envelope 链路和失败 envelope。
+
+落地状态：
+
+- `voice_casting` 输出 `voice_profiles`、`voice_tasks`、逻辑音频 asset intent、零成本估算和 `checkpoint.required=true`。
+- `subtitle_generator` 输出 `subtitle_cues`、SRT 文本结构、逻辑字幕 asset intent 和 review warnings；只产出文本结构，不写真实 SRT 文件。
+- `auto_editor` 输出 video / audio / subtitle timeline tracks、rough edit `render_plan`、逻辑 MP4 output intent 和 review warnings。
+- 输出明确 `provider=none`、`model=none`、`file_written=false`、`writes_files=false`、`writes_database=false`、`uses_ffmpeg=false`。
 
 验收：
 
-- MP4 可播放。
-- SRT 可下载。
-- 字幕时间轴基本对齐。
-- 音量不过载。
+- 配音任务可消费脚本段落、speaker 信息和分镜 timing。
+- 字幕 cue 与配音任务数量和时间轴一致，并可序列化为 SRT 格式文本。
+- 粗剪计划可消费 mock 视频片段、配音任务和字幕 cue，形成后续 FFmpeg / export adapter 可读的 timeline。
+- Stage 10 不绕过 Control API / Worker 边界，不让 UI 直接访问数据库、文件系统、Python 脚本或 FFmpeg。
 
 阶段结束自检重点：
 
 - 对照 OpenMontage FFmpeg、subtitle-sync、video-stitching。
+- 已联网对照 OpenAI Audio / Text-to-speech、FFmpeg、Auto-Editor v3 timeline 和 SRT cue 格式；确认本阶段先收敛配音任务、字幕 cue 和粗剪 timeline boundary，真实 TTS、BGM/SFX、字幕文件、FFmpeg、MP4、持久化和 UI 下载延后。
 
 ## 18. Stage 11 质量检查
 
@@ -705,13 +714,53 @@ Status: pending
 
 - 检查同类产品的一键生成失败点，更新质检项。
 
-## 19. Stage 12 桌面打包
+## 19. Stage 12 PostgreSQL 持久化与后端收敛
+
+Status: pending
+
+目标：
+
+- 先把数据库、持久化、迁移和 Worker durable claiming 作为后端能力做好，不和桌面端绑定。
+- 本阶段不做 Electron，不做安装器，不做桌面端进程管理。
+- 桌面端后续只调用 Control API health / preflight 和业务 API。
+
+具体任务：
+
+1. 在 `MiLuStudio.Infrastructure` 中新增 PostgreSQL / EF Core DbContext adapter。
+2. 引入必要的 EF Core / Npgsql 依赖，并继续约束 NuGet 缓存到 D 盘项目目录。
+3. 将现有 SQL migration 与 EF Core model 对齐，必要时建立 migration runner 或明确的 migration 命令。
+4. 实现项目、生产任务、生成任务、资产和成本记录的 PostgreSQL repositories。
+5. 通过配置切换 `RepositoryProvider=InMemory` / `RepositoryProvider=PostgreSQL`。
+6. 实现 API 启动 preflight，检查连接串、数据库可达性、migration 状态和 storage 路径。
+7. 实现 Worker durable claiming，优先使用 PostgreSQL `FOR UPDATE SKIP LOCKED`。
+8. 将 Stage 5-11 的 Production Skill envelope 输出通过 Control API / Worker 写入数据库。
+9. 补齐数据库集成测试，覆盖 API / Worker 重启后的状态恢复。
+10. 明确本地数据库安装方式和连接配置文档；不要把 PostgreSQL 安装、端口、账号或 migrations 藏进 Electron 安装器。
+
+验收：
+
+- API 和 Worker 能在 PostgreSQL provider 下共享同一份项目、任务、资产和成本状态。
+- API 重启后仍能恢复项目进度、checkpoint、失败原因和已完成 skill 输出。
+- Worker 重启后能继续领取未完成任务，不重复执行已完成任务。
+- InMemory provider 仍可用于开发 smoke，不影响 PostgreSQL provider。
+- 所有数据库连接、migration、日志和 storage 配置都属于后端配置，不由 Electron 直接管理。
+- UI 只通过 Control API 展示数据库状态和错误；不直接访问数据库。
+
+阶段结束自检重点：
+
+- 检查 PostgreSQL Windows 本地部署、EF Core migrations、durable queue 和本地数据目录最新注意事项。
+- 确认桌面端不承担数据库 schema、migration 或初始化职责。
+
+## 20. Stage 13 桌面打包
 
 Status: pending
 
 目标：
 
 - 形成可演示、可售卖的 Windows 安装包。
+- 唯一桌面打包方案为 `Electron + electron-builder + NSIS assisted installer + 自定义 installer.nsh`。
+- 桌面端保留现有 Web UI 和 Control API 作为可持续迭代的前后端，只新增桌面宿主、安装器和本地进程管理边界。
+- 桌面端作为独立 part，在 Web UI、Control API、Worker、PostgreSQL adapter 和核心生产功能相对稳定后推进。
 
 具体任务：
 
@@ -721,26 +770,38 @@ Status: pending
 4. 启动 Windows Worker。
 5. 启动 Python Sidecar。
 6. 随机端口绑定。
-7. 首次启动初始化数据库。
-8. 托盘菜单。
-9. 打开输出目录。
-10. 查看日志。
-11. electron-builder + NSIS 打包。
-12. 生成 `MiLuStudio-Setup-<version>.exe`。
+7. 调用 Control API health / preflight 检查数据库、storage、Python runtime 和 Worker 状态；桌面端只展示结果和修复引导。
+8. 初始化或检查 storage 目录只能通过 Control API / 后端 service 完成，Electron 不直接写业务目录。
+9. 托盘菜单。
+10. 打开输出目录。
+11. 查看日志。
+12. electron-builder + NSIS assisted installer 打包，设置 `oneClick=false`、`allowToChangeInstallationDirectory=true`、`runAfterFinish=true`。
+13. 配置应用图标、安装器图标、卸载器图标、快捷方式图标、AppUserModelID 和 `shortcutName`。
+14. 增加自定义 `build\installer.nsh`，支持安装前付费码 / 激活码输入页和安装后动作。
+15. 安装器提供用户可选项：桌面快捷方式、开始菜单快捷方式、开机自启动、安装完成后启动。
+16. 预留登录 / 注册 / 授权入口和前端路由；账号系统不阻塞桌面安装包 MVP，作为下一大阶段推进。
+17. 生成 `MiLuStudio-Setup-<version>.exe`。
 
 验收：
 
 - 干净 Windows 环境可安装。
 - 用户无需手动启动后端。
+- 桌面端只通过 Control API 检查和使用数据库，不直接访问数据库、文件系统业务目录、Python 脚本或 FFmpeg。
+- 如果数据库未就绪，桌面端展示 Control API preflight 返回的错误和修复建议，不自行创建或迁移数据库。
+- 用户可选择安装目录、桌面快捷方式、开始菜单快捷方式、开机自启动和安装完成后启动。
+- 安装过程有可见实时进度条。
+- 付费码 / 激活码校验可阻止无效安装继续。
+- 安装器激活码门槛不作为唯一授权边界；应用内登录注册和账号授权留给桌面 MVP 后下一大阶段。
+- 任务栏固定不做静默强制 pin；通过正确 AppUserModelID / 快捷方式 / 引导让用户自行固定。
 - 卸载不默认删除用户生成素材。
 - 日志可定位错误。
 
 阶段结束自检重点：
 
 - 对照 LocalMiniDrama、Toonflow、MiLuAssistantDesktop 经验。
-- 检查 Electron / NSIS Windows 打包最新注意事项。
+- 检查 Electron / electron-builder / NSIS Windows 打包、自定义安装页、图标、快捷方式、自启动、安装激活码和任务栏固定最新注意事项。
 
-## 20. 每阶段联网自检模板
+## 21. 每阶段联网自检模板
 
 每个大阶段结束后必须填写到 `docs\MILUSTUDIO_TASK_RECORD.md`。
 
@@ -752,6 +813,7 @@ Design check:
 Web searches:
 Findings:
 Deviation risk:
+README check:
 Build plan changes:
 Phase plan changes:
 Task record changes:
@@ -764,11 +826,13 @@ Next phase:
 1. 先最小修改 `docs\MILUSTUDIO_BUILD_PLAN.md`。
 2. 再修改本文件的阶段任务。
 3. 再在 `docs\MILUSTUDIO_TASK_RECORD.md` 记录原因和变更。
-4. 最后修改 `docs\MILUSTUDIO_HANDOFF.md`。
+4. 检查并按需修改根 `README.md`。
+5. 最后修改 `docs\MILUSTUDIO_HANDOFF.md`。
 
 如果没有偏差：
 
 1. 不修改总参考。
 2. 只更新本文件阶段状态。
 3. 在 `docs\MILUSTUDIO_TASK_RECORD.md` 记录自检摘要。
-4. 更新 `docs\MILUSTUDIO_HANDOFF.md` 的下一棒任务。
+4. 检查根 `README.md` 是否需要同步更新。
+5. 更新 `docs\MILUSTUDIO_HANDOFF.md` 的下一棒任务。

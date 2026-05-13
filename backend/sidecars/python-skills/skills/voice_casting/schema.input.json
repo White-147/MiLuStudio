@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/voice_casting/input.schema.json",
+  "title": "voice_casting input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["episode_writer", "storyboard_director"],
+  "properties": {
+    "episode_writer": {
+      "type": "object",
+      "description": "A successful episode_writer runtime envelope."
+    },
+    "storyboard_director": {
+      "type": "object",
+      "description": "A successful storyboard_director runtime envelope for the same project and episode."
+    }
+  }
+}

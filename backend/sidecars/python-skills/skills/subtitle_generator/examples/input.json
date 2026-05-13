@@ -1,0 +1,92 @@
+{
+  "episode_writer": {
+    "ok": true,
+    "skill_name": "episode_writer",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "title": "雨夜纸鹤",
+      "language": "zh-CN",
+      "segments": [],
+      "subtitle_cues": []
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "storyboard_director": {
+    "ok": true,
+    "skill_name": "storyboard_director",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "shots": [
+        {
+          "shot_id": "shot_01",
+          "source_segment_id": "seg_01",
+          "start_second": 0,
+          "duration_seconds": 4
+        }
+      ],
+      "timing_summary": {
+        "total_shot_seconds": 4,
+        "within_tolerance": true
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "voice_casting": {
+    "ok": true,
+    "skill_name": "voice_casting",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "voice_tasks": [
+        {
+          "task_id": "voice_task_001",
+          "source_segment_id": "seg_01",
+          "source_type": "narration",
+          "speaker": "旁白",
+          "voice_profile_id": "voice_narrator",
+          "text": "林溪以为这只是普通的一晚。",
+          "start_second": 0,
+          "end_second": 2,
+          "duration_seconds": 2,
+          "target_shot_ids": ["shot_01"]
+        },
+        {
+          "task_id": "voice_task_002",
+          "source_segment_id": "seg_01",
+          "source_type": "dialogue",
+          "speaker": "林溪",
+          "voice_profile_id": "voice_speaker_01",
+          "text": "你到底想带我去哪？",
+          "start_second": 2,
+          "end_second": 4,
+          "duration_seconds": 2,
+          "target_shot_ids": ["shot_01"]
+        }
+      ]
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/subtitle_generator/input.schema.json",
+  "title": "subtitle_generator input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["episode_writer", "storyboard_director", "voice_casting"],
+  "properties": {
+    "episode_writer": {
+      "type": "object",
+      "description": "A successful episode_writer runtime envelope."
+    },
+    "storyboard_director": {
+      "type": "object",
+      "description": "A successful storyboard_director runtime envelope for the same project and episode."
+    },
+    "voice_casting": {
+      "type": "object",
+      "description": "A successful voice_casting runtime envelope for the same project and episode."
+    }
+  }
+}

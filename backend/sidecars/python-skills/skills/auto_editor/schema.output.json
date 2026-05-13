@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/auto_editor/output.schema.json",
+  "title": "auto_editor output envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "skill_name", "schema_version", "data", "error", "runtime"],
+  "properties": {
+    "ok": { "type": "boolean" },
+    "skill_name": { "type": "string", "const": "auto_editor" },
+    "schema_version": { "type": "string", "const": "1.0" },
+    "data": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": [
+            "project_id",
+            "episode_index",
+            "title",
+            "language",
+            "provider",
+            "model",
+            "mode",
+            "timeline",
+            "render_plan",
+            "edit_manifest",
+            "cost_estimate",
+            "review",
+            "checkpoint"
+          ],
+          "properties": {
+            "project_id": { "type": "string" },
+            "episode_index": { "type": "integer" },
+            "title": { "type": "string" },
+            "language": { "type": "string" },
+            "provider": { "type": "string", "const": "none" },
+            "model": { "type": "string", "const": "none" },
+            "mode": { "type": "string" },
+            "timeline": { "type": "object" },
+            "render_plan": { "type": "object" },
+            "edit_manifest": { "type": "object" },
+            "cost_estimate": { "type": "object" },
+            "review": { "type": "object" },
+            "checkpoint": { "type": "object" }
+          }
+        }
+      ]
+    },
+    "error": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["code", "message", "details"],
+          "properties": {
+            "code": { "type": "string" },
+            "message": { "type": "string" },
+            "details": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["duration_ms", "model", "mode", "cost_estimate"],
+      "properties": {
+        "duration_ms": { "type": "number" },
+        "model": { "type": "string" },
+        "mode": { "type": "string" },
+        "cost_estimate": { "type": "number" }
+      }
+    }
+  }
+}
