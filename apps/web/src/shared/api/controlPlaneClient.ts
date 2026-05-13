@@ -1,4 +1,12 @@
-import type { ProductionJob, ProductionJobEvent, ProjectDetail, ProjectSummary } from '../types/production';
+import type {
+  CostLedgerRecord,
+  GenerationTaskRecord,
+  ProductionJob,
+  ProductionJobEvent,
+  ProjectAssetRecord,
+  ProjectDetail,
+  ProjectSummary,
+} from '../types/production';
 
 const DEFAULT_API_BASE_URL = 'http://127.0.0.1:5268';
 
@@ -48,6 +56,22 @@ export async function resumeProductionJob(jobId: string, signal?: AbortSignal): 
 
 export async function retryProductionJob(jobId: string, signal?: AbortSignal): Promise<ProductionJob> {
   return productionJobCommand(jobId, 'retry', undefined, signal);
+}
+
+export async function getProductionJob(jobId: string, signal?: AbortSignal): Promise<ProductionJob> {
+  return request<ProductionJob>(`/api/production-jobs/${encodeURIComponent(jobId)}`, { signal });
+}
+
+export async function listProductionTasks(jobId: string, signal?: AbortSignal): Promise<GenerationTaskRecord[]> {
+  return request<GenerationTaskRecord[]>(`/api/production-jobs/${encodeURIComponent(jobId)}/tasks`, { signal });
+}
+
+export async function listProjectAssets(projectId: string, signal?: AbortSignal): Promise<ProjectAssetRecord[]> {
+  return request<ProjectAssetRecord[]>(`/api/projects/${encodeURIComponent(projectId)}/assets`, { signal });
+}
+
+export async function listProjectCosts(projectId: string, signal?: AbortSignal): Promise<CostLedgerRecord[]> {
+  return request<CostLedgerRecord[]>(`/api/projects/${encodeURIComponent(projectId)}/cost-ledger`, { signal });
 }
 
 export async function approveProductionCheckpoint(jobId: string, signal?: AbortSignal): Promise<ProductionJob> {

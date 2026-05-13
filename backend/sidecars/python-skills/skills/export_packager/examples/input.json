@@ -1,0 +1,95 @@
+{
+  "auto_editor": {
+    "ok": true,
+    "skill_name": "auto_editor",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo_project",
+      "episode_index": 1,
+      "title": "雨巷纸鹤",
+      "language": "zh-CN",
+      "timeline": {
+        "timeline_id": "timeline_demo_project_01",
+        "total_duration_seconds": 45
+      },
+      "render_plan": {
+        "output_format": "mp4",
+        "writes_files": false,
+        "uses_ffmpeg": false
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 1,
+      "model": "none",
+      "mode": "deterministic"
+    }
+  },
+  "quality_checker": {
+    "ok": true,
+    "skill_name": "quality_checker",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo_project",
+      "episode_index": 1,
+      "quality_status": "passed_with_warnings",
+      "quality_manifest": {
+        "issue_count": 0,
+        "auto_retry_count": 0,
+        "requires_human_confirmation": false
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 1,
+      "model": "none",
+      "mode": "deterministic"
+    }
+  },
+  "subtitle_generator": {
+    "ok": true,
+    "skill_name": "subtitle_generator",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo_project",
+      "episode_index": 1,
+      "subtitle_cues": [
+        {
+          "cue_index": 1,
+          "start_time": "00:00:00,000",
+          "end_time": "00:00:03,000",
+          "text": "雨夜里，纸鹤发出微光。"
+        }
+      ]
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 1,
+      "model": "none",
+      "mode": "deterministic"
+    }
+  },
+  "video_generation": {
+    "ok": true,
+    "skill_name": "video_generation",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo_project",
+      "episode_index": 1,
+      "clips": [
+        {
+          "clip_id": "clip_001",
+          "duration_seconds": 3,
+          "logical_uri": "milu://mock-assets/demo_project/video/clip_001.mp4",
+          "file_written": false
+        }
+      ]
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 1,
+      "model": "none",
+      "mode": "deterministic"
+    }
+  }
+}

@@ -33,6 +33,8 @@ class SkillGateway:
                 "voice_casting": "skills.voice_casting.executor:run",
                 "subtitle_generator": "skills.subtitle_generator.executor:run",
                 "auto_editor": "skills.auto_editor.executor:run",
+                "quality_checker": "skills.quality_checker.executor:run",
+                "export_packager": "skills.export_packager.executor:run",
             }
         )
 

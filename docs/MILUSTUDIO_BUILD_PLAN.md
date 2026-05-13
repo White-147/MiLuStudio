@@ -228,7 +228,7 @@ Artifacts: MP4 / SRT / storyboards / character bible / asset pack
 
 登录与授权原则：
 
-- 账号系统不阻塞 Stage 13 桌面安装包 MVP，作为桌面端落地后的下一大阶段推进。
+- 账号系统不阻塞 Stage 14 桌面安装包 MVP，作为桌面端落地后的下一大阶段推进。
 - 下一大阶段对齐 QQ 一类体验：应用启动默认只显示登录 / 注册 / 激活入口，未登录用户不能访问项目、素材、生产任务或设置页。
 - 登录注册、会话、授权状态、设备绑定和账号套餐必须由 Control API / Auth & Licensing adapter 统一处理，不放进 Electron 主进程或安装器脚本里。
 - 安装器里的付费码 / 激活码校验只能作为安装前门槛和商业体验，不作为唯一安全边界；安装完成后应用仍必须在登录态和授权态下访问功能。
@@ -1157,29 +1157,31 @@ D:\code\MiLuStudio\
 
 ### 阶段 11：质量检查
 
-目标：避免“一键生成”变成“一键失败”。
+目标：先把质量检查收敛成内部 Production Skill 边界，避免后续“一键生成”变成“一键失败”。
 
 步骤：
 
 1. 实现 `quality_checker`。
-2. 检查角色是否前后矛盾。
-3. 检查分镜时长是否达标。
-4. 检查字幕是否过长。
-5. 检查视频是否黑屏、卡顿、水印、尺寸错误。
-6. 检查文件是否缺失。
-7. 输出可读报告。
-8. 对可自动修复项自动重试。
+2. 基于 `character_bible` 检查分镜角色引用是否一致。
+3. 基于 `style_bible` 检查分镜是否引用已审核的画风 prompt blocks。
+4. 基于 `storyboard_director`、`video_generation` 和 `auto_editor` 检查 shot / mock clip / timeline 时长是否一致。
+5. 基于 `voice_casting` 和 `subtitle_generator` 检查配音任务、SRT cue timing、字幕长度和镜头引用。
+6. 检查 mock 资产和计划结构的边界标记：`file_written=false`、`writes_files=false`、`writes_database=false`、`uses_ffmpeg=false`、`reads_media_files=false`。
+7. 输出可读质量报告、严重级别、可自动重试项和人工确认 checkpoint。
+8. 后续真实黑屏、卡顿、水印、尺寸、音量和字幕烧录检测留给真实媒体 QA adapter；本阶段不读取真实媒体文件。
 
 验收：
 
 - 用户能看到失败原因。
-- 可重试项能从失败镜头继续，不重跑全流程。
-- 报告能保存到项目资产。
+- 可重试项能指向失败镜头或失败结构，供后续 Worker 从对应 skill 继续。
+- 报告结构能被后续 Control API / Worker / PostgreSQL adapter 保存为项目资产。
+- 本阶段不接真实视觉或音频检测模型，不触发 FFmpeg，不生成真实 MP4，不写数据库。
 
 参考：
 
 - OpenMontage reviewer / quality skills。
 - ArcReel checkpoint resume 思路。
+- FFmpeg `blackdetect` / `freezedetect` / `silencedetect` 只作为后续真实媒体 adapter 参考，不在 Stage 11 直接调用。
 
 ### 阶段 12：PostgreSQL 持久化与后端收敛
 
@@ -1212,7 +1214,7 @@ D:\code\MiLuStudio\
 延后：
 
 - 账号注册、登录、设备绑定、许可证和云端授权服务留给桌面 MVP 后的账号授权阶段。
-- Electron 安装器只在 Stage 13 作为交付壳接入已有后端，不承担数据库 schema 或 migration 设计。
+- Electron 安装器只在 Stage 14 作为交付壳接入已有后端，不承担数据库 schema 或 migration 设计。
 
 参考：
 
@@ -1221,7 +1223,68 @@ D:\code\MiLuStudio\
 - XiaoLouAI Windows 本地后端配置经验。
 - ArcReel task queue / cost ledger 思路。
 
-### 阶段 13：桌面打包
+当前落地状态：
+
+- Stage 12 已在 `backend\control-plane` 中落地为后端 Infrastructure 能力。
+- 已新增 `MiLuStudioDbContext`、PostgreSQL repository、provider 配置切换、preflight、migration status / apply API、Worker durable claiming 和 skill envelope 写回 API。
+- PostgreSQL provider 使用 SQL migration 文件维护 schema；`002_stage12_postgresql_claiming.sql` 增加 Worker lease / claiming 字段。
+- Worker claiming 通过 repository 边界完成，PostgreSQL 查询使用 `FOR UPDATE SKIP LOCKED`，并可接管 lease 过期的 running task。
+- 本阶段仍不接 Electron；数据库配置、migration、storage 和日志都属于 Control API / Worker / Infrastructure。
+- Stage 13 已将本地真实数据库配置落地到 `milu` / `root` / `root`，Control API preflight 返回 healthy。
+- Stage 13 已完成 PostgreSQL migration / API / Worker 共享状态 smoke，验证 15 个 deterministic Production Skill task 全部写回 PostgreSQL。
+
+### 阶段 13：真实配置、Worker-Skills 与前后端收敛验收
+
+目标：把 Stage 12 的后端持久化边界真正切到本机 PostgreSQL，并让 Worker、Python deterministic skills、Control API 和前端展示形成可验收闭环。
+
+本阶段决策：
+
+- 复用本机 PostgreSQL 18 Windows 服务。
+- 使用 `root/root` 作为本地开发数据库账号。
+- 创建 MiLuStudio 专用业务库 `milu`，不使用 XiaoLouAI 的 `xiaolou` 数据库。
+- 默认 `RepositoryProvider` 切换为 `PostgreSQL`。
+- InMemory provider 仍保留，但只用于快速 smoke 或特殊轻量场景。
+- 能持久化的数据优先写入 PostgreSQL，避免在用户电脑内存较小时堆积过多进程内状态。
+- 桌面端仍不参与数据库安装、连接、migration 或 storage 初始化；桌面打包后移到 Stage 14。
+
+步骤：
+
+1. 将 API / Worker 的版本库配置改为 PostgreSQL 默认 provider。
+2. 将连接串统一为 `Host=127.0.0.1;Port=5432;Database=milu;Username=root;Password=root`。
+3. 新增或更新 Windows 初始化脚本，幂等创建数据库 `milu` 并保持 D 盘约束。
+4. 通过 Control API / Infrastructure migration service 应用 SQL migrations。
+5. 增加 Worker 内部 skill runner adapter，通过 Python CLI / `SkillGateway` 调用 deterministic Production Skills。
+6. Worker 根据 `story_inputs` 和前置 task output envelope 构建每个 skill 输入。
+7. Worker 将 output envelope 通过后端 persistence service / repository 写入 `generation_tasks.output_json`、`assets` 和可选 `cost_ledger`。
+8. `ok=false` envelope 必须转为 failed task / failed job，不得写成 completed。
+9. API SSE 或轮询只推送数据库中的真实 job / task 状态，不再用 mock 逻辑自动推进。
+10. 审核节点继续通过 Control API checkpoint 确认，smoke 可以自动调用 checkpoint，但生产逻辑不能静默跳过人工确认边界。
+11. 如果任务队列包含 `export_packager`，补齐 deterministic mock skill，只输出导出包占位结构，不生成真实 ZIP / MP4。
+12. 前端通过 Control API 展示真实任务结果、skill envelope 摘要、资产索引、质量报告和成本记录；静态 mock 仅作为 API 不可用时的降级。
+
+验收：
+
+- 本机存在 `milu` 数据库，`root/root` 可连接。
+- `/api/system/preflight` 在 PostgreSQL provider 下返回 healthy。
+- `/api/system/migrations` 显示所有 SQL migration 已应用。
+- API 和 Worker 共享 PostgreSQL 中同一份项目、任务、资产和成本状态。
+- Worker 能领取 waiting task，调用 Python deterministic skill，并写回 envelope。
+- API / Worker 重启后，项目进度、checkpoint、失败原因和已完成 skill 输出仍能恢复。
+- 前端不直接访问数据库、文件系统、Python 脚本或 FFmpeg，只通过 Control API 展示真实结果。
+- 不接真实模型、不读取真实媒体、不触发 FFmpeg、不生成真实媒体文件。
+- 不引入 Linux / Docker / Redis / Celery 作为生产依赖。
+
+当前落地状态：
+
+- 已完成。默认开发 provider 已切到 PostgreSQL，InMemory 仅保留为快速 smoke / 特殊轻量场景。
+- 已创建 `milu` 数据库并通过 Control API migration service 应用 SQL migrations。
+- Worker 已通过 `PythonProductionSkillRunner` 调用 Python CLI / `SkillGateway`，并通过 `SkillEnvelopePersistenceService` 写回 `generation_tasks.output_json`、`assets` 和 `cost_ledger`。
+- 已把 `plot_adaptation`、`image_prompt_builder`、`video_prompt_builder`、`export_packager` 纳入完整 queue，端到端链路为 Stage 5-13。
+- API SSE 已改为读取数据库快照，不再由 API mock 自动推进生产状态。
+- 前端已通过 Control API 展示真实 tasks、skill envelope 摘要、资产索引和成本记录；静态 mock 仅作 API 不可用时降级。
+- 本地验证通过：`job_ba4b02d1cd534e948fe0fda74aaead3c` 为 completed / 100，15 个 task 全部 completed 且均有 output envelope，cost ledger 15 行。
+
+### 阶段 14：桌面打包
 
 目标：形成老板可演示、可售卖的 Windows 安装包。
 

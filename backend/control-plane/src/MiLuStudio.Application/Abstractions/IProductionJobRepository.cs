@@ -15,4 +15,14 @@ public interface IProductionJobRepository
     Task<IReadOnlyList<GenerationTask>> ListTasksAsync(string jobId, CancellationToken cancellationToken);
 
     Task ReplaceTasksAsync(string jobId, IReadOnlyList<GenerationTask> tasks, CancellationToken cancellationToken);
+
+    Task<GenerationTask?> GetTaskAsync(string taskId, CancellationToken cancellationToken);
+
+    Task UpdateTaskAsync(GenerationTask task, CancellationToken cancellationToken);
+
+    Task<GenerationTask?> ClaimNextTaskAsync(
+        string workerId,
+        DateTimeOffset now,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken);
 }

@@ -1287,3 +1287,319 @@ Changes:
 - `docs\MILUSTUDIO_PHASE_PLAN.md` 新增每棒先读 README、README check 字段和阶段完成后的 README 检查步骤。
 - `docs\MILUSTUDIO_HANDOFF.md` 新增固定约束：每次修改完成后检查 README 是否需要同步更新。
 - 根 `README.md` 已改为中文面试展示版，结构对齐 BookRecommendation 风格，同时保留 MiLuStudio 当前阶段、边界、数据库与桌面端解耦路线。
+
+### 2026-05-13 Stage 11 完成
+
+Date:
+
+- 2026-05-13
+
+Stage:
+
+- Stage 11 质量检查边界。
+
+Local verification:
+
+- 已新增 `skills\quality_checker`，包含 `skill.yaml`、`prompt.md`、input/output schema、executor、validators 和 examples。
+- 已在 `SkillGateway.default()` 注册 `quality_checker`。
+- `quality_checker` 输入消费 `character_bible`、`style_bible`、`storyboard_director`、`video_generation`、`voice_casting`、`subtitle_generator` 和 `auto_editor` 成功 envelope。
+- `quality_checker` 输出 `quality_status`、`score`、`issues`、`auto_retry_items`、`manual_review_items`、`quality_manifest`、`generation_plan`、`review` 和 `checkpoint`。
+- Stage 11 输出明确 `provider=none`、`model=none`、`writes_files=false`、`writes_database=false`、`reads_media_files=false`、`uses_visual_detector=false`、`uses_audio_detector=false`、`uses_ffmpeg=false`。
+- 已新增 `tests\test_stage11_quality_checker_pipeline.py`，覆盖 Stage 5-11 完整 envelope 链路、字幕过长可重试项和失败 envelope。
+- 已运行 `D:\soft\program\Python\Python313\python.exe -m py_compile backend\sidecars\python-skills\skills\quality_checker\executor.py backend\sidecars\python-skills\skills\quality_checker\validators.py backend\sidecars\python-skills\milu_studio_skills\gateway.py`，通过。
+- 已运行 `D:\soft\program\Python\Python313\python.exe -m milu_studio_skills run --skill quality_checker --input skills\quality_checker\examples\input.json --output skills\quality_checker\examples\output.json --pretty`，通过并生成 example output。
+- 已运行 `D:\soft\program\Python\Python313\python.exe -m unittest tests.test_stage11_quality_checker_pipeline`，3 个测试通过。
+- 已运行 `D:\soft\program\Python\Python313\python.exe -m unittest discover -s tests -v`，26 个测试通过。
+- 已运行 `D:\soft\program\Python\Python313\python.exe -m compileall -q milu_studio_skills skills tests`，通过。
+
+Design check:
+
+- cohesion: `quality_checker` 只负责结构化质检报告、严重级别、可重试项和人工确认 checkpoint，不混入真实 provider、数据库或媒体处理。
+- coupling: 仍只通过 `SkillGateway` / CLI envelope 串联；UI 未直接访问数据库、文件系统、Python 脚本、模型 SDK 或 FFmpeg。
+- boundaries: 本阶段不读取真实媒体文件，不接视觉 / 音频检测模型，不触发 FFmpeg，不写 MP4 / WAV / SRT / PNG，不写数据库。
+- dependency inversion: 真实黑屏、卡顿、水印、分辨率、音量、字幕烧录检测、报告持久化和 Worker retry claiming 保留给后续 adapter / Control API / PostgreSQL 阶段。
+- temporary debt: 当前只检查 envelope 元数据和 deterministic 结构；真实媒体 QA、自动续跑、失败镜头资产落盘、UI 质量报告卡片和数据库资产索引未做。
+
+Environment check:
+
+- project-local files: 新增文件均位于 `D:\code\MiLuStudio\backend\sidecars\python-skills`、`D:\code\MiLuStudio\docs` 和根 `README.md`。
+- D drive only: 验证使用 `D:\soft\program\Python\Python313\python.exe`。
+- C drive risk: 未新增 npm / NuGet / pip 依赖，未新增 Docker / Redis / Celery / Linux 生产依赖。
+
+Internet self-check:
+
+- OpenMontage README 显示生产级视频系统会在最终展示前做多点自检，包括 ffprobe validation、frame sampling、audio level analysis、delivery promise verification 和 subtitle checks；Stage 11 先做结构化质量报告，真实 ffprobe / frame / audio 检测留给后续 adapter，方向一致。
+- OpenMontage README 还显示其流程含 reviewer skill、checkpoint state 和 human approval；Stage 11 的 `manual_review_items` 与 `checkpoint.required=true` 保留人工确认边界。
+- FFmpeg filters 官方文档提供 `blackdetect`、`freezedetect`、`silencedetect` 等真实媒体检测能力；Stage 11 记录这些为后续真实媒体 QA adapter 参考，本阶段不调用 FFmpeg。
+- Auto-Editor v1 docs 显示 timeline 可以用 JSON 表达，且要求前后片段无 gap；Stage 11 继续检查 rough edit timeline 与 storyboard timing 的结构一致性，不渲染媒体。
+
+Sources:
+
+- `https://github.com/calesthio/OpenMontage`
+- `https://ffmpeg.org/ffmpeg-filters.html`
+- `https://auto-editor.com/docs/v1`
+
+Deviation reason:
+
+- 原 Stage 11 文档把黑屏、卡顿、水印、尺寸和文件缺失检查写在同一阶段，容易暗示要读取真实媒体或调用 FFmpeg。
+- 本轮用户明确要求 Stage 11 不接真实视觉 / 音频检测模型，不读取真实媒体文件，不触发 FFmpeg，不生成真实 MP4，不写数据库，并且不绕过 Control API / Worker。
+- 联网自检也确认真实媒体检测属于渲染或媒体 adapter 后的 QA 阶段；因此 Stage 11 先收敛为 metadata-only quality boundary。
+
+Build plan changes:
+
+- Stage 11 目标改为内部 Production Skill 质量检查边界。
+- Stage 11 步骤改为角色 / 风格 / timing / mock clip / 配音 / 字幕 / 粗剪计划结构质检。
+- 明确真实黑屏、卡顿、水印、尺寸、音量和字幕烧录检测留给后续真实媒体 QA adapter。
+
+Phase plan changes:
+
+- Stage 11 标记为 `done`。
+- 当前焦点改为 Stage 12 PostgreSQL 持久化与后端收敛。
+- Stage 11 落地状态补充 `quality_checker`、gateway 注册、schema、examples、tests 和 CLI smoke。
+
+README check:
+
+- 已检查根 `README.md`，需要同步更新。
+- 已将当前阶段改为 Stage 0-11 完成。
+- 已将核心链路补充到 `auto_editor -> quality_checker`。
+- 已补充质量报告、严重级别、可自动重试项和人工确认 checkpoint 说明。
+- 已将后续改进方向中的 Stage 11 待办改为 Stage 12 PostgreSQL 和真实媒体 QA adapter。
+- 已检查 `backend\sidecars\python-skills\README.md`，需要同步更新；已改为中文、PowerShell 友好的 Stage 11 sidecar 说明。
+
+Handoff changes:
+
+- 当前接棒状态更新为 Stage 12 preparation。
+- 记录 Stage 11 新 skill、验证命令、约束、技术债和下一阶段边界。
+
+Next phase:
+
+- Stage 12 PostgreSQL 持久化与后端收敛。
+- 将 Stage 5-11 的 Production Skill envelope 输出通过 Control API / Worker 写入数据库。
+- 继续保持桌面端与数据库解耦；Electron 不直接访问 PostgreSQL、不执行 migrations、不调用 Python 或 FFmpeg。
+
+### 2026-05-13 Stage 12 完成
+
+Date:
+
+- 2026-05-13
+
+Stage:
+
+- Stage 12 PostgreSQL 持久化与后端收敛。
+
+Local verification:
+
+- 已为 `MiLuStudio.Infrastructure` 引入 `Npgsql.EntityFrameworkCore.PostgreSQL`。
+- 已新增 `MiLuStudioDbContext`，映射 projects、story_inputs、production_jobs、generation_tasks、assets、cost_ledger、characters 和 shots。
+- 已新增 PostgreSQL repository，覆盖项目、生产任务、生成任务、资产和成本记录。
+- 已保留 InMemory provider，通过 `ControlPlane:RepositoryProvider=InMemory` / `PostgreSQL` 切换。
+- 已新增 `IControlPlanePreflightService`、`IControlPlaneMigrationService`、`IAssetRepository` 和 `ICostLedgerRepository`。
+- 已新增 `/api/system/preflight`、`/api/system/migrations`、`/api/system/migrations/apply`、`/api/projects/{projectId}/assets`、`/api/projects/{projectId}/cost-ledger`、`/api/production-jobs/{jobId}/tasks` 和 `POST /api/generation-tasks/{taskId}/output`。
+- 已新增 `002_stage12_postgresql_claiming.sql`，为 `generation_tasks` 增加 `queue_index`、`locked_by`、`locked_until`、`last_heartbeat_at` 和 claiming indexes。
+- Worker 现在通过 repository 领取任务；PostgreSQL provider 使用 `FOR UPDATE SKIP LOCKED`，并可接管 lease 过期的 running task。
+- Skill envelope 写回会更新 `generation_tasks.output_json`，并建立 `assets` 记录；请求包含成本字段时会写入 `cost_ledger`。
+- 已运行 `. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1; D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\control-plane-stage12-build\`，0 warning / 0 error。
+- 已运行 Python sidecar `compileall` 和 `unittest discover -s tests -v`，26 个测试通过。
+- 已运行 InMemory Control API smoke，覆盖 health、preflight、创建项目、创建 production job、查询 tasks、写入 skill envelope 和查询 assets。
+- 已运行 PostgreSQL provider 未配置可用数据库时的 preflight 负向 smoke，`/api/system/preflight` 返回 503 且包含结构化 preflight 诊断。
+- 本机存在运行中的 `postgresql-x64-18` 服务，但当前未配置可用连接串和凭据；真实 PostgreSQL migration / API / Worker 共享状态集成测试留给本地数据库配置完成后执行。
+
+Design check:
+
+- cohesion: PostgreSQL schema mapping、repository、migration service、preflight service 和 Worker claiming 各自位于 Infrastructure / Application / Worker 边界内，职责清晰。
+- coupling: API 和 Worker 只依赖 Application repository / service 抽象；UI 仍只通过 Control API DTO 通信，不直接访问数据库、文件系统、Python 脚本或 FFmpeg。
+- boundaries: 数据库配置、migration、storage 检查和 skill envelope 写回都属于后端；Electron 未接入，也不承担 schema、migration 或初始化职责。
+- dependency inversion: InMemory 与 PostgreSQL 通过同一 repository provider 切换；后续真实 Skill 执行、文件存储、FFmpeg 和 provider SDK 仍保留在 adapter / Worker 边界之后。
+- temporary debt: 真实 PostgreSQL 集成测试尚需可用本地连接串；InMemory provider 仍是进程内 smoke，不跨 API / Worker 进程共享状态。
+
+Environment check:
+
+- project-local files: 新增源码位于 `D:\code\MiLuStudio\backend\control-plane`，新增 SQL migration 位于 `backend\control-plane\db\migrations`，新增专题文档位于 `docs\POSTGRESQL_STAGE12_SETUP.md`。
+- D drive only: .NET 使用 `D:\soft\program\dotnet\dotnet.exe`；NuGet、构建输出、API smoke 日志均位于 `D:\code\MiLuStudio` 下的 `.nuget` / `.tmp`。
+- C drive risk: 未安装新全局工具，未引入 Docker / Redis / Celery / Linux 生产依赖；本机已有 PostgreSQL Windows 服务未被本阶段修改。
+
+Internet self-check:
+
+- Npgsql 官方文档确认 PostgreSQL 的 EF Core provider 通过 `Npgsql.EntityFrameworkCore.PostgreSQL` 接入，并遵循通用 EF Core DbContext 模式。
+- Microsoft EF Core provider 文档列出 `Npgsql.EntityFrameworkCore.PostgreSQL` 作为 PostgreSQL provider，当前选择符合 .NET 后端主线。
+- PostgreSQL 官方 `SELECT` 文档说明 `SKIP LOCKED` 会跳过无法立即加锁的行，适合多个消费者访问 queue-like table 以避免锁竞争；当前 Worker claiming 方案一致。
+- Microsoft ASP.NET Core health check 文档说明 DbContext 连接检查默认使用 EF Core `CanConnectAsync`；当前 preflight 的数据库可达性检查方向一致，并额外返回 migration 和 storage 建议。
+
+Sources:
+
+- `https://www.npgsql.org/efcore/?tabs=aspnet`
+- `https://learn.microsoft.com/en-us/ef/core/providers/`
+- `https://www.postgresql.org/docs/18/sql-select.html`
+- `https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/health-checks?view=aspnetcore-10.0`
+
+Deviation reason:
+
+- 无产品方向偏差。
+- Stage 12 按用户要求先完成后端数据库能力，不推进桌面端，不把 PostgreSQL 安装、端口、账号、migration 或 storage 初始化藏进 Electron。
+- 真实 PostgreSQL 实库集成测试因缺少已确认的本地数据库连接串和凭据未执行，已记录为下一步配置后验证项。
+
+Build plan changes:
+
+- 增加 Stage 12 当前落地状态，记录 DbContext、PostgreSQL repository、provider switch、preflight、migration API、Worker claiming 和 skill envelope 写回。
+- 明确真实 PostgreSQL integration 需要配置好本地连接串后执行。
+
+Phase plan changes:
+
+- Stage 12 标记为 `done`。
+- 当前焦点改为 Stage 13 桌面打包。
+- Stage 12 落地状态补充 preflight、migration、durable claiming、skill envelope 写回和本地验证边界。
+
+README check:
+
+- 已检查根 `README.md`，需要同步更新。
+- 已将项目阶段改为 Stage 0-12 完成。
+- 已补充 PostgreSQL adapter、migration、preflight、Worker durable claiming 和 skill envelope 写回说明。
+- 已修正“当前边界”中旧的“不写真实数据库”表述，改为默认 InMemory 不要求真实 PostgreSQL，切换 PostgreSQL 后由后端写入业务状态。
+
+Handoff changes:
+
+- 当前接棒状态更新为 Stage 13 preparation。
+- 记录 Stage 12 新增后端能力、验证命令、真实 PostgreSQL 集成测试边界和下一阶段桌面打包提示词。
+
+Next phase:
+
+- Stage 13 真实配置、Worker-Skills 与前后端收敛验收。
+- 默认 PostgreSQL、真实 `milu` 数据库、Worker 调 Python deterministic skills 和前端真实结果展示。
+- Stage 14 再进入桌面打包，唯一方案仍为 `Electron + electron-builder + NSIS assisted installer + 自定义 installer.nsh`。
+
+### 2026-05-13 Stage 13 文档同步
+
+Date:
+
+- 2026-05-13
+
+Decision:
+
+- 在桌面打包前插入新的 Stage 13：真实配置、Worker-Skills 与前后端收敛验收。
+- 原 Stage 13 桌面打包整体后移为 Stage 14。
+- 默认 `RepositoryProvider` 后续切到 `PostgreSQL`。
+- 本机数据库复用 PostgreSQL 18 Windows 服务，使用 `root/root`，创建 MiLuStudio 专用业务库 `milu`。
+- InMemory provider 保留为快速 smoke / 特殊轻量场景，不再作为默认业务事实来源。
+- Worker 必须通过内部 adapter 调用 Python deterministic Production Skills，并通过后端 persistence / repository 边界写回 PostgreSQL。
+- 前端必须通过 Control API 展示真实任务结果、skill envelope、资产索引和成本记录；不能直接访问数据库、文件系统、Python 脚本或 FFmpeg。
+
+Reason:
+
+- Stage 12 已具备 PostgreSQL adapter、migration、preflight 和 durable claiming 边界，但真实本机数据库配置、Worker 调 skill 和前端真实结果展示尚未收敛。
+- 直接进入桌面打包会把仍在变化的前后端和数据库边界过早固化到安装器中，不利于后续功能迭代。
+- 用户明确希望数据库不和桌面端绑定，桌面端作为独立 part 在核心前后端功能完善后继续。
+
+Doc changes:
+
+- `docs\MILUSTUDIO_PHASE_PLAN.md`：新增 Stage 13，原桌面打包改为 Stage 14，并更新当前焦点。
+- `docs\MILUSTUDIO_BUILD_PLAN.md`：新增阶段 13 真实配置与收敛目标，原桌面打包改为阶段 14。
+- `docs\MILUSTUDIO_HANDOFF.md`：更新当前接棒、固定约束、技术债、下一步建议和下一棒提示词。
+- `docs\POSTGRESQL_STAGE12_SETUP.md`：同步 Stage 13 默认 PostgreSQL、`milu`、`root/root` 和验收要求。
+- 根 `README.md`：同步当前阶段、默认持久化策略和后续 Stage 14 桌面打包位置。
+
+README check:
+
+- 已检查根 `README.md`，需要同步更新。
+- README 已从 “Stage 0-12 完成、默认 InMemory” 调整为 “Stage 13 推进中、默认切向 PostgreSQL”。
+
+Next phase:
+
+- 继续 Stage 13 实现。
+- 先写入 API / Worker 默认 PostgreSQL 配置和本机数据库初始化脚本。
+- 再推进 Worker skill runner adapter、API 状态收敛和前端真实结果展示。
+
+### 2026-05-13 Stage 13 完成
+
+Date:
+
+- 2026-05-13
+
+Stage:
+
+- Stage 13 真实配置、Worker-Skills 与前后端收敛验收。
+
+Local verification:
+
+- 已将 API / Worker 默认 `RepositoryProvider` 切到 `PostgreSQL`。
+- 已将版本库连接串统一为 `Host=127.0.0.1;Port=5432;Database=milu;Username=root;Password=root`。
+- 已新增 `scripts\windows\Initialize-MiLuStudioPostgreSql.ps1`，幂等创建 `milu`；本机 `root/root` 无 `CREATEDB` 权限时用 `postgres/root` bootstrap 建库并把 owner 设为 `root`。
+- 已实际创建数据库 `milu`，并通过 Control API `/api/system/migrations/apply` 应用 `001_initial_control_plane` 和 `002_stage12_postgresql_claiming`。
+- 已新增 `IProductionSkillRunner`、`PythonProductionSkillRunner` 和 `ProductionSkillExecutionService`，Worker 通过 Python CLI / `SkillGateway` 调用 deterministic skills。
+- 已把 `plot_adaptation`、`image_prompt_builder`、`video_prompt_builder` 和新增 `export_packager` 纳入 production queue。
+- 已新增 deterministic `export_packager` skill 和 `tests\test_stage13_export_packager.py`。
+- 已将 `SystemClock` 改为 UTC，修复 Npgsql 写入 `timestamptz` 时 `DateTimeOffset +08:00` 不被接受的问题。
+- 已修复 PostgreSQL repository 的 job / task 外键写入顺序，并在写入后清理 EF Core ChangeTracker，避免长链路跟踪冲突。
+- 已将 Worker 空轮询间隔从 30 秒降为 3 秒，checkpoint 后能更快继续领取下一条 task。
+- 已将 API SSE 改为读取数据库快照，不再由 API mock 自动推进生产状态。
+- 已让前端通过 Control API 读取 job、tasks、assets、cost ledger，并用真实 `outputJson` envelope 构建结果卡和导出区。
+
+Commands:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Initialize-MiLuStudioPostgreSql.ps1
+
+. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage13-build\
+
+# Control API on http://127.0.0.1:5368
+# POST /api/system/migrations/apply
+# GET /api/system/preflight
+# Full smoke with API + Worker + automatic checkpoint approval
+
+Push-Location D:\code\MiLuStudio\backend\sidecars\python-skills
+& $env:MILUSTUDIO_PYTHON -m compileall milu_studio_skills skills tests
+& $env:MILUSTUDIO_PYTHON -m unittest discover -s tests -v
+Pop-Location
+
+cd D:\code\MiLuStudio\apps\web
+npm run build
+```
+
+Smoke result:
+
+- `job_ba4b02d1cd534e948fe0fda74aaead3c` completed / 100。
+- `generation_tasks`: 15 rows, 15 completed, 15 output_json present。
+- `cost_ledger`: 15 rows。
+
+Design check:
+
+- cohesion: Worker 调用 Python、输入构建、输出持久化集中在 Application / Infrastructure 边界，前端只消费 API DTO。
+- coupling: UI 未接触数据库、文件系统、Python 脚本或 FFmpeg；Python skill 不写数据库；Electron 未提前介入数据库。
+- boundaries: PostgreSQL migration、preflight、durable claiming、skill runner 和 envelope persistence 都保持在 Control API / Worker / Infrastructure 边界内。
+- temporary debt: 端到端 smoke 已手工脚本化但还不是仓库内自动化集成测试；真实 provider、真实媒体文件、FFmpeg、下载文件和账号授权仍未实现。
+
+Environment check:
+
+- 本机使用 `postgresql-x64-18` Windows 服务。
+- 应用业务连接使用 `milu` / `root` / `root`。
+- 依赖、临时 skill run、构建输出和 storage 均在 `D:\code\MiLuStudio` 或明确 D 盘工具目录内。
+- 未引入 Linux / Docker / Redis / Celery 作为生产依赖。
+
+Web self-check:
+
+- PostgreSQL 18 `SELECT` 文档确认 `FOR UPDATE ... SKIP LOCKED` 仍是可用的非阻塞任务领取能力：https://www.postgresql.org/docs/18/sql-select.html
+- Npgsql Date / Time 文档确认 `DateTimeOffset` 写入 `timestamp with time zone` 仅支持 Offset=0，已用 UTC clock 修正：https://www.npgsql.org/doc/types/datetime.html
+- Microsoft EF Core tracking 文档确认 DbContext 会跟踪实体实例，长链路重复 attach 需要控制跟踪状态，已在 repository 写入后清理 ChangeTracker：https://learn.microsoft.com/en-us/ef/core/querying/tracking
+- electron-builder NSIS 文档确认 Stage 14 继续采用 NSIS assisted installer 和自定义脚本方向：https://www.electron.build/nsis.html
+
+README check:
+
+- 已检查根 `README.md`，需要同步更新。
+- 已将 README 改为 Stage 0-13 完成、下一阶段 Stage 14 桌面打包。
+- 已补充 `export_packager`、本机 PostgreSQL 初始化 / migration 命令、Stage 5-13 写回数据库和 Stage 13 已完成状态。
+- 已检查 `backend\sidecars\python-skills\README.md`，需要同步更新；已补充 Stage 13、`export_packager` 和示例命令。
+
+Doc changes:
+
+- `docs\MILUSTUDIO_PHASE_PLAN.md`：Stage 13 标记为 `done`，当前焦点改为 Stage 14，并补充 Stage 13 落地状态。
+- `docs\MILUSTUDIO_BUILD_PLAN.md`：补充 Stage 13 当前落地状态，移除“真实 PostgreSQL 集成测试待配置”的旧表述。
+- `docs\POSTGRESQL_STAGE12_SETUP.md`：补充 `milu` 初始化脚本、bootstrap 权限说明和 Stage 13 smoke 结果。
+- `docs\MILUSTUDIO_HANDOFF.md`：当前接棒改为 Stage 14，补充 Stage 13 落地内容、验证结果、技术债和下一棒提示词。
+- 根 `README.md`：同步 Stage 13 完成状态和 Stage 14 后续方向。
+- `backend\sidecars\python-skills\README.md`：同步 Stage 13 sidecar 范围和 `export_packager` 示例。
+
+Next phase:
+
+- Stage 14 桌面端独立打包。
+- 唯一方案继续为 `Electron + electron-builder + NSIS assisted installer + 自定义 installer.nsh`。
+- 桌面端不直接访问 PostgreSQL、不执行 migrations、不定义数据库表、不调用 Python 或 FFmpeg，只通过 Control API health / preflight 和业务 API 工作。

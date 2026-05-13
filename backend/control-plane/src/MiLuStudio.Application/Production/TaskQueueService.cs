@@ -16,6 +16,7 @@ public sealed class TaskQueueService
                 Id = $"task_{Guid.NewGuid():N}",
                 JobId = jobId,
                 ProjectId = projectId,
+                QueueIndex = index,
                 SkillName = stage.Skill,
                 Provider = "mock-control-plane",
                 InputJson = $$"""{"stage":"{{stage.Id}}","requestedBy":"{{requestedBy ?? "ui"}}"}""",

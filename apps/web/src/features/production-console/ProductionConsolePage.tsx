@@ -15,10 +15,14 @@ import {
   Video,
 } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   approveProductionCheckpoint,
+  getProductionJob,
   getProject,
+  listProductionTasks,
+  listProjectAssets,
+  listProjectCosts,
   pauseProductionJob,
   resumeProductionJob,
   retryProductionJob,
@@ -26,7 +30,17 @@ import {
   watchProductionJob,
 } from '../../shared/api/controlPlaneClient';
 import { mockDeliveryAssets, mockProjects, mockResultCards, mockStages } from '../../shared/mock/studioMock';
-import type { ProjectDetail, ProjectMode, ProductionJob, ProductionJobEvent, ProductionStage, ResultCard } from '../../shared/types/production';
+import type {
+  CostLedgerRecord,
+  GenerationTaskRecord,
+  ProjectAssetRecord,
+  ProjectDetail,
+  ProjectMode,
+  ProductionJob,
+  ProductionJobEvent,
+  ProductionStage,
+  ResultCard,
+} from '../../shared/types/production';
 
 interface ProductionConsolePageProps {
   onBack: () => void;
@@ -50,6 +64,27 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
   const [streamJobId, setStreamJobId] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState('正在连接 Control API');
   const [actioning, setActioning] = useState<JobCommand | null>(null);
+  const [taskOutputs, setTaskOutputs] = useState<GenerationTaskRecord[]>([]);
+  const [projectAssets, setProjectAssets] = useState<ProjectAssetRecord[]>([]);
+  const [costLedger, setCostLedger] = useState<CostLedgerRecord[]>([]);
+
+  const refreshProductionArtifacts = useCallback(
+    async (jobId: string) => {
+      const [nextJob, nextTasks, nextAssets, nextCosts] = await Promise.all([
+        getProductionJob(jobId),
+        listProductionTasks(jobId),
+        listProjectAssets(project.id),
+        listProjectCosts(project.id),
+      ]);
+
+      setJob(nextJob);
+      setStages(nextJob.stages);
+      setTaskOutputs(nextTasks);
+      setProjectAssets(nextAssets);
+      setCostLedger(nextCosts);
+    },
+    [project.id],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -96,6 +131,9 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
       (event) => {
         applyProductionEvent(event, setJob, setStages);
         setSyncMessage(event.message);
+        void refreshProductionArtifacts(event.jobId).catch(() => {
+          setSyncMessage('Control API 已推送状态，但结果索引暂时未同步。');
+        });
 
         if (event.jobStatus === 'completed' || event.jobStatus === 'failed') {
           setRunning(false);
@@ -106,7 +144,7 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
         setSyncMessage('SSE 连接已结束或等待下一次 mock 事件');
       },
     );
-  }, [streamJobId]);
+  }, [refreshProductionArtifacts, streamJobId]);
 
   const visibleStages = useMemo(() => {
     if (apiState !== 'mock-fallback' || !running) {
@@ -137,6 +175,7 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
       setApiState('control-api');
       setStreamJobId(nextJob.id);
       setSyncMessage(`Control API 已启动 job ${nextJob.id}`);
+      void refreshProductionArtifacts(nextJob.id);
     } catch {
       setRunning(true);
       setApiState('mock-fallback');
@@ -167,6 +206,7 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
       setJob(nextJob);
       setStages(nextJob.stages);
       setRunning(nextJob.status === 'running' || nextJob.status === 'paused');
+      void refreshProductionArtifacts(nextJob.id);
 
       if ((command === 'retry' || command === 'resume') && nextJob.status === 'running') {
         setStreamJobId(nextJob.id);
@@ -221,7 +261,13 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
           stages={visibleStages}
           syncMessage={syncMessage}
         />
-        <ResultsPanel jobCompleted={job?.status === 'completed'} />
+        <ResultsPanel
+          apiState={apiState}
+          assets={projectAssets}
+          costs={costLedger}
+          jobCompleted={job?.status === 'completed'}
+          tasks={taskOutputs}
+        />
       </div>
     </section>
   );
@@ -369,15 +415,30 @@ function ProgressPanel({
   );
 }
 
-function ResultsPanel({ jobCompleted }: { jobCompleted: boolean }) {
+function ResultsPanel({
+  apiState,
+  assets,
+  costs,
+  jobCompleted,
+  tasks,
+}: {
+  apiState: ApiState;
+  assets: ProjectAssetRecord[];
+  costs: CostLedgerRecord[];
+  jobCompleted: boolean;
+  tasks: GenerationTaskRecord[];
+}) {
+  const realCards = buildRealResultCards(tasks, costs);
+  const cards = apiState === 'control-api' && realCards.length > 0 ? realCards : mockResultCards;
+
   return (
     <section className="results-column" aria-label="中间结果和最终交付">
       <div className="result-stack">
-        {mockResultCards.map((card) => (
+        {cards.map((card) => (
           <ResultCardView card={card} key={card.id} />
         ))}
       </div>
-      <DeliveryPanel jobCompleted={jobCompleted} />
+      <DeliveryPanel assets={assets} jobCompleted={jobCompleted} tasks={tasks} />
     </section>
   );
 }
@@ -416,7 +477,32 @@ function ResultCardView({ card }: { card: ResultCard }) {
   );
 }
 
-function DeliveryPanel({ jobCompleted }: { jobCompleted: boolean }) {
+function DeliveryPanel({
+  assets,
+  jobCompleted,
+  tasks,
+}: {
+  assets: ProjectAssetRecord[];
+  jobCompleted: boolean;
+  tasks: GenerationTaskRecord[];
+}) {
+  const exportAssets = extractExportDeliveryAssets(tasks);
+  const rows =
+    exportAssets.length > 0
+      ? exportAssets
+      : assets.length > 0
+        ? assets.slice(0, 6).map((asset) => ({
+            id: asset.id,
+            label: asset.kind,
+            format: asset.mimeType,
+            size: formatFileSize(asset.fileSize),
+            state: 'ready' as const,
+          }))
+        : mockDeliveryAssets.map((asset) => ({
+            ...asset,
+            state: jobCompleted ? ('ready' as const) : asset.state,
+          }));
+
   return (
     <section className="workspace-panel delivery-panel" aria-label="最终交付区">
       <div className="panel-heading">
@@ -427,23 +513,179 @@ function DeliveryPanel({ jobCompleted }: { jobCompleted: boolean }) {
         <Download size={18} />
       </div>
       <div className="asset-list">
-        {mockDeliveryAssets.map((asset) => {
-          const state = jobCompleted ? 'ready' : asset.state;
-
-          return (
-            <div className="asset-row" key={asset.id}>
-              <div>
-                <strong>{asset.label}</strong>
-                <span>{asset.format}</span>
-              </div>
-              <span>{state === 'ready' ? asset.size : '等待生成'}</span>
+        {rows.map((asset) => (
+          <div className="asset-row" key={asset.id}>
+            <div>
+              <strong>{asset.label}</strong>
+              <span>{asset.format}</span>
             </div>
-          );
-        })}
+            <span>{asset.state === 'ready' ? asset.size : '等待生成'}</span>
+          </div>
+        ))}
       </div>
     </section>
   );
 }
+
+function buildRealResultCards(tasks: GenerationTaskRecord[], costs: CostLedgerRecord[]): ResultCard[] {
+  return tasks
+    .filter((task) => task.outputJson)
+    .map((task): ResultCard => {
+      const envelope = parseSkillEnvelope(task.outputJson);
+      const data = envelope?.data;
+      const cost = costs.find((entry) => entry.taskId === task.id);
+
+      return {
+        id: task.id,
+        title: skillTitle(task.skillName),
+        kind: resultKindForSkill(task.skillName),
+        status: task.status === 'completed' ? 'locked' : task.status === 'review' ? 'ready' : 'draft',
+        summary: summarizeSkillOutput(task, envelope),
+        details: [
+          `状态：${task.status}`,
+          `尝试：${task.attemptCount}`,
+          cost ? `成本：${cost.actualCost ?? cost.estimatedCost}` : '成本：0',
+          data ? `字段：${Object.keys(data).slice(0, 4).join(' / ')}` : '字段：error',
+        ],
+      };
+    });
+}
+
+function parseSkillEnvelope(outputJson: string | null): SkillEnvelope | null {
+  if (!outputJson) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(outputJson) as SkillEnvelope;
+  } catch {
+    return null;
+  }
+}
+
+function summarizeSkillOutput(task: GenerationTaskRecord, envelope: SkillEnvelope | null): string {
+  if (!envelope) {
+    return task.errorMessage ?? '结果 JSON 暂时无法解析。';
+  }
+
+  if (!envelope.ok) {
+    return envelope.error?.message ?? task.errorMessage ?? '该 Production Skill 执行失败。';
+  }
+
+  const data = envelope.data ?? {};
+  if (task.skillName === 'quality_checker') {
+    const issueCount = Array.isArray(data.issues) ? data.issues.length : 0;
+    return `质量状态 ${String(data.quality_status ?? 'unknown')}，发现 ${issueCount} 个结构化检查项。`;
+  }
+
+  if (task.skillName === 'export_packager') {
+    const assetCount = Array.isArray(data.delivery_assets) ? data.delivery_assets.length : 0;
+    return `已生成 ${assetCount} 个导出占位资产结构，等待后续真实渲染 adapter。`;
+  }
+
+  if (Array.isArray(data.shots)) {
+    return `已生成 ${data.shots.length} 个可审阅分镜。`;
+  }
+
+  if (Array.isArray(data.clips)) {
+    return `已生成 ${data.clips.length} 个 mock 视频片段结构。`;
+  }
+
+  if (Array.isArray(data.characters)) {
+    return `已生成 ${data.characters.length} 个角色设定。`;
+  }
+
+  if (Array.isArray(data.subtitle_cues)) {
+    return `已生成 ${data.subtitle_cues.length} 条 SRT-ready 字幕 cue。`;
+  }
+
+  return String(data.summary ?? data.title ?? `${task.skillName} envelope 已写入数据库。`);
+}
+
+function extractExportDeliveryAssets(tasks: GenerationTaskRecord[]) {
+  const exportTask = tasks.find((task) => task.skillName === 'export_packager' && task.outputJson);
+  const envelope = parseSkillEnvelope(exportTask?.outputJson ?? null);
+  const deliveryAssets = envelope?.data?.delivery_assets;
+
+  if (!Array.isArray(deliveryAssets)) {
+    return [];
+  }
+
+  return deliveryAssets.map((asset, index) => ({
+    id: String(asset.asset_id ?? `delivery-${index}`),
+    label: String(asset.label ?? asset.kind ?? '导出资产'),
+    format: String(asset.format ?? 'json'),
+    size: asset.file_written ? '已生成' : '占位结构',
+    state: 'ready' as const,
+  }));
+}
+
+function skillTitle(skillName: string): string {
+  return skillNameMap[skillName] ?? skillName;
+}
+
+function resultKindForSkill(skillName: string): ResultCard['kind'] {
+  if (skillName.includes('story') || skillName.includes('episode') || skillName.includes('plot')) {
+    return 'script';
+  }
+
+  if (skillName.includes('character')) {
+    return 'character';
+  }
+
+  if (skillName.includes('style')) {
+    return 'style';
+  }
+
+  if (skillName.includes('board')) {
+    return 'storyboard';
+  }
+
+  if (skillName.includes('export')) {
+    return 'delivery';
+  }
+
+  return 'media';
+}
+
+function formatFileSize(value: number): string {
+  if (value <= 0) {
+    return 'DB 索引';
+  }
+
+  if (value < 1024) {
+    return `${value} B`;
+  }
+
+  return `${Math.round(value / 1024)} KB`;
+}
+
+interface SkillEnvelope {
+  ok: boolean;
+  skill_name: string;
+  schema_version: string;
+  data: Record<string, any> | null;
+  error: { code?: string; message?: string; details?: unknown } | null;
+  runtime?: Record<string, unknown>;
+}
+
+const skillNameMap: Record<string, string> = {
+  story_intake: '故事解析',
+  plot_adaptation: '短剧改编',
+  episode_writer: '脚本',
+  character_bible: '角色设定',
+  style_bible: '画风规则',
+  storyboard_director: '分镜',
+  image_prompt_builder: '图像提示词',
+  image_generation: 'Mock 图片资产',
+  video_prompt_builder: '视频提示词',
+  video_generation: 'Mock 视频片段',
+  voice_casting: '配音任务',
+  subtitle_generator: '字幕结构',
+  auto_editor: '粗剪计划',
+  quality_checker: '质量报告',
+  export_packager: '导出占位包',
+};
 
 function applyProductionEvent(
   event: ProductionJobEvent,

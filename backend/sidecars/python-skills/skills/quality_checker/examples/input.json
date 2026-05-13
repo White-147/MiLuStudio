@@ -1,0 +1,305 @@
+{
+  "character_bible": {
+    "ok": true,
+    "skill_name": "character_bible",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo_project",
+      "episode_index": 1,
+      "title": "Demo Episode",
+      "language": "zh-CN",
+      "characters": [
+        {
+          "character_id": "char_01",
+          "name": "Lead",
+          "role_type": "main",
+          "stable_seed": "demo_project:episode_1:char_01"
+        }
+      ]
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "style_bible": {
+    "ok": true,
+    "skill_name": "style_bible",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo_project",
+      "episode_index": 1,
+      "title": "Demo Episode",
+      "language": "zh-CN",
+      "reusable_prompt_blocks": {
+        "base_style": "clean vertical animation frame",
+        "character_consistency": "Lead keeps the same silhouette and outfit",
+        "environment": "simple reviewable background",
+        "camera": "stable vertical composition",
+        "quality_guardrails": "no extra characters, no random outfit changes"
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "storyboard_director": {
+    "ok": true,
+    "skill_name": "storyboard_director",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo_project",
+      "episode_index": 1,
+      "title": "Demo Episode",
+      "language": "zh-CN",
+      "aspect_ratio": "9:16",
+      "shots": [
+        {
+          "shot_id": "shot_01",
+          "shot_index": 1,
+          "source_segment_id": "segment_001",
+          "start_second": 0,
+          "duration_seconds": 4,
+          "characters": [
+            {
+              "character_id": "char_01",
+              "name": "Lead",
+              "role_type": "main",
+              "stable_seed": "demo_project:episode_1:char_01"
+            }
+          ],
+          "style_prompt_block_refs": [
+            "base_style",
+            "character_consistency",
+            "environment",
+            "camera",
+            "quality_guardrails"
+          ]
+        }
+      ],
+      "timing_summary": {
+        "target_duration_seconds": 4,
+        "total_shot_seconds": 4,
+        "shot_count": 1,
+        "min_shot_seconds": 4,
+        "max_shot_seconds": 4,
+        "within_tolerance": true
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "video_generation": {
+    "ok": true,
+    "skill_name": "video_generation",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo_project",
+      "episode_index": 1,
+      "clips": [
+        {
+          "clip_id": "mock_video_01_001",
+          "request_id": "video_request_001",
+          "shot_id": "shot_01",
+          "duration_seconds": 4,
+          "status": "mock_ready",
+          "provider": "mock",
+          "model": "none",
+          "asset_uri": "milu://mock-assets/demo_project/mock_video_01_001.mp4",
+          "file_written": false
+        }
+      ],
+      "clip_manifest": {
+        "clip_count": 1,
+        "total_duration_seconds": 4,
+        "writes_files": false,
+        "writes_database": false,
+        "uses_ffmpeg": false
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "voice_casting": {
+    "ok": true,
+    "skill_name": "voice_casting",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo_project",
+      "episode_index": 1,
+      "voice_tasks": [
+        {
+          "task_id": "voice_task_001",
+          "source_segment_id": "segment_001",
+          "source_type": "narration",
+          "speaker": "Narrator",
+          "text": "A compact review line.",
+          "start_second": 0,
+          "end_second": 4,
+          "duration_seconds": 4,
+          "target_shot_ids": ["shot_01"],
+          "provider": "none",
+          "model": "none",
+          "output_audio_intent": {
+            "kind": "audio",
+            "asset_uri": "milu://mock-assets/demo_project/voice_task_001.wav",
+            "file_written": false
+          }
+        }
+      ],
+      "voice_manifest": {
+        "task_count": 1,
+        "writes_files": false,
+        "writes_database": false
+      },
+      "generation_plan": {
+        "provider": "none",
+        "model": "none",
+        "writes_files": false,
+        "writes_database": false
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "subtitle_generator": {
+    "ok": true,
+    "skill_name": "subtitle_generator",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo_project",
+      "episode_index": 1,
+      "subtitle_cues": [
+        {
+          "cue_id": "subtitle_001",
+          "index": 1,
+          "start_second": 0,
+          "end_second": 4,
+          "text": "A compact review line.",
+          "source_task_id": "voice_task_001",
+          "target_shot_ids": ["shot_01"]
+        }
+      ],
+      "srt_text": "1\n00:00:00,000 --> 00:00:04,000\nA compact review line.",
+      "subtitle_manifest": {
+        "cue_count": 1,
+        "subtitle_uri": "milu://mock-assets/demo_project/subtitles_episode_01.srt",
+        "file_written": false,
+        "writes_files": false,
+        "writes_database": false
+      },
+      "generation_plan": {
+        "provider": "none",
+        "model": "none",
+        "writes_files": false,
+        "writes_database": false,
+        "uses_audio_alignment": false
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "auto_editor": {
+    "ok": true,
+    "skill_name": "auto_editor",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo_project",
+      "episode_index": 1,
+      "timeline": {
+        "timeline_id": "demo_project:episode_1:rough_edit",
+        "aspect_ratio": "9:16",
+        "fps": 24,
+        "total_duration_seconds": 4,
+        "tracks": {
+          "video": [
+            {
+              "timeline_item_id": "video_shot_01",
+              "clip_id": "mock_video_01_001",
+              "shot_id": "shot_01",
+              "start_second": 0,
+              "end_second": 4,
+              "duration_seconds": 4,
+              "asset_uri": "milu://mock-assets/demo_project/mock_video_01_001.mp4",
+              "file_written": false
+            }
+          ],
+          "audio": [
+            {
+              "timeline_item_id": "audio_voice_task_001",
+              "task_id": "voice_task_001",
+              "start_second": 0,
+              "end_second": 4,
+              "duration_seconds": 4
+            }
+          ],
+          "subtitles": [
+            {
+              "timeline_item_id": "subtitle_001",
+              "cue_id": "subtitle_001",
+              "start_second": 0,
+              "end_second": 4,
+              "text": "A compact review line."
+            }
+          ]
+        }
+      },
+      "render_plan": {
+        "engine": "none",
+        "uses_ffmpeg": false,
+        "writes_files": false,
+        "writes_database": false,
+        "output_intent": {
+          "kind": "video",
+          "asset_uri": "milu://mock-assets/demo_project/rough_cut_episode_01.mp4",
+          "file_written": false
+        }
+      },
+      "edit_manifest": {
+        "timeline_id": "demo_project:episode_1:rough_edit",
+        "shot_count": 1,
+        "video_clip_count": 1,
+        "voice_task_count": 1,
+        "subtitle_cue_count": 1,
+        "total_duration_seconds": 4,
+        "writes_files": false,
+        "writes_database": false,
+        "uses_ffmpeg": false
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  }
+}

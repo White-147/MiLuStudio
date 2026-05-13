@@ -75,3 +75,52 @@ export interface DeliveryAsset {
   size: string;
   state: 'ready' | 'waiting';
 }
+
+export type GenerationTaskRecordStatus = 'waiting' | 'running' | 'review' | 'completed' | 'failed';
+
+export interface GenerationTaskRecord {
+  id: string;
+  jobId: string;
+  projectId: string;
+  shotId: string | null;
+  queueIndex: number;
+  skillName: string;
+  provider: string;
+  inputJson: string;
+  outputJson: string | null;
+  status: GenerationTaskRecordStatus;
+  attemptCount: number;
+  costEstimate: number;
+  costActual: number | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  lockedBy: string | null;
+  lockedUntil: string | null;
+  lastHeartbeatAt: string | null;
+  errorMessage: string | null;
+}
+
+export interface ProjectAssetRecord {
+  id: string;
+  projectId: string;
+  kind: string;
+  localPath: string;
+  mimeType: string;
+  fileSize: number;
+  sha256: string | null;
+  metadataJson: string | null;
+  createdAt: string;
+}
+
+export interface CostLedgerRecord {
+  id: string;
+  projectId: string;
+  taskId: string | null;
+  provider: string;
+  model: string;
+  unit: string;
+  quantity: number;
+  estimatedCost: number;
+  actualCost: number | null;
+  createdAt: string;
+}

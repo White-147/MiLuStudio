@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/export_packager/input.schema.json",
+  "title": "export_packager input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["auto_editor", "quality_checker", "subtitle_generator", "video_generation"],
+  "properties": {
+    "auto_editor": {
+      "type": "object",
+      "description": "A successful auto_editor runtime envelope."
+    },
+    "quality_checker": {
+      "type": "object",
+      "description": "A successful quality_checker runtime envelope."
+    },
+    "subtitle_generator": {
+      "type": "object",
+      "description": "A successful subtitle_generator runtime envelope."
+    },
+    "video_generation": {
+      "type": "object",
+      "description": "A successful video_generation runtime envelope."
+    }
+  }
+}

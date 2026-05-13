@@ -12,11 +12,13 @@ public sealed class GenerationTask
 
     public string? ShotId { get; init; }
 
+    public int QueueIndex { get; init; }
+
     public required string SkillName { get; init; }
 
     public required string Provider { get; init; }
 
-    public required string InputJson { get; init; }
+    public required string InputJson { get; set; }
 
     public string? OutputJson { get; set; }
 
@@ -31,6 +33,12 @@ public sealed class GenerationTask
     public DateTimeOffset? StartedAt { get; set; }
 
     public DateTimeOffset? FinishedAt { get; set; }
+
+    public string? LockedBy { get; set; }
+
+    public DateTimeOffset? LockedUntil { get; set; }
+
+    public DateTimeOffset? LastHeartbeatAt { get; set; }
 
     public string? ErrorMessage { get; set; }
 }

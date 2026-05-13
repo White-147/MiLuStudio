@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/export_packager/output.schema.json",
+  "title": "export_packager output",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "project_id",
+    "episode_index",
+    "title",
+    "language",
+    "provider",
+    "model",
+    "mode",
+    "package_id",
+    "delivery_assets",
+    "export_manifest",
+    "review",
+    "checkpoint"
+  ],
+  "properties": {
+    "project_id": { "type": "string" },
+    "episode_index": { "type": "integer" },
+    "title": { "type": "string" },
+    "language": { "type": "string" },
+    "provider": { "const": "none" },
+    "model": { "const": "none" },
+    "mode": { "const": "deterministic-export-boundary" },
+    "package_id": { "type": "string" },
+    "delivery_assets": { "type": "array" },
+    "export_manifest": { "type": "object" },
+    "review": { "type": "object" },
+    "checkpoint": { "type": "object" }
+  }
+}

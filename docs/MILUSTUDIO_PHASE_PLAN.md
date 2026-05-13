@@ -95,27 +95,21 @@ Environment check:
 ## 6. 当前焦点
 
 ```text
-Current phase: Stage 11
+Current phase: Stage 14
 Status: pending
-Goal: 基于 Stage 10 粗剪计划继续收敛质量检查边界。
+Goal: 桌面端独立打包与 Electron + electron-builder + NSIS 自定义安装器。
 Next handoff owner: next session
 ```
 
 当前阶段完成标准：
 
-- `D:\code\MiLuStudio` 是独立 Git 仓库。
-- 根 `.gitignore` 存在。
-- 根 `README.md` 存在。
-- 总控文档位于 `docs\`。
-- `docs\REFERENCE_PROJECTS.md` 存在。
-- `docs\PRODUCT_SPEC.md` 存在。
-- `apps\web` 可运行。
-- 前端 UI 有项目列表、项目页、对话输入、任务进度 mock、结果卡片 mock。
-- 不出现复杂无限画布。
-- 不接真实模型。
-- 代码边界通过软件设计阶段检查。
-- 依赖、缓存、配置和运行文件通过 D 盘封闭环境检查。
-- 阶段完成后完成联网自检并更新相关文档。
+- 形成 `Electron + electron-builder + NSIS assisted installer + 自定义 installer.nsh` 桌面端独立交付 part。
+- 继续保留 Web UI、Control API、Worker 和 PostgreSQL 作为可独立迭代的前后端与后端基础设施。
+- Electron 不直接访问 PostgreSQL，不执行 migrations，不定义数据库表，不调用 Python 或 FFmpeg。
+- 桌面端只通过 Control API health / preflight 和业务 API 展示状态、错误和修复建议。
+- 安装器具备自定义图标、安装目录、桌面快捷方式、开始菜单、开机自启动、安装完成后启动、实时进度条和付费码 / 激活码输入页。
+- 账号系统只预留入口，不阻塞 Stage 14 桌面安装包 MVP。
+- 阶段完成后完成联网自检、README 检查和相关文档更新。
 
 ## 7. Stage 0 项目初始化
 
@@ -687,36 +681,45 @@ Status: done
 
 ## 18. Stage 11 质量检查
 
-Status: pending
+Status: done
 
 目标：
 
-- 降低一键生成失败率。
+- 降低一键生成失败率，先把质量检查收敛为内部 Production Skill 边界。
 
 具体任务：
 
 1. 实现 `quality_checker`。
-2. 检查角色一致性。
-3. 检查分镜时长。
-4. 检查字幕长度。
-5. 检查视频黑屏、卡顿、水印、尺寸。
-6. 检查文件缺失。
-7. 输出可读报告。
-8. 可自动修复项自动重试。
+2. 检查角色引用是否存在于 `character_bible`。
+3. 检查分镜 style prompt block 是否来自 `style_bible`。
+4. 检查分镜时长、mock 视频片段时长和粗剪 timeline 时长是否一致。
+5. 检查配音任务、字幕 cue timing、字幕长度和镜头引用。
+6. 检查 mock 资产和计划结构是否保持 `file_written=false`、`writes_files=false`、`writes_database=false`、`uses_ffmpeg=false`、`reads_media_files=false`。
+7. 输出可读质量报告、严重级别、可自动重试项和人工确认 checkpoint。
+8. 真实黑屏、卡顿、水印、尺寸、音量和字幕烧录检测留给后续真实媒体 QA adapter；本阶段不读取真实媒体文件。
 
 验收：
 
 - 用户能看到失败原因。
-- 可重试项能从失败镜头继续。
-- 质检报告保存到项目资产。
+- 可重试项能指向失败镜头或失败结构，供后续 Worker 从对应 skill 继续。
+- 质检报告结构能被后续 PostgreSQL adapter / EF Core DbContext 保存到项目资产。
+- Stage 11 不接真实视觉 / 音频检测模型，不触发 FFmpeg，不生成真实 MP4，不写数据库。
 
 阶段结束自检重点：
 
-- 检查同类产品的一键生成失败点，更新质检项。
+- 检查同类产品的一键生成失败点，确认 Stage 11 只做结构和边界质检是否仍符合当前阶段。
+
+落地状态：
+
+- 已新增 `backend\sidecars\python-skills\skills\quality_checker`。
+- 已通过 `SkillGateway.default()` 注册 `quality_checker`。
+- 已新增 `tests\test_stage11_quality_checker_pipeline.py`。
+- 已覆盖 Stage 5-11 完整 envelope 链路、字幕过长可重试报告和失败 envelope。
+- 已生成 `quality_checker` example input / output。
 
 ## 19. Stage 12 PostgreSQL 持久化与后端收敛
 
-Status: pending
+Status: done
 
 目标：
 
@@ -751,7 +754,85 @@ Status: pending
 - 检查 PostgreSQL Windows 本地部署、EF Core migrations、durable queue 和本地数据目录最新注意事项。
 - 确认桌面端不承担数据库 schema、migration 或初始化职责。
 
-## 20. Stage 13 桌面打包
+落地状态：
+
+- 已在 `MiLuStudio.Infrastructure` 中新增 `MiLuStudioDbContext`，使用 Npgsql / EF Core 映射现有 PostgreSQL schema。
+- 已新增 `PostgreSqlControlPlaneRepository`，覆盖项目、生产任务、生成任务、资产和成本记录 repository 边界。
+- 已保留 `InMemoryControlPlaneStore`，通过 `ControlPlane:RepositoryProvider=InMemory` / `PostgreSQL` 切换。
+- 已新增后端 preflight：检查 provider、connection string、数据库可达性、migration 状态和 storage 根目录。
+- 已新增 migration status / apply API，并以 SQL 文件方式维护 `001_initial_control_plane.sql` 和 `002_stage12_postgresql_claiming.sql`。
+- 已为 `generation_tasks` 增加 `queue_index`、`locked_by`、`locked_until` 和 `last_heartbeat_at`。
+- Worker 已通过 repository 领取任务；PostgreSQL provider 使用 `FOR UPDATE SKIP LOCKED`，并可接管 lease 过期的 running task。
+- 已新增 `POST /api/generation-tasks/{taskId}/output`，用于将 skill envelope 写入 `generation_tasks.output_json`，并建立 `assets` 和可选 `cost_ledger` 记录；Stage 13 已把 Stage 5-13 端到端链路接入 Worker 写回。
+- 已新增 `GET /api/projects/{projectId}/assets` 和 `GET /api/projects/{projectId}/cost-ledger`。
+- 已新增 `docs\POSTGRESQL_STAGE12_SETUP.md`，明确本地 PostgreSQL 配置、preflight、migration、Worker claiming 和 Electron 禁止边界。
+- 本机验证已覆盖 .NET build、Python Skills tests、InMemory Control API smoke 和 PostgreSQL provider 未就绪时的 preflight 503。
+- Stage 13 已基于本机 `postgresql-x64-18` 服务创建 `milu` 数据库，使用 `root/root` 作为业务连接账号，并完成真实 PostgreSQL migration / API / Worker 共享状态 smoke。
+
+## 20. Stage 13 真实配置、Worker-Skills 与前后端收敛验收
+
+Status: done
+
+目标：
+
+- 把 Stage 12 只落到后端边界的 PostgreSQL 能力切到真实本机配置。
+- 本机复用已存在的 PostgreSQL 18 Windows 服务，使用 `root/root`，创建 MiLuStudio 专用业务库 `milu`。
+- 默认 `RepositoryProvider` 切到 `PostgreSQL`，后续尽量能持久化的数据都写入 PostgreSQL，InMemory 只作为快速 smoke / 特殊轻量场景保留。
+- Worker 真正调用 `backend\sidecars\python-skills` 中的 deterministic Production Skills。
+- 通过 Control API / Worker / repository 边界，把 Stage 5-13 deterministic skill envelope 写回数据库。
+- 前端通过 Control API 展示真实项目、任务、skill envelope、资产索引和成本记录，减少静态 mock 对主流程的误导。
+- 桌面打包继续后移为 Stage 14，数据库不和桌面端绑定。
+
+具体任务：
+
+1. 更新 API / Worker 默认配置：`ControlPlane:RepositoryProvider=PostgreSQL`。
+2. 将版本库中的开发连接串统一为 `Host=127.0.0.1;Port=5432;Database=milu;Username=root;Password=root`。
+3. 新增或更新 Windows PowerShell 初始化脚本，幂等创建数据库 `milu`，只使用本机 PostgreSQL 18 服务，不修改 `xiaolou` 数据库。
+4. 通过 Control API `/api/system/migrations/apply` 或同等后端 migration service 运行 SQL migrations。
+5. 保留 InMemory provider，但不再作为默认开发事实来源。
+6. 新增 Worker 内部 skill runner adapter，通过 Python CLI / `SkillGateway` 调用 deterministic skills。
+7. Worker 构建每个 skill 的稳定输入：首个任务来自 `story_inputs`，后续任务来自前置 task 的成功 envelope。
+8. Worker 将 skill output 交给后端 persistence service / repository 写入 `generation_tasks.output_json`、`assets` 和可选 `cost_ledger`。
+9. skill envelope `ok=false` 时，任务必须落为 failed，错误信息写入 task / job，不得假装 completed。
+10. 收敛 production job 状态推进：由 Worker 和数据库状态驱动，API SSE 只读推送当前状态，不再用 mock 自动推进。
+11. 审核节点仍走 checkpoint：前端或 smoke 脚本通过 Control API 提交确认，不能在 Worker 中静默跳过。
+12. 如果队列仍包含 `export_packager`，补齐 deterministic mock `export_packager` Production Skill，输出后续导出阶段可消费的占位导出包结构，不生成真实 ZIP / MP4。
+13. 增加 Control API 查询能力，让前端能按 job / project 获取 task outputs、assets 和成本记录。
+14. 前端生产控制台优先展示真实 API 返回的任务结果、质量报告、mock 资产索引和导出占位结构；demo 静态 mock 只作为 API 不可用时的降级。
+15. 补齐本地集成 smoke：创建项目、启动 job、API / Worker 共享 PostgreSQL 状态、checkpoint 推进、重启后恢复。
+
+验收：
+
+- `milu` 数据库存在，`root/root` 可连接，migration 状态为已应用。
+- API 和 Worker 默认使用 PostgreSQL provider，并能共享同一份项目、任务、资产和成本状态。
+- Worker 能领取 waiting task，调用 Python deterministic skill，并写回 envelope。
+- API / Worker 重启后，项目、任务、checkpoint、失败原因和已完成 skill 输出仍可恢复。
+- 前端不直接访问数据库、文件系统、Python 脚本或 FFmpeg，只通过 Control API 展示真实结果。
+- Stage 13 不接真实模型、不读取真实媒体文件、不调用 FFmpeg、不生成真实 MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery 作为生产依赖。
+- 桌面打包、安装器激活码和账号系统不在本阶段实现。
+
+阶段结束自检重点：
+
+- 检查 PostgreSQL 18 Windows 本地服务、EF Core / Npgsql、durable claiming、Worker subprocess、Control API SSE / polling 和前端数据展示是否仍符合 Windows-native 目标。
+- 检查是否出现 UI 绕过 Control API、Electron 提前接数据库、Worker 绕过 repository、Python 直接写数据库或 FFmpeg 被提前调用的偏差。
+
+落地状态：
+
+- 已将 API / Worker 默认 `RepositoryProvider` 切到 `PostgreSQL`，连接串写入版本库配置：`Host=127.0.0.1;Port=5432;Database=milu;Username=root;Password=root`。
+- 已新增 `scripts\windows\Initialize-MiLuStudioPostgreSql.ps1`，幂等创建 `milu`；当业务账号 `root/root` 无建库权限时，脚本使用本机 `postgres/root` 作为 bootstrap 创建 `milu` 并把 owner 设为 `root`。
+- 已通过 Control API `/api/system/migrations/apply` 应用 `001_initial_control_plane` 和 `002_stage12_postgresql_claiming`。
+- 已新增 `IProductionSkillRunner` 和 `PythonProductionSkillRunner`，Worker 通过 Python CLI / `SkillGateway` 调用 deterministic skills，不直接调用单个 Python 文件。
+- 已将 `plot_adaptation`、`image_prompt_builder`、`video_prompt_builder` 和 `export_packager` 纳入 production task queue，Stage 5-13 链路可完整写回 PostgreSQL。
+- 已将 `SystemClock` 改为 UTC，满足 Npgsql 对 `timestamptz` / `DateTimeOffset` 的写入要求；展示层仍转为本地时间。
+- 已收敛 PostgreSQL repository 写入顺序和 EF Core ChangeTracker 清理，避免外键顺序和长链路实体跟踪冲突。
+- 已将 Worker 轮询间隔收敛为 3 秒，checkpoint 后能更快继续领取下一条 waiting task。
+- 已新增 deterministic `export_packager` skill，只输出 MP4 / SRT / JSON / ZIP 的占位交付结构，不生成真实文件。
+- 已让 API SSE 只基于数据库快照推送，不再由 API mock 自动推进生产状态。
+- 已让前端通过 Control API 读取 production job、tasks、assets 和 cost ledger，并用真实 `outputJson` envelope 构建结果卡和导出区。
+- 本地 smoke 已完成：`milu` 中 `job_ba4b02d1cd534e948fe0fda74aaead3c` 达到 `completed / 100`，15 个 task 全部 completed，15 个 task 均有 output envelope，cost ledger 15 行。
+
+## 21. Stage 14 桌面打包
 
 Status: pending
 
@@ -801,7 +882,7 @@ Status: pending
 - 对照 LocalMiniDrama、Toonflow、MiLuAssistantDesktop 经验。
 - 检查 Electron / electron-builder / NSIS Windows 打包、自定义安装页、图标、快捷方式、自启动、安装激活码和任务栏固定最新注意事项。
 
-## 21. 每阶段联网自检模板
+## 22. 每阶段联网自检模板
 
 每个大阶段结束后必须填写到 `docs\MILUSTUDIO_TASK_RECORD.md`。
 

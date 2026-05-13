@@ -4,13 +4,15 @@ using MiLuStudio.Application.Abstractions;
 using MiLuStudio.Domain;
 using MiLuStudio.Domain.Entities;
 
-public sealed class InMemoryControlPlaneStore : IProjectRepository, IProductionJobRepository
+public sealed class InMemoryControlPlaneStore : IProjectRepository, IProductionJobRepository, IAssetRepository, ICostLedgerRepository
 {
     private readonly object _gate = new();
     private readonly Dictionary<string, Project> _projects = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, StoryInput> _storyInputs = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, ProductionJob> _jobs = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<GenerationTask>> _tasksByJob = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Asset> _assets = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, CostLedgerEntry> _costLedger = new(StringComparer.OrdinalIgnoreCase);
 
     public InMemoryControlPlaneStore()
     {
@@ -119,6 +121,122 @@ public sealed class InMemoryControlPlaneStore : IProjectRepository, IProductionJ
         lock (_gate)
         {
             _tasksByJob[jobId] = tasks.Select(Clone).ToList();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<GenerationTask?> GetTaskAsync(string taskId, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            var task = _tasksByJob.Values.SelectMany(tasks => tasks).FirstOrDefault(task => string.Equals(task.Id, taskId, StringComparison.OrdinalIgnoreCase));
+            return Task.FromResult(task is null ? null : Clone(task));
+        }
+    }
+
+    public Task UpdateTaskAsync(GenerationTask task, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            if (_tasksByJob.TryGetValue(task.JobId, out var tasks))
+            {
+                var index = tasks.FindIndex(candidate => string.Equals(candidate.Id, task.Id, StringComparison.OrdinalIgnoreCase));
+                if (index >= 0)
+                {
+                    tasks[index] = Clone(task);
+                }
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<GenerationTask?> ClaimNextTaskAsync(
+        string workerId,
+        DateTimeOffset now,
+        TimeSpan leaseDuration,
+        CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            foreach (var job in _jobs.Values.OrderBy(job => job.StartedAt))
+            {
+                if (job.Status is not (ProductionJobStatus.Queued or ProductionJobStatus.Running))
+                {
+                    continue;
+                }
+
+                if (!_tasksByJob.TryGetValue(job.Id, out var tasks))
+                {
+                    continue;
+                }
+
+                var orderedTasks = tasks.OrderBy(task => task.QueueIndex).ToList();
+                var task = orderedTasks.FirstOrDefault(candidate =>
+                    IsClaimable(candidate, now) &&
+                    orderedTasks.Where(previous => previous.QueueIndex < candidate.QueueIndex).All(previous => previous.Status == GenerationTaskStatus.Completed));
+
+                if (task is null)
+                {
+                    continue;
+                }
+
+                task.Status = GenerationTaskStatus.Running;
+                task.AttemptCount++;
+                task.StartedAt ??= now;
+                task.FinishedAt = null;
+                task.LockedBy = workerId;
+                task.LockedUntil = now.Add(leaseDuration);
+                task.LastHeartbeatAt = now;
+                task.ErrorMessage = null;
+
+                return Task.FromResult<GenerationTask?>(Clone(task));
+            }
+
+            return Task.FromResult<GenerationTask?>(null);
+        }
+    }
+
+    public Task<IReadOnlyList<Asset>> ListAssetsByProjectAsync(string projectId, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            return Task.FromResult<IReadOnlyList<Asset>>(
+                _assets.Values
+                    .Where(asset => string.Equals(asset.ProjectId, projectId, StringComparison.OrdinalIgnoreCase))
+                    .Select(Clone)
+                    .ToList());
+        }
+    }
+
+    public Task AddAsync(Asset asset, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            _assets[asset.Id] = Clone(asset);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<CostLedgerEntry>> ListCostByProjectAsync(string projectId, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            return Task.FromResult<IReadOnlyList<CostLedgerEntry>>(
+                _costLedger.Values
+                    .Where(entry => string.Equals(entry.ProjectId, projectId, StringComparison.OrdinalIgnoreCase))
+                    .Select(Clone)
+                    .ToList());
+        }
+    }
+
+    public Task AddAsync(CostLedgerEntry entry, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            _costLedger[entry.Id] = Clone(entry);
         }
 
         return Task.CompletedTask;
@@ -245,6 +363,7 @@ public sealed class InMemoryControlPlaneStore : IProjectRepository, IProductionJ
             JobId = task.JobId,
             ProjectId = task.ProjectId,
             ShotId = task.ShotId,
+            QueueIndex = task.QueueIndex,
             SkillName = task.SkillName,
             Provider = task.Provider,
             InputJson = task.InputJson,
@@ -255,7 +374,50 @@ public sealed class InMemoryControlPlaneStore : IProjectRepository, IProductionJ
             CostActual = task.CostActual,
             StartedAt = task.StartedAt,
             FinishedAt = task.FinishedAt,
+            LockedBy = task.LockedBy,
+            LockedUntil = task.LockedUntil,
+            LastHeartbeatAt = task.LastHeartbeatAt,
             ErrorMessage = task.ErrorMessage
+        };
+    }
+
+    private static bool IsClaimable(GenerationTask task, DateTimeOffset now)
+    {
+        return task.Status == GenerationTaskStatus.Waiting ||
+            task.Status == GenerationTaskStatus.Running &&
+            (task.LockedUntil is null || task.LockedUntil <= now);
+    }
+
+    private static Asset Clone(Asset asset)
+    {
+        return new Asset
+        {
+            Id = asset.Id,
+            ProjectId = asset.ProjectId,
+            Kind = asset.Kind,
+            LocalPath = asset.LocalPath,
+            MimeType = asset.MimeType,
+            FileSize = asset.FileSize,
+            Sha256 = asset.Sha256,
+            MetadataJson = asset.MetadataJson,
+            CreatedAt = asset.CreatedAt
+        };
+    }
+
+    private static CostLedgerEntry Clone(CostLedgerEntry entry)
+    {
+        return new CostLedgerEntry
+        {
+            Id = entry.Id,
+            ProjectId = entry.ProjectId,
+            TaskId = entry.TaskId,
+            Provider = entry.Provider,
+            Model = entry.Model,
+            Unit = entry.Unit,
+            Quantity = entry.Quantity,
+            EstimatedCost = entry.EstimatedCost,
+            ActualCost = entry.ActualCost,
+            CreatedAt = entry.CreatedAt
         };
     }
 }

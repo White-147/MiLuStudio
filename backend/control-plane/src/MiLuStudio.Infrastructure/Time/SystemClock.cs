@@ -4,5 +4,5 @@ using MiLuStudio.Application.Abstractions;
 
 public sealed class SystemClock : IClock
 {
-    public DateTimeOffset Now => DateTimeOffset.Now;
+    public DateTimeOffset Now => DateTimeOffset.UtcNow;
 }

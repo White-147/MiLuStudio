@@ -1,0 +1,16 @@
+name: export_packager
+display_name: Export Packager
+description: Builds a deterministic placeholder export package manifest for later render and storage adapters.
+stage: export
+input_schema: schema.input.json
+output_schema: schema.output.json
+timeout_seconds: 30
+max_retries: 1
+cost_policy:
+  provider: none
+  model: none
+  estimated_cost: 0
+required_provider_capabilities: []
+checkpoint_policy:
+  required: false
+  reason: Placeholder export package structure does not need manual review in Stage 13.

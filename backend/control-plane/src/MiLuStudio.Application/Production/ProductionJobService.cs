@@ -6,7 +6,7 @@ using MiLuStudio.Domain.Entities;
 
 public sealed class ProductionJobService
 {
-    private static readonly TimeSpan MockEventDelay = TimeSpan.FromMilliseconds(650);
+    private static readonly TimeSpan EventDelay = TimeSpan.FromSeconds(1);
 
     private readonly IClock _clock;
     private readonly IProductionJobRepository _jobs;
@@ -144,9 +144,9 @@ public sealed class ProductionJobService
         return ToDto(snapshot.Job, snapshot.Tasks);
     }
 
-    public async IAsyncEnumerable<ProductionJobEventDto> StreamMockEventsAsync(
+    public async IAsyncEnumerable<ProductionJobEventDto> StreamEventsAsync(
         string jobId,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        [global::System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -157,9 +157,7 @@ public sealed class ProductionJobService
                 yield break;
             }
 
-            var transition = _stateMachine.Advance(snapshot.Job, snapshot.Tasks, _clock.Now);
-
-            await PersistAsync(snapshot, cancellationToken);
+            var transition = ToSnapshotTransition(snapshot.Job, snapshot.Tasks);
 
             yield return ToEventDto(snapshot.Job, transition);
 
@@ -168,7 +166,7 @@ public sealed class ProductionJobService
                 yield break;
             }
 
-            await Task.Delay(MockEventDelay, cancellationToken);
+            await Task.Delay(EventDelay, cancellationToken);
         }
     }
 
@@ -236,6 +234,86 @@ public sealed class ProductionJobService
             transition.Progress,
             transition.Message,
             _clock.Now);
+    }
+
+    private ProductionStateTransition ToSnapshotTransition(ProductionJob job, IReadOnlyList<GenerationTask> tasks)
+    {
+        if (job.Status == ProductionJobStatus.Completed)
+        {
+            return new ProductionStateTransition(
+                "artifact_ready",
+                "delivery",
+                "导出包",
+                "export_packager",
+                GenerationTaskStatus.Completed,
+                100,
+                "生产任务已完成，导出占位结构已写入数据库。",
+                IsTerminal: true);
+        }
+
+        if (job.Status == ProductionJobStatus.Failed)
+        {
+            var failedTask = tasks.FirstOrDefault(task => task.Status == GenerationTaskStatus.Failed);
+            var failedStage = failedTask is null ? null : ProductionStageCatalog.FindBySkill(failedTask.SkillName);
+
+            return new ProductionStateTransition(
+                "task_failed",
+                failedStage?.Id ?? ProductionStageCatalog.ExternalIdFor(job.CurrentStage),
+                failedStage?.Label ?? "生产失败",
+                failedStage?.Skill ?? failedTask?.SkillName ?? "control_plane",
+                GenerationTaskStatus.Failed,
+                job.ProgressPercent,
+                job.ErrorMessage ?? failedTask?.ErrorMessage ?? "生产任务失败。",
+                IsTerminal: true);
+        }
+
+        var stage = ProductionStageCatalog.Find(job.CurrentStage) ?? ProductionStageCatalog.First;
+        var task = _taskQueue.FindTask(tasks, stage);
+        var taskStatus = task?.Status ?? GenerationTaskStatus.Waiting;
+
+        if (job.Status == ProductionJobStatus.Paused && taskStatus == GenerationTaskStatus.Review)
+        {
+            return new ProductionStateTransition(
+                "checkpoint_required",
+                stage.Id,
+                stage.Label,
+                stage.Skill,
+                GenerationTaskStatus.Review,
+                job.ProgressPercent,
+                $"{stage.Label} 等待 checkpoint 确认。",
+                IsTerminal: false);
+        }
+
+        var eventType = taskStatus switch
+        {
+            GenerationTaskStatus.Running => "task_progress",
+            GenerationTaskStatus.Review => "checkpoint_required",
+            GenerationTaskStatus.Completed => "task_completed",
+            GenerationTaskStatus.Failed => "task_failed",
+            _ => "stage_changed"
+        };
+
+        return new ProductionStateTransition(
+            eventType,
+            stage.Id,
+            stage.Label,
+            stage.Skill,
+            taskStatus,
+            job.ProgressPercent,
+            SnapshotMessage(stage, taskStatus),
+            IsTerminal: false);
+    }
+
+    private static string SnapshotMessage(ProductionStageDefinition stage, GenerationTaskStatus status)
+    {
+        return status switch
+        {
+            GenerationTaskStatus.Running => $"{stage.Label} 正在由 Worker 执行。",
+            GenerationTaskStatus.Review => $"{stage.Label} 已生成，等待用户确认。",
+            GenerationTaskStatus.Completed => $"{stage.Label} 已完成。",
+            GenerationTaskStatus.Failed => $"{stage.Label} 执行失败。",
+            _ => $"{stage.Label} 等待 Worker 领取。"
+        };
     }
 
     private static string FormatJobStatus(ProductionJobStatus status)

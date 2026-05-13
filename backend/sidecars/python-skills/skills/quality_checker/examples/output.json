@@ -1,0 +1,129 @@
+{
+  "ok": true,
+  "skill_name": "quality_checker",
+  "schema_version": "1.0",
+  "data": {
+    "project_id": "demo_project",
+    "episode_index": 1,
+    "title": "Demo Episode",
+    "language": "zh-CN",
+    "provider": "none",
+    "model": "none",
+    "mode": "deterministic-quality-boundary",
+    "quality_status": "passed",
+    "score": {
+      "overall": 100,
+      "max": 100,
+      "bands": {
+        "character_consistency": 100,
+        "style_consistency": 100,
+        "timing": 100,
+        "video_clip": 100,
+        "audio": 100,
+        "subtitle": 100,
+        "edit_plan": 100,
+        "asset_boundary": 100
+      }
+    },
+    "issues": [],
+    "auto_retry_items": [],
+    "manual_review_items": [
+      {
+        "checkpoint_id": "manual_confirm_001",
+        "source_issue_id": null,
+        "severity": "info",
+        "category": "quality_checkpoint",
+        "target": {
+          "scope": "project",
+          "id": "quality_report"
+        },
+        "question": "Confirm the deterministic quality report before downstream persistence or export adapters.",
+        "recommended_action": "Approve the report or request another review pass."
+      }
+    ],
+    "quality_manifest": {
+      "checks_run": [
+        "character_reference_consistency",
+        "style_prompt_block_references",
+        "storyboard_timing",
+        "mock_video_clip_alignment",
+        "voice_task_coverage",
+        "subtitle_cue_coverage",
+        "rough_edit_timeline_alignment",
+        "metadata_only_boundary_flags"
+      ],
+      "issue_count": 0,
+      "blocking_count": 0,
+      "error_count": 0,
+      "warning_count": 0,
+      "info_count": 0,
+      "auto_retry_count": 0,
+      "manual_review_count": 1,
+      "shot_count": 1,
+      "clip_count": 1,
+      "voice_task_count": 1,
+      "subtitle_cue_count": 1,
+      "writes_files": false,
+      "writes_database": false,
+      "reads_media_files": false,
+      "uses_visual_detector": false,
+      "uses_audio_detector": false,
+      "uses_ffmpeg": false
+    },
+    "generation_plan": {
+      "mode": "quality_report_boundary",
+      "provider": "none",
+      "model": "none",
+      "input_skills": [
+        "character_bible",
+        "style_bible",
+        "storyboard_director",
+        "video_generation",
+        "voice_casting",
+        "subtitle_generator",
+        "auto_editor"
+      ],
+      "input_counts": {
+        "characters": 1,
+        "shots": 1,
+        "mock_video_clips": 1,
+        "voice_tasks": 1,
+        "subtitle_cues": 1
+      },
+      "writes_files": false,
+      "writes_database": false,
+      "reads_media_files": false,
+      "uses_visual_detector": false,
+      "uses_audio_detector": false,
+      "uses_ffmpeg": false,
+      "notes": [
+        "This skill inspects envelope metadata and deterministic structures only.",
+        "Real media QA, OCR, watermark detection, black-frame detection, audio analysis, and persistence stay behind later adapters."
+      ]
+    },
+    "review": {
+      "status": "ready_for_quality_review",
+      "editable_fields": [
+        "issues",
+        "auto_retry_items",
+        "manual_review_items"
+      ],
+      "notes": [
+        "Stage 11 checks structure and boundary flags only; it does not inspect real video or audio files.",
+        "Retry items are hints for later Worker orchestration and persistence adapters."
+      ]
+    },
+    "checkpoint": {
+      "required": true,
+      "policy": "pause_for_quality_review",
+      "reason": "quality_checker is the manual confirmation boundary before retry orchestration or export adapters."
+    }
+  },
+  "error": null,
+  "runtime": {
+    "duration_ms": 26.41,
+    "model": "none",
+    "mode": "deterministic-mock",
+    "cost_estimate": 0
+  }
+}
