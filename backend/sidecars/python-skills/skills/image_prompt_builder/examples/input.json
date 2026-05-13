@@ -1,0 +1,144 @@
+{
+  "storyboard_director": {
+    "ok": true,
+    "skill_name": "storyboard_director",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "title": "The Ledger in the Rain",
+      "language": "zh-CN",
+      "aspect_ratio": "9:16",
+      "shots": [
+        {
+          "shot_id": "shot_01",
+          "shot_index": 1,
+          "source_segment_id": "segment_01",
+          "start_second": 0,
+          "duration_seconds": 5,
+          "scene": "rainy alley with a flickering sign and a hidden ledger",
+          "characters": [
+            {
+              "character_id": "char_lin",
+              "name": "Lin",
+              "role_type": "protagonist",
+              "stable_seed": "demo-episode-01:lin"
+            }
+          ],
+          "camera": {
+            "angle": "low detail angle",
+            "motion": "slow_push_in",
+            "composition": "vertical frame with subtitle-safe lower third"
+          },
+          "lighting": {
+            "key_light": "soft rain reflection",
+            "accent_light": "cyan sign glow",
+            "rule": "keep face readable"
+          },
+          "visual_action": "Lin finds the wet ledger behind a loose brick.",
+          "style_prompt_block_refs": ["base_style", "character_consistency", "camera", "quality_guardrails"],
+          "continuity_notes": ["reuse Lin coat silhouette and amber pin"],
+          "image_prompt_seed": "noir vertical comic style | Lin | wet ledger | rainy alley",
+          "review_flags": []
+        },
+        {
+          "shot_id": "shot_02",
+          "shot_index": 2,
+          "source_segment_id": "segment_01",
+          "start_second": 5,
+          "duration_seconds": 5,
+          "scene": "close reaction beside the alley exit",
+          "characters": [
+            {
+              "character_id": "char_lin",
+              "name": "Lin",
+              "role_type": "protagonist",
+              "stable_seed": "demo-episode-01:lin"
+            }
+          ],
+          "camera": {
+            "angle": "eye level close reaction",
+            "motion": "hold",
+            "composition": "face and clue both readable"
+          },
+          "lighting": {
+            "key_light": "soft rain reflection",
+            "accent_light": "warm paper edge",
+            "rule": "avoid unreadable shadow over eyes"
+          },
+          "visual_action": "Lin opens the ledger and sees a map mark.",
+          "style_prompt_block_refs": ["base_style", "character_consistency", "camera", "quality_guardrails"],
+          "continuity_notes": ["ledger remains damp and torn at the corner"],
+          "image_prompt_seed": "noir vertical comic style | Lin | map mark | damp ledger",
+          "review_flags": []
+        }
+      ]
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "character_bible": {
+    "ok": true,
+    "skill_name": "character_bible",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "characters": [
+        {
+          "character_id": "char_lin",
+          "name": "Lin",
+          "role_type": "protagonist",
+          "stable_seed": "demo-episode-01:lin",
+          "appearance": {
+            "signature_detail": "short black hair, amber lapel pin, focused eyes"
+          },
+          "costume": {
+            "lock_rule": "dark raincoat with amber lapel pin"
+          },
+          "visual_identity": {
+            "must_keep": ["short black hair", "amber lapel pin", "dark raincoat"]
+          }
+        }
+      ],
+      "continuity_rules": ["Keep Lin's amber lapel pin visible in all close shots."]
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "style_bible": {
+    "ok": true,
+    "skill_name": "style_bible",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "style_name": "vertical noir comic",
+      "reusable_prompt_blocks": {
+        "base_style": "vertical noir comic, cinematic rain, crisp readable faces",
+        "character_consistency": "preserve face shape, hair, costume, and signature prop",
+        "camera": "mobile-first 9:16 composition with subtitle-safe lower third",
+        "quality_guardrails": "clean linework, no warped hands, no unreadable faces"
+      },
+      "negative_prompt": ["blurred face", "extra fingers", "logo", "watermark"]
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  }
+}
+

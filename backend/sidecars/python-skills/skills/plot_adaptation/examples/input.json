@@ -1,0 +1,63 @@
+{
+  "story_intake": {
+    "ok": true,
+    "skill_name": "story_intake",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "language": "zh-CN",
+      "source_word_count": 101,
+      "summary": "雨夜里，林溪在旧巷口捡到一只会发光的纸鹤。纸鹤不断飞向废弃照相馆，那里藏着哥哥失踪前留下的最后一卷胶片。林溪冲洗胶片后发现，哥哥曾拍到一扇只在午夜出现的门，而门后的光正和纸鹤一模一样。",
+      "logline": "一部悬疑、都市短篇：雨夜里，林溪在旧巷口捡到一只会发光的纸鹤。",
+      "genres": ["悬疑", "都市", "奇幻"],
+      "tone_keywords": ["雨夜", "悬疑", "奇幻", "国漫"],
+      "style_preset": "雨夜悬疑国漫",
+      "mode": "director",
+      "target_duration_seconds": 45,
+      "aspect_ratio": "9:16",
+      "recommended_shot_count": 9,
+      "main_characters": [
+        {
+          "name": "林溪",
+          "role": "protagonist",
+          "evidence": "林溪在旧巷口捡到一只会发光的纸鹤。"
+        },
+        {
+          "name": "哥哥",
+          "role": "supporting",
+          "evidence": "哥哥失踪前留下的最后一卷胶片。"
+        }
+      ],
+      "story_beats": [
+        {
+          "index": 1,
+          "label": "开端",
+          "summary": "雨夜里，林溪在旧巷口捡到一只会发光的纸鹤。"
+        },
+        {
+          "index": 2,
+          "label": "推进",
+          "summary": "纸鹤飞向废弃照相馆，那里藏着哥哥留下的胶片。"
+        },
+        {
+          "index": 3,
+          "label": "钩子",
+          "summary": "胶片里拍到一扇只在午夜出现的门。"
+        }
+      ],
+      "risks": [],
+      "checkpoint": {
+        "required": false,
+        "policy": "auto_continue",
+        "reason": "story_intake only normalizes source story and does not need user approval."
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  }
+}

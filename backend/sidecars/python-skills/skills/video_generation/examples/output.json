@@ -1,0 +1,113 @@
+{
+  "ok": true,
+  "skill_name": "video_generation",
+  "schema_version": "1.0",
+  "data": {
+    "project_id": "demo-episode-01",
+    "episode_index": 1,
+    "title": "The Ledger in the Rain",
+    "language": "zh-CN",
+    "provider": "mock",
+    "model": "none",
+    "mode": "deterministic-placeholder",
+    "clips": [
+      {
+        "clip_id": "mock_video_01_001",
+        "request_id": "vidreq_shot_01_clip",
+        "shot_id": "shot_01",
+        "shot_index": 1,
+        "duration_seconds": 5,
+        "status": "mock_ready",
+        "provider": "mock",
+        "model": "none",
+        "generation_mode": "image_to_video",
+        "prompt": "Lin reaches toward the loose brick | generation_mode=image_to_video | duration=5s",
+        "negative_prompt": [
+          "blurred face",
+          "identity drift",
+          "flicker"
+        ],
+        "source_images": [
+          {
+            "role": "first_frame",
+            "asset_id": "mock_image_01_003",
+            "asset_type": "first_frame",
+            "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_003.png",
+            "file_written": false,
+            "selected": true
+          },
+          {
+            "role": "last_frame",
+            "asset_id": "mock_image_01_004",
+            "asset_type": "last_frame",
+            "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_004.png",
+            "file_written": false,
+            "selected": false
+          }
+        ],
+        "aspect_ratio": "9:16",
+        "selected": true,
+        "file_written": false,
+        "asset_uri": "milu://mock-assets/demo-episode-01/mock_video_01_001.mp4",
+        "storage_intent": {
+          "root": "D:\\code\\MiLuStudio\\storage",
+          "relative_path": "projects/demo-episode-01/videos/mock_video_01_001.mp4",
+          "will_write_in_future_adapter": true
+        },
+        "metadata": {
+          "seed_hint": "demo-episode-01:episode_1:shot_01:video_clip",
+          "kind": "video",
+          "intended_use": "video_clip",
+          "source": "deterministic_mock_no_file",
+          "frame_count_estimate": 120
+        }
+      }
+    ],
+    "clip_manifest": {
+      "prompt_set_id": "demo-episode-01:episode_1:video_prompts",
+      "clip_count": 1,
+      "total_duration_seconds": 5,
+      "by_shot": {
+        "shot_01": "mock_video_01_001"
+      },
+      "writes_files": false,
+      "writes_database": false,
+      "uses_ffmpeg": false,
+      "notes": [
+        "asset_uri is a logical placeholder and does not mean a real MP4 exists.",
+        "storage_intent describes a later adapter target and does not write to the file system in this stage."
+      ]
+    },
+    "cost_estimate": {
+      "provider": "mock",
+      "currency": "USD",
+      "unit": "video_second",
+      "quantity": 5,
+      "estimated_cost": 0,
+      "actual_cost": 0
+    },
+    "review": {
+      "status": "ready_for_video_review",
+      "editable_fields": [
+        "clips",
+        "clip_manifest"
+      ],
+      "notes": [
+        "Stage 9 emits mock placeholder video clip records, not real MP4 files.",
+        "Real video provider calls, retries, persistence, previews, and FFmpeg work stay behind later adapters."
+      ]
+    },
+    "checkpoint": {
+      "required": true,
+      "policy": "pause_for_video_review",
+      "reason": "video_generation output represents the video review boundary, even when clips are mock placeholders."
+    }
+  },
+  "error": null,
+  "runtime": {
+    "duration_ms": 6.25,
+    "model": "none",
+    "mode": "deterministic-mock",
+    "cost_estimate": 0
+  }
+}

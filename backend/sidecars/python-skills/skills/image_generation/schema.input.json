@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/image_generation/input.schema.json",
+  "title": "image_generation input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["image_prompt_builder"],
+  "properties": {
+    "image_prompt_builder": {
+      "type": "object",
+      "description": "A successful image_prompt_builder runtime envelope."
+    }
+  }
+}
+

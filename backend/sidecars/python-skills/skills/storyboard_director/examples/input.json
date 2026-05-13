@@ -1,0 +1,240 @@
+{
+  "episode_writer": {
+    "ok": true,
+    "skill_name": "episode_writer",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "title": "雨夜纸鹤",
+      "language": "zh-CN",
+      "target_duration_seconds": 45,
+      "aspect_ratio": "9:16",
+      "summary": "一部悬疑、都市短篇：雨夜里，林溪在旧巷口捡到一只会发光的纸鹤。",
+      "script_text": "标题：雨夜纸鹤\n时长：45 秒\nseg_01\n旁白：林溪以为这只是普通的一晚。\n对白（林溪）：你到底想带我去哪？",
+      "segments": [
+        {
+          "segment_id": "seg_01",
+          "beat_id": "beat_01_hook",
+          "start_second": 0,
+          "duration_seconds": 8,
+          "purpose": "立刻抛出异常物件和追踪动机。",
+          "visual_direction": "竖屏近景，用异常线索贴近镜头开场。",
+          "narration": "林溪以为这只是普通的一晚，直到线索把林溪带向不该出现的地方。",
+          "dialogue_lines": [
+            {
+              "speaker": "林溪",
+              "line": "你到底想带我去哪？",
+              "delivery": "压低声音，带一点试探。"
+            }
+          ],
+          "pacing_note": "8 秒内完成钩子，不解释背景。",
+          "sound_note": "雨夜、悬疑低频氛围。"
+        },
+        {
+          "segment_id": "seg_02",
+          "beat_id": "beat_02_setup",
+          "start_second": 8,
+          "duration_seconds": 12,
+          "purpose": "交代地点、人物牵挂和必须行动的原因。",
+          "visual_direction": "竖屏近景切到关键地点。",
+          "narration": "越靠近真相，熟悉的记忆越像被人重新摆放过。",
+          "dialogue_lines": [
+            {
+              "speaker": "林溪",
+              "line": "哥哥的线索，怎么会在这里？",
+              "delivery": "困惑后迅速紧张。"
+            }
+          ],
+          "pacing_note": "12 秒保持一镜一信息点。",
+          "sound_note": "雨夜、悬疑氛围延续。"
+        },
+        {
+          "segment_id": "seg_03",
+          "beat_id": "beat_03_turn",
+          "start_second": 20,
+          "duration_seconds": 12,
+          "purpose": "让观众看到证据，并把危险推到角色面前。",
+          "visual_direction": "推进到证据特写，再切林溪的反应。",
+          "narration": "证据出现的那一刻，林溪终于明白，危险一直等在前方。",
+          "dialogue_lines": [
+            {
+              "speaker": "林溪",
+              "line": "原来他不是失踪，是发现了这扇门。",
+              "delivery": "震惊，尾音收住。"
+            }
+          ],
+          "pacing_note": "12 秒保持一镜一信息点。",
+          "sound_note": "雨夜、悬疑氛围延续。"
+        },
+        {
+          "segment_id": "seg_04",
+          "beat_id": "beat_04_hook",
+          "start_second": 32,
+          "duration_seconds": 13,
+          "purpose": "用未解谜团或下一步行动收束，留下继续观看理由。",
+          "visual_direction": "收束在未解画面上。",
+          "narration": "午夜门出现。",
+          "dialogue_lines": [
+            {
+              "speaker": "林溪",
+              "line": "如果门后是答案，我就进去。",
+              "delivery": "坚定，但保留不安。"
+            }
+          ],
+          "pacing_note": "13 秒先揭示一半真相，再用对白收尾。",
+          "sound_note": "环境声骤停，结尾对白后留半秒空白。"
+        }
+      ],
+      "subtitle_cues": [],
+      "voice_notes": {},
+      "review": {},
+      "checkpoint": {
+        "required": true,
+        "policy": "pause_for_script_review",
+        "reason": "demo"
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "character_bible": {
+    "ok": true,
+    "skill_name": "character_bible",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "title": "雨夜纸鹤",
+      "language": "zh-CN",
+      "source_summary": "一部悬疑、都市短篇：雨夜里，林溪在旧巷口捡到一只会发光的纸鹤。",
+      "characters": [
+        {
+          "character_id": "char_01",
+          "name": "林溪",
+          "role_type": "main",
+          "stable_seed": "demo-episode-01:episode_1:char_01",
+          "identity": "林溪是推动短片行动的主角。",
+          "personality": ["敏锐", "克制"],
+          "appearance": {
+            "signature_detail": "发光纸鹤作为核心识别道具"
+          },
+          "costume": {
+            "lock_rule": "同一集内主色、衣领形状和袖口细节保持一致。"
+          },
+          "voice_profile": {
+            "tone": "克制、清晰、紧张时不拖长尾音。"
+          },
+          "visual_identity": {
+            "must_keep": ["林溪的脸型、发型、服装主色和体态在所有镜头保持一致。"]
+          },
+          "expression_palette": [],
+          "continuity_rules": ["主角近景、中景、背影都必须能通过服装主色和体态识别。"],
+          "source_evidence": []
+        },
+        {
+          "character_id": "char_02",
+          "name": "哥哥",
+          "role_type": "supporting",
+          "stable_seed": "demo-episode-01:episode_1:char_02",
+          "identity": "哥哥是牵动主角行动的关键关系角色。",
+          "personality": ["留白感强"],
+          "appearance": {},
+          "costume": {
+            "lock_rule": "每次出现都保留同一个可识别细节。"
+          },
+          "voice_profile": {
+            "tone": "可由旁白或记忆感对白承载，保持距离感。"
+          },
+          "visual_identity": {
+            "must_keep": ["哥哥的脸型、发型、服装主色和体态在所有镜头保持一致。"]
+          },
+          "expression_palette": [],
+          "continuity_rules": [],
+          "source_evidence": []
+        }
+      ],
+      "relationship_notes": [],
+      "continuity_rules": ["进入画风、分镜、图像或视频提示词阶段时，必须引用 character_id 和 stable_seed。"],
+      "review": {},
+      "checkpoint": {
+        "required": true,
+        "policy": "pause_for_character_review",
+        "reason": "demo"
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "style_bible": {
+    "ok": true,
+    "skill_name": "style_bible",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "title": "雨夜纸鹤",
+      "language": "zh-CN",
+      "style_name": "雨夜悬疑国漫",
+      "visual_style": {
+        "name": "雨夜悬疑国漫"
+      },
+      "color_palette": [
+        { "name": "midnight_blue", "hex": "#17213A", "usage": "夜景和主背景阴影。" },
+        { "name": "wet_asphalt", "hex": "#2E3438", "usage": "地面、墙面和雨水暗部。" },
+        { "name": "paper_crane_glow", "hex": "#D9F7FF", "usage": "核心线索的冷白发光。" },
+        { "name": "warning_amber", "hex": "#E5A64B", "usage": "门缝、灯箱或结尾钩子的少量暖光。" }
+      ],
+      "lighting": {
+        "key_light": "低强度侧光或环境反射光。",
+        "accent_light": "只服务线索、角色眼神和结尾钩子。",
+        "rules": ["主角脸部保留可读高光，环境阴影不压掉表情。", "门缝光可作为结尾钩子。"]
+      },
+      "environment_design": {
+        "primary_locations": ["雨巷、湿地反光、招牌残光。"],
+        "density": "竖屏画面每镜只突出一个环境识别点。",
+        "avoid": "背景细节不能抢走角色和线索的可读性。"
+      },
+      "camera_language": {
+        "aspect_ratio": "9:16",
+        "composition_rules": ["竖屏安全区内保留字幕下沿空间。"]
+      },
+      "character_rendering_rules": [],
+      "negative_prompt": ["角色脸型漂移", "发型或服装主色跨镜头变化", "随机新增无关角色", "字幕安全区被主体遮挡"],
+      "reusable_prompt_blocks": {
+        "base_style": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense",
+        "character_consistency": "林溪(char_01): 林溪的脸型、发型、服装主色和体态在所有镜头保持一致。",
+        "environment": "雨夜旧巷、废弃照相馆、胶片线索",
+        "camera": "vertical composition, readable face, one story clue per frame, room for subtitles",
+        "quality_guardrails": "consistent character identity, no random outfit change, no extra characters, clear focal point"
+      },
+      "image_prompt_guidelines": [],
+      "video_prompt_guidelines": [],
+      "continuity_notes": ["后续 storyboard_director 必须复用 reusable_prompt_blocks。"],
+      "review": {},
+      "checkpoint": {
+        "required": true,
+        "policy": "pause_for_style_review",
+        "reason": "demo"
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  }
+}
+

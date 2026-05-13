@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/story_intake/input.schema.json",
+  "title": "story_intake input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["story_text"],
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "story_text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "default": "zh-CN"
+    },
+    "target_duration_seconds": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 60,
+      "default": 45
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "enum": ["9:16", "16:9", "1:1"],
+      "default": "9:16"
+    },
+    "style_preset": {
+      "type": "string",
+      "default": "轻写实国漫"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["fast", "director"],
+      "default": "director"
+    }
+  }
+}

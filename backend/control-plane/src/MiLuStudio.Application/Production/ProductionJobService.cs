@@ -6,15 +6,25 @@ using MiLuStudio.Domain.Entities;
 
 public sealed class ProductionJobService
 {
+    private static readonly TimeSpan MockEventDelay = TimeSpan.FromMilliseconds(650);
+
     private readonly IClock _clock;
     private readonly IProductionJobRepository _jobs;
     private readonly IProjectRepository _projects;
+    private readonly ProductionStateMachine _stateMachine;
+    private readonly TaskQueueService _taskQueue;
 
-    public ProductionJobService(IClock clock, IProductionJobRepository jobs, IProjectRepository projects)
+    public ProductionJobService(
+        IClock clock,
+        IProductionJobRepository jobs,
+        IProjectRepository projects,
+        TaskQueueService taskQueue)
     {
         _clock = clock;
         _jobs = jobs;
         _projects = projects;
+        _taskQueue = taskQueue;
+        _stateMachine = new ProductionStateMachine(taskQueue);
     }
 
     public async Task<ProductionJobDto?> GetAsync(string jobId, CancellationToken cancellationToken)
@@ -31,7 +41,10 @@ public sealed class ProductionJobService
         return ToDto(job, tasks);
     }
 
-    public async Task<ProductionJobDto?> StartAsync(string projectId, StartProductionJobRequest request, CancellationToken cancellationToken)
+    public async Task<ProductionJobDto?> StartAsync(
+        string projectId,
+        StartProductionJobRequest request,
+        CancellationToken cancellationToken)
     {
         var project = await _projects.GetAsync(projectId, cancellationToken);
 
@@ -49,26 +62,13 @@ public sealed class ProductionJobService
         {
             Id = $"job_{Guid.NewGuid():N}",
             ProjectId = projectId,
-            CurrentStage = ProductionStageCatalog.All[0].Id,
+            CurrentStage = ProductionStage.Created,
             Status = ProductionJobStatus.Running,
             ProgressPercent = 0,
             StartedAt = now
         };
 
-        var tasks = ProductionStageCatalog.All
-            .Select((stage, index) => new GenerationTask
-            {
-                Id = $"task_{Guid.NewGuid():N}",
-                JobId = job.Id,
-                ProjectId = projectId,
-                SkillName = stage.Skill,
-                Provider = "mock-control-plane",
-                InputJson = $$"""{"stage":"{{stage.Id}}","requestedBy":"{{request.RequestedBy ?? "ui"}}"}""",
-                Status = index == 0 ? GenerationTaskStatus.Running : GenerationTaskStatus.Waiting,
-                AttemptCount = 0,
-                CostEstimate = index < 3 ? 0.01m * (index + 1) : 0
-            })
-            .ToList();
+        var tasks = _taskQueue.CreateInitialTasks(job.Id, projectId, request.RequestedBy);
 
         await _jobs.AddAsync(job, tasks, cancellationToken);
 
@@ -77,125 +77,118 @@ public sealed class ProductionJobService
 
     public async Task<ProductionJobDto?> PauseAsync(string jobId, CancellationToken cancellationToken)
     {
-        var job = await _jobs.GetAsync(jobId, cancellationToken);
+        var snapshot = await LoadSnapshotAsync(jobId, cancellationToken);
 
-        if (job is null)
+        if (snapshot is null)
         {
             return null;
         }
 
-        job.Status = ProductionJobStatus.Paused;
-        await _jobs.UpdateAsync(job, cancellationToken);
+        _stateMachine.Pause(snapshot.Job);
+        await PersistAsync(snapshot, cancellationToken);
 
-        var tasks = await _jobs.ListTasksAsync(jobId, cancellationToken);
-        return ToDto(job, tasks);
+        return ToDto(snapshot.Job, snapshot.Tasks);
     }
 
     public async Task<ProductionJobDto?> ResumeAsync(string jobId, CancellationToken cancellationToken)
     {
-        var job = await _jobs.GetAsync(jobId, cancellationToken);
+        var snapshot = await LoadSnapshotAsync(jobId, cancellationToken);
 
-        if (job is null)
+        if (snapshot is null)
         {
             return null;
         }
 
-        job.Status = ProductionJobStatus.Running;
-        await _jobs.UpdateAsync(job, cancellationToken);
+        _stateMachine.Resume(snapshot.Job, snapshot.Tasks);
+        await PersistAsync(snapshot, cancellationToken);
 
-        var tasks = await _jobs.ListTasksAsync(jobId, cancellationToken);
-        return ToDto(job, tasks);
+        return ToDto(snapshot.Job, snapshot.Tasks);
     }
 
     public async Task<ProductionJobDto?> RetryAsync(string jobId, CancellationToken cancellationToken)
     {
-        var job = await _jobs.GetAsync(jobId, cancellationToken);
+        var snapshot = await LoadSnapshotAsync(jobId, cancellationToken);
 
-        if (job is null)
+        if (snapshot is null)
         {
             return null;
         }
 
-        job.Status = ProductionJobStatus.Running;
-        job.ErrorMessage = null;
-        await _jobs.UpdateAsync(job, cancellationToken);
+        _stateMachine.PrepareRetry(snapshot.Job, snapshot.Tasks);
+        await PersistAsync(snapshot, cancellationToken);
 
-        var tasks = await _jobs.ListTasksAsync(jobId, cancellationToken);
-        foreach (var task in tasks.Where(task => task.Status == GenerationTaskStatus.Failed))
+        return ToDto(snapshot.Job, snapshot.Tasks);
+    }
+
+    public async Task<ProductionJobDto?> CheckpointAsync(
+        string jobId,
+        ProductionCheckpointRequest request,
+        CancellationToken cancellationToken)
+    {
+        var snapshot = await LoadSnapshotAsync(jobId, cancellationToken);
+
+        if (snapshot is null)
         {
-            task.Status = GenerationTaskStatus.Waiting;
-            task.ErrorMessage = null;
+            return null;
         }
 
-        await _jobs.ReplaceTasksAsync(jobId, tasks, cancellationToken);
+        _stateMachine.ApplyCheckpoint(
+            snapshot.Job,
+            snapshot.Tasks,
+            request.Approved ?? true,
+            _clock.Now,
+            request.Notes);
 
-        return ToDto(job, tasks);
+        await PersistAsync(snapshot, cancellationToken);
+
+        return ToDto(snapshot.Job, snapshot.Tasks);
     }
 
     public async IAsyncEnumerable<ProductionJobEventDto> StreamMockEventsAsync(
         string jobId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var snapshot = await LoadSnapshotAsync(jobId, cancellationToken);
+
+            if (snapshot is null)
+            {
+                yield break;
+            }
+
+            var transition = _stateMachine.Advance(snapshot.Job, snapshot.Tasks, _clock.Now);
+
+            await PersistAsync(snapshot, cancellationToken);
+
+            yield return ToEventDto(snapshot.Job, transition);
+
+            if (transition.IsTerminal)
+            {
+                yield break;
+            }
+
+            await Task.Delay(MockEventDelay, cancellationToken);
+        }
+    }
+
+    private async Task<ProductionJobSnapshot?> LoadSnapshotAsync(string jobId, CancellationToken cancellationToken)
+    {
         var job = await _jobs.GetAsync(jobId, cancellationToken);
 
         if (job is null)
         {
-            yield break;
+            return null;
         }
 
         var tasks = (await _jobs.ListTasksAsync(jobId, cancellationToken)).ToList();
+        return new ProductionJobSnapshot(job, tasks);
+    }
 
-        for (var index = 0; index < ProductionStageCatalog.All.Count; index++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var stage = ProductionStageCatalog.All[index];
-            var progress = (int)Math.Round((index + 1) * 100m / ProductionStageCatalog.All.Count);
-            var status = stage.NeedsReview ? GenerationTaskStatus.Review : GenerationTaskStatus.Running;
-
-            job.CurrentStage = stage.Id;
-            job.ProgressPercent = progress;
-            job.Status = ProductionJobStatus.Running;
-            SetTaskStatus(tasks, stage.Skill, status);
-
-            await _jobs.UpdateAsync(job, cancellationToken);
-            await _jobs.ReplaceTasksAsync(jobId, tasks, cancellationToken);
-
-            yield return new ProductionJobEventDto(
-                TypeFor(index, stage),
-                job.Id,
-                job.ProjectId,
-                stage.Id,
-                stage.Label,
-                stage.Skill,
-                StageStatus(status),
-                progress,
-                stage.NeedsReview ? $"{stage.Label} 已生成，等待用户确认。" : $"{stage.Label} 正在执行。",
-                _clock.Now);
-
-            await Task.Delay(TimeSpan.FromMilliseconds(650), cancellationToken);
-
-            SetTaskStatus(tasks, stage.Skill, GenerationTaskStatus.Completed);
-        }
-
-        job.ProgressPercent = 100;
-        job.CurrentStage = "completed";
-        job.Status = ProductionJobStatus.Completed;
-        job.FinishedAt = _clock.Now;
-        await _jobs.UpdateAsync(job, cancellationToken);
-        await _jobs.ReplaceTasksAsync(jobId, tasks, cancellationToken);
-
-        yield return new ProductionJobEventDto(
-            "artifact_ready",
-            job.Id,
-            job.ProjectId,
-            "delivery",
-            "导出包",
-            "export_packager",
-            "done",
-            100,
-            "mock 生产任务已完成，后续阶段会接入真实 Worker 和资产索引。",
-            _clock.Now);
+    private async Task PersistAsync(ProductionJobSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        await _jobs.UpdateAsync(snapshot.Job, cancellationToken);
+        await _jobs.ReplaceTasksAsync(snapshot.Job.Id, snapshot.Tasks, cancellationToken);
     }
 
     private static ProductionJobDto ToDto(ProductionJob job, IReadOnlyList<GenerationTask> tasks)
@@ -204,7 +197,7 @@ public sealed class ProductionJobService
             job.Id,
             job.ProjectId,
             FormatJobStatus(job.Status),
-            job.CurrentStage,
+            ProductionStageCatalog.ExternalIdFor(job.CurrentStage),
             job.ProgressPercent,
             FormatDate(job.StartedAt),
             job.FinishedAt is null ? null : FormatDate(job.FinishedAt.Value),
@@ -216,7 +209,7 @@ public sealed class ProductionJobService
     {
         return ProductionStageCatalog.All.Select(stage =>
         {
-            var task = tasks.FirstOrDefault(task => task.SkillName == stage.Skill);
+            var task = tasks.FirstOrDefault(task => string.Equals(task.SkillName, stage.Skill, StringComparison.OrdinalIgnoreCase));
 
             return new ProductionStageDto(
                 stage.Id,
@@ -229,27 +222,20 @@ public sealed class ProductionJobService
         }).ToList();
     }
 
-    private static void SetTaskStatus(IReadOnlyList<GenerationTask> tasks, string skillName, GenerationTaskStatus status)
+    private ProductionJobEventDto ToEventDto(ProductionJob job, ProductionStateTransition transition)
     {
-        var task = tasks.FirstOrDefault(task => task.SkillName == skillName);
-
-        if (task is null)
-        {
-            return;
-        }
-
-        task.Status = status;
-        task.AttemptCount = Math.Max(1, task.AttemptCount);
-    }
-
-    private static string TypeFor(int index, ProductionStageDefinition stage)
-    {
-        if (index == 0)
-        {
-            return "task_started";
-        }
-
-        return stage.NeedsReview ? "checkpoint_required" : "stage_changed";
+        return new ProductionJobEventDto(
+            transition.EventType,
+            job.Id,
+            job.ProjectId,
+            transition.StageId,
+            transition.StageLabel,
+            transition.Skill,
+            StageStatus(transition.TaskStatus),
+            FormatJobStatus(job.Status),
+            transition.Progress,
+            transition.Message,
+            _clock.Now);
     }
 
     private static string FormatJobStatus(ProductionJobStatus status)
@@ -281,4 +267,6 @@ public sealed class ProductionJobService
     {
         return value.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
     }
+
+    private sealed record ProductionJobSnapshot(ProductionJob Job, IReadOnlyList<GenerationTask> Tasks);
 }

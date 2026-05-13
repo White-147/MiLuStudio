@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/character_bible/input.schema.json",
+  "title": "character_bible input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["episode_writer"],
+  "properties": {
+    "episode_writer": {
+      "type": "object",
+      "description": "A successful episode_writer runtime envelope."
+    },
+    "character_preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "locked_character_names": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        }
+      }
+    }
+  }
+}
+

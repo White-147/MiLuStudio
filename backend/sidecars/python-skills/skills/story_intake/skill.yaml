@@ -1,0 +1,15 @@
+name: story_intake
+display_name: 故事入口解析
+description: Normalize a user story into a stable summary, tone, genre, risks, and first story beats.
+stage: STORY_INGESTING
+input_schema: schema.input.json
+output_schema: schema.output.json
+timeout_seconds: 30
+max_retries: 1
+cost_policy:
+  mode: fixed_zero
+  estimated_cost: 0
+required_provider_capabilities: []
+checkpoint_policy:
+  required: false
+  reason: Story intake only prepares source material and should auto-continue.

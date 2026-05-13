@@ -1,0 +1,509 @@
+{
+  "ok": true,
+  "skill_name": "storyboard_director",
+  "schema_version": "1.0",
+  "data": {
+    "project_id": "demo-episode-01",
+    "episode_index": 1,
+    "title": "雨夜纸鹤",
+    "language": "zh-CN",
+    "target_duration_seconds": 45,
+    "aspect_ratio": "9:16",
+    "storyboard_summary": "《雨夜纸鹤》拆分为 8 个竖屏分镜，总时长 45 秒，每镜头保留角色、景别、运镜、灯光、对白/旁白和 prompt seed。",
+    "shots": [
+      {
+        "shot_id": "shot_01",
+        "shot_index": 1,
+        "source_segment_id": "seg_01",
+        "source_beat_id": "beat_01_hook",
+        "start_second": 0,
+        "duration_seconds": 4,
+        "scene": "雨巷、湿地反光、招牌残光。；线索和空间关系；来源：立刻抛出异常物件和追踪动机。",
+        "characters": [
+          {
+            "character_id": "char_01",
+            "name": "林溪",
+            "role_type": "main",
+            "stable_seed": "demo-episode-01:episode_1:char_01"
+          }
+        ],
+        "shot_size": "extreme_close_up",
+        "camera": {
+          "angle": "low detail angle focused on the clue",
+          "motion": "slow_push_in",
+          "composition": "竖屏安全区内保留字幕下沿空间。 线索放在画面三分之一交点。",
+          "safety": "keep subtitle lower-third clear and preserve character face readability"
+        },
+        "lighting": {
+          "key_light": "低强度侧光或环境反射光。",
+          "accent_light": "只服务线索、角色眼神和结尾钩子。",
+          "rule": "主角脸部保留可读高光，环境阴影不压掉表情。"
+        },
+        "visual_action": "建立镜头：竖屏近景，用异常线索贴近镜头开场。",
+        "dialogue": [
+          {
+            "speaker": "林溪",
+            "line": "你到底想带我去哪？",
+            "delivery": "压低声音，带一点试探。"
+          }
+        ],
+        "narration": "林溪以为这只是普通的一晚，直到线索把林溪带向不该出现的地方。",
+        "sound_note": "雨夜、悬疑低频氛围。",
+        "style_prompt_block_refs": [
+          "base_style",
+          "character_consistency",
+          "environment",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_notes": [
+          "本镜头必须复用 style_bible.reusable_prompt_blocks。",
+          "同一角色跨镜头保持 stable_seed、服装主色和脸型一致。",
+          "角色锁定引用：char_01。",
+          "后续 storyboard_director 必须复用 reusable_prompt_blocks。"
+        ],
+        "image_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | 林溪(char_01): 林溪的脸型、发型、服装主色和体态在所有镜头保持一致。 | shot_size=extreme_close_up | characters=林溪 | scene=雨巷、湿地反光、招牌残光。；线索和空间关系；来源：立刻抛出异常物件和追踪动机。 | story_purpose=立刻抛出异常物件和追踪动机。",
+        "video_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | vertical composition, readable face, one story clue per frame, room for subtitles | duration_seconds=4 | camera_motion=slow_push_in | visual_direction=竖屏近景，用异常线索贴近镜头开场。",
+        "review_flags": []
+      },
+      {
+        "shot_id": "shot_02",
+        "shot_index": 2,
+        "source_segment_id": "seg_01",
+        "source_beat_id": "beat_01_hook",
+        "start_second": 4,
+        "duration_seconds": 4,
+        "scene": "雨巷、湿地反光、招牌残光。；角色反应和下一步行动；来源：立刻抛出异常物件和追踪动机。",
+        "characters": [
+          {
+            "character_id": "char_01",
+            "name": "林溪",
+            "role_type": "main",
+            "stable_seed": "demo-episode-01:episode_1:char_01"
+          }
+        ],
+        "shot_size": "medium_close_up",
+        "camera": {
+          "angle": "slight close reaction angle on the main character",
+          "motion": "steady_follow",
+          "composition": "竖屏安全区内保留字幕下沿空间。 主角眼神方向引导到下一镜。",
+          "safety": "keep subtitle lower-third clear and preserve character face readability"
+        },
+        "lighting": {
+          "key_light": "低强度侧光或环境反射光。",
+          "accent_light": "只服务线索、角色眼神和结尾钩子。",
+          "rule": "门缝光可作为结尾钩子。"
+        },
+        "visual_action": "反应镜头：角色完成对白“你到底想带我去哪？”并推进下一动作。",
+        "dialogue": [
+          {
+            "speaker": "林溪",
+            "line": "你到底想带我去哪？",
+            "delivery": "压低声音，带一点试探。"
+          }
+        ],
+        "narration": "",
+        "sound_note": "雨夜、悬疑低频氛围。",
+        "style_prompt_block_refs": [
+          "base_style",
+          "character_consistency",
+          "environment",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_notes": [
+          "本镜头必须复用 style_bible.reusable_prompt_blocks。",
+          "同一角色跨镜头保持 stable_seed、服装主色和脸型一致。",
+          "角色锁定引用：char_01。",
+          "后续 storyboard_director 必须复用 reusable_prompt_blocks。"
+        ],
+        "image_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | 林溪(char_01): 林溪的脸型、发型、服装主色和体态在所有镜头保持一致。 | shot_size=medium_close_up | characters=林溪 | scene=雨巷、湿地反光、招牌残光。；角色反应和下一步行动；来源：立刻抛出异常物件和追踪动机。 | story_purpose=立刻抛出异常物件和追踪动机。",
+        "video_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | vertical composition, readable face, one story clue per frame, room for subtitles | duration_seconds=4 | camera_motion=steady_follow | visual_direction=竖屏近景，用异常线索贴近镜头开场。",
+        "review_flags": []
+      },
+      {
+        "shot_id": "shot_03",
+        "shot_index": 3,
+        "source_segment_id": "seg_02",
+        "source_beat_id": "beat_02_setup",
+        "start_second": 8,
+        "duration_seconds": 6,
+        "scene": "雨巷、湿地反光、招牌残光。；线索和空间关系；来源：交代地点、人物牵挂和必须行动的原因。",
+        "characters": [
+          {
+            "character_id": "char_01",
+            "name": "林溪",
+            "role_type": "main",
+            "stable_seed": "demo-episode-01:episode_1:char_01"
+          }
+        ],
+        "shot_size": "detail",
+        "camera": {
+          "angle": "eye-level angle that keeps the environment readable",
+          "motion": "brief_insert_push",
+          "composition": "竖屏安全区内保留字幕下沿空间。 线索放在画面三分之一交点。",
+          "safety": "keep subtitle lower-third clear and preserve character face readability"
+        },
+        "lighting": {
+          "key_light": "低强度侧光或环境反射光。",
+          "accent_light": "只服务线索、角色眼神和结尾钩子。",
+          "rule": "主角脸部保留可读高光，环境阴影不压掉表情。"
+        },
+        "visual_action": "建立镜头：竖屏近景切到关键地点。",
+        "dialogue": [
+          {
+            "speaker": "林溪",
+            "line": "哥哥的线索，怎么会在这里？",
+            "delivery": "困惑后迅速紧张。"
+          }
+        ],
+        "narration": "越靠近真相，熟悉的记忆越像被人重新摆放过。",
+        "sound_note": "雨夜、悬疑氛围延续。",
+        "style_prompt_block_refs": [
+          "base_style",
+          "character_consistency",
+          "environment",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_notes": [
+          "本镜头必须复用 style_bible.reusable_prompt_blocks。",
+          "同一角色跨镜头保持 stable_seed、服装主色和脸型一致。",
+          "角色锁定引用：char_01。",
+          "后续 storyboard_director 必须复用 reusable_prompt_blocks。"
+        ],
+        "image_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | 林溪(char_01): 林溪的脸型、发型、服装主色和体态在所有镜头保持一致。 | shot_size=detail | characters=林溪 | scene=雨巷、湿地反光、招牌残光。；线索和空间关系；来源：交代地点、人物牵挂和必须行动的原因。 | story_purpose=交代地点、人物牵挂和必须行动的原因。",
+        "video_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | vertical composition, readable face, one story clue per frame, room for subtitles | duration_seconds=6 | camera_motion=brief_insert_push | visual_direction=竖屏近景切到关键地点。",
+        "review_flags": []
+      },
+      {
+        "shot_id": "shot_04",
+        "shot_index": 4,
+        "source_segment_id": "seg_02",
+        "source_beat_id": "beat_02_setup",
+        "start_second": 14,
+        "duration_seconds": 6,
+        "scene": "雨巷、湿地反光、招牌残光。；角色反应和下一步行动；来源：交代地点、人物牵挂和必须行动的原因。",
+        "characters": [
+          {
+            "character_id": "char_01",
+            "name": "林溪",
+            "role_type": "main",
+            "stable_seed": "demo-episode-01:episode_1:char_01"
+          }
+        ],
+        "shot_size": "medium",
+        "camera": {
+          "angle": "slight close reaction angle on the main character",
+          "motion": "locked_reaction",
+          "composition": "竖屏安全区内保留字幕下沿空间。 主角眼神方向引导到下一镜。",
+          "safety": "keep subtitle lower-third clear and preserve character face readability"
+        },
+        "lighting": {
+          "key_light": "低强度侧光或环境反射光。",
+          "accent_light": "只服务线索、角色眼神和结尾钩子。",
+          "rule": "门缝光可作为结尾钩子。"
+        },
+        "visual_action": "反应镜头：角色完成对白“哥哥的线索，怎么会在这里？”并推进下一动作。",
+        "dialogue": [
+          {
+            "speaker": "林溪",
+            "line": "哥哥的线索，怎么会在这里？",
+            "delivery": "困惑后迅速紧张。"
+          }
+        ],
+        "narration": "",
+        "sound_note": "雨夜、悬疑氛围延续。",
+        "style_prompt_block_refs": [
+          "base_style",
+          "character_consistency",
+          "environment",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_notes": [
+          "本镜头必须复用 style_bible.reusable_prompt_blocks。",
+          "同一角色跨镜头保持 stable_seed、服装主色和脸型一致。",
+          "角色锁定引用：char_01。",
+          "后续 storyboard_director 必须复用 reusable_prompt_blocks。"
+        ],
+        "image_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | 林溪(char_01): 林溪的脸型、发型、服装主色和体态在所有镜头保持一致。 | shot_size=medium | characters=林溪 | scene=雨巷、湿地反光、招牌残光。；角色反应和下一步行动；来源：交代地点、人物牵挂和必须行动的原因。 | story_purpose=交代地点、人物牵挂和必须行动的原因。",
+        "video_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | vertical composition, readable face, one story clue per frame, room for subtitles | duration_seconds=6 | camera_motion=locked_reaction | visual_direction=竖屏近景切到关键地点。",
+        "review_flags": []
+      },
+      {
+        "shot_id": "shot_05",
+        "shot_index": 5,
+        "source_segment_id": "seg_03",
+        "source_beat_id": "beat_03_turn",
+        "start_second": 20,
+        "duration_seconds": 6,
+        "scene": "雨巷、湿地反光、招牌残光。；线索和空间关系；来源：让观众看到证据，并把危险推到角色面前。",
+        "characters": [
+          {
+            "character_id": "char_01",
+            "name": "林溪",
+            "role_type": "main",
+            "stable_seed": "demo-episode-01:episode_1:char_01"
+          }
+        ],
+        "shot_size": "close_up",
+        "camera": {
+          "angle": "eye-level angle that keeps the environment readable",
+          "motion": "slow_pan",
+          "composition": "竖屏安全区内保留字幕下沿空间。 线索放在画面三分之一交点。",
+          "safety": "keep subtitle lower-third clear and preserve character face readability"
+        },
+        "lighting": {
+          "key_light": "低强度侧光或环境反射光。",
+          "accent_light": "只服务线索、角色眼神和结尾钩子。",
+          "rule": "主角脸部保留可读高光，环境阴影不压掉表情。"
+        },
+        "visual_action": "建立镜头：推进到证据特写，再切林溪的反应。",
+        "dialogue": [
+          {
+            "speaker": "林溪",
+            "line": "原来他不是失踪，是发现了这扇门。",
+            "delivery": "震惊，尾音收住。"
+          }
+        ],
+        "narration": "证据出现的那一刻，林溪终于明白，危险一直等在前方。",
+        "sound_note": "雨夜、悬疑氛围延续。",
+        "style_prompt_block_refs": [
+          "base_style",
+          "character_consistency",
+          "environment",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_notes": [
+          "本镜头必须复用 style_bible.reusable_prompt_blocks。",
+          "同一角色跨镜头保持 stable_seed、服装主色和脸型一致。",
+          "角色锁定引用：char_01。",
+          "后续 storyboard_director 必须复用 reusable_prompt_blocks。"
+        ],
+        "image_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | 林溪(char_01): 林溪的脸型、发型、服装主色和体态在所有镜头保持一致。 | shot_size=close_up | characters=林溪 | scene=雨巷、湿地反光、招牌残光。；线索和空间关系；来源：让观众看到证据，并把危险推到角色面前。 | story_purpose=让观众看到证据，并把危险推到角色面前。",
+        "video_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | vertical composition, readable face, one story clue per frame, room for subtitles | duration_seconds=6 | camera_motion=slow_pan | visual_direction=推进到证据特写，再切林溪的反应。",
+        "review_flags": []
+      },
+      {
+        "shot_id": "shot_06",
+        "shot_index": 6,
+        "source_segment_id": "seg_03",
+        "source_beat_id": "beat_03_turn",
+        "start_second": 26,
+        "duration_seconds": 6,
+        "scene": "雨巷、湿地反光、招牌残光。；角色反应和下一步行动；来源：让观众看到证据，并把危险推到角色面前。",
+        "characters": [
+          {
+            "character_id": "char_01",
+            "name": "林溪",
+            "role_type": "main",
+            "stable_seed": "demo-episode-01:episode_1:char_01"
+          }
+        ],
+        "shot_size": "wide",
+        "camera": {
+          "angle": "slight close reaction angle on the main character",
+          "motion": "hold",
+          "composition": "竖屏安全区内保留字幕下沿空间。 主角眼神方向引导到下一镜。",
+          "safety": "keep subtitle lower-third clear and preserve character face readability"
+        },
+        "lighting": {
+          "key_light": "低强度侧光或环境反射光。",
+          "accent_light": "只服务线索、角色眼神和结尾钩子。",
+          "rule": "门缝光可作为结尾钩子。"
+        },
+        "visual_action": "反应镜头：角色完成对白“原来他不是失踪，是发现了这扇门。”并推进下一动作。",
+        "dialogue": [
+          {
+            "speaker": "林溪",
+            "line": "原来他不是失踪，是发现了这扇门。",
+            "delivery": "震惊，尾音收住。"
+          }
+        ],
+        "narration": "",
+        "sound_note": "雨夜、悬疑氛围延续。",
+        "style_prompt_block_refs": [
+          "base_style",
+          "character_consistency",
+          "environment",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_notes": [
+          "本镜头必须复用 style_bible.reusable_prompt_blocks。",
+          "同一角色跨镜头保持 stable_seed、服装主色和脸型一致。",
+          "角色锁定引用：char_01。",
+          "后续 storyboard_director 必须复用 reusable_prompt_blocks。"
+        ],
+        "image_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | 林溪(char_01): 林溪的脸型、发型、服装主色和体态在所有镜头保持一致。 | shot_size=wide | characters=林溪 | scene=雨巷、湿地反光、招牌残光。；角色反应和下一步行动；来源：让观众看到证据，并把危险推到角色面前。 | story_purpose=让观众看到证据，并把危险推到角色面前。",
+        "video_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | vertical composition, readable face, one story clue per frame, room for subtitles | duration_seconds=6 | camera_motion=hold | visual_direction=推进到证据特写，再切林溪的反应。",
+        "review_flags": []
+      },
+      {
+        "shot_id": "shot_07",
+        "shot_index": 7,
+        "source_segment_id": "seg_04",
+        "source_beat_id": "beat_04_hook",
+        "start_second": 32,
+        "duration_seconds": 6,
+        "scene": "雨巷、湿地反光、招牌残光。；线索和空间关系；来源：用未解谜团或下一步行动收束，留下继续观看理由。",
+        "characters": [
+          {
+            "character_id": "char_01",
+            "name": "林溪",
+            "role_type": "main",
+            "stable_seed": "demo-episode-01:episode_1:char_01"
+          }
+        ],
+        "shot_size": "medium_close_up",
+        "camera": {
+          "angle": "eye-level angle that keeps the environment readable",
+          "motion": "tracking_in",
+          "composition": "竖屏安全区内保留字幕下沿空间。 线索放在画面三分之一交点。",
+          "safety": "keep subtitle lower-third clear and preserve character face readability"
+        },
+        "lighting": {
+          "key_light": "低强度侧光或环境反射光。",
+          "accent_light": "只服务线索、角色眼神和结尾钩子。",
+          "rule": "主角脸部保留可读高光，环境阴影不压掉表情。"
+        },
+        "visual_action": "建立镜头：收束在未解画面上。",
+        "dialogue": [
+          {
+            "speaker": "林溪",
+            "line": "如果门后是答案，我就进去。",
+            "delivery": "坚定，但保留不安。"
+          }
+        ],
+        "narration": "午夜门出现。",
+        "sound_note": "环境声骤停，结尾对白后留半秒空白。",
+        "style_prompt_block_refs": [
+          "base_style",
+          "character_consistency",
+          "environment",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_notes": [
+          "本镜头必须复用 style_bible.reusable_prompt_blocks。",
+          "同一角色跨镜头保持 stable_seed、服装主色和脸型一致。",
+          "角色锁定引用：char_01。",
+          "后续 storyboard_director 必须复用 reusable_prompt_blocks。"
+        ],
+        "image_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | 林溪(char_01): 林溪的脸型、发型、服装主色和体态在所有镜头保持一致。 | shot_size=medium_close_up | characters=林溪 | scene=雨巷、湿地反光、招牌残光。；线索和空间关系；来源：用未解谜团或下一步行动收束，留下继续观看理由。 | story_purpose=用未解谜团或下一步行动收束，留下继续观看理由。",
+        "video_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | vertical composition, readable face, one story clue per frame, room for subtitles | duration_seconds=6 | camera_motion=tracking_in | visual_direction=收束在未解画面上。",
+        "review_flags": []
+      },
+      {
+        "shot_id": "shot_08",
+        "shot_index": 8,
+        "source_segment_id": "seg_04",
+        "source_beat_id": "beat_04_hook",
+        "start_second": 38,
+        "duration_seconds": 7,
+        "scene": "雨巷、湿地反光、招牌残光。；角色反应和下一步行动；来源：用未解谜团或下一步行动收束，留下继续观看理由。",
+        "characters": [
+          {
+            "character_id": "char_01",
+            "name": "林溪",
+            "role_type": "main",
+            "stable_seed": "demo-episode-01:episode_1:char_01"
+          }
+        ],
+        "shot_size": "hook_close_up",
+        "camera": {
+          "angle": "slight close reaction angle on the main character",
+          "motion": "still_hook",
+          "composition": "竖屏安全区内保留字幕下沿空间。 主角眼神方向引导到下一镜。",
+          "safety": "keep subtitle lower-third clear and preserve character face readability"
+        },
+        "lighting": {
+          "key_light": "低强度侧光或环境反射光。",
+          "accent_light": "只服务线索、角色眼神和结尾钩子。",
+          "rule": "门缝光可作为结尾钩子。"
+        },
+        "visual_action": "反应镜头：角色完成对白“如果门后是答案，我就进去。”并推进下一动作。",
+        "dialogue": [
+          {
+            "speaker": "林溪",
+            "line": "如果门后是答案，我就进去。",
+            "delivery": "坚定，但保留不安。"
+          }
+        ],
+        "narration": "",
+        "sound_note": "环境声骤停，结尾对白后留半秒空白。",
+        "style_prompt_block_refs": [
+          "base_style",
+          "character_consistency",
+          "environment",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_notes": [
+          "本镜头必须复用 style_bible.reusable_prompt_blocks。",
+          "同一角色跨镜头保持 stable_seed、服装主色和脸型一致。",
+          "角色锁定引用：char_01。",
+          "后续 storyboard_director 必须复用 reusable_prompt_blocks。"
+        ],
+        "image_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | 林溪(char_01): 林溪的脸型、发型、服装主色和体态在所有镜头保持一致。 | shot_size=hook_close_up | characters=林溪 | scene=雨巷、湿地反光、招牌残光。；角色反应和下一步行动；来源：用未解谜团或下一步行动收束，留下继续观看理由。 | story_purpose=用未解谜团或下一步行动收束，留下继续观看理由。",
+        "video_prompt_seed": "雨夜悬疑国漫, 2D animated short-video frame, controlled suspense | vertical composition, readable face, one story clue per frame, room for subtitles | duration_seconds=7 | camera_motion=still_hook | visual_direction=收束在未解画面上。",
+        "review_flags": []
+      }
+    ],
+    "timing_summary": {
+      "target_duration_seconds": 45,
+      "total_shot_seconds": 45,
+      "shot_count": 8,
+      "min_shot_seconds": 4,
+      "max_shot_seconds": 7,
+      "within_tolerance": true
+    },
+    "image_video_readiness": {
+      "per_shot_prompt_inputs": [
+        "shot.scene",
+        "shot.characters",
+        "shot.visual_action",
+        "shot.camera",
+        "shot.lighting",
+        "shot.image_prompt_seed",
+        "shot.video_prompt_seed"
+      ],
+      "requires_reference_assets": false,
+      "deferred_assets": [
+        "storyboard images",
+        "first/last frames",
+        "video clips"
+      ],
+      "notes": [
+        "当前阶段只生成可审阅镜头列表，不生成图片、视频或文件资产。",
+        "后续 image_prompt_builder / video_prompt_builder 应复用每个镜头的 prompt seed。"
+      ]
+    },
+    "review": {
+      "status": "ready_for_review",
+      "editable_fields": [
+        "shots",
+        "timing_summary",
+        "storyboard_summary"
+      ],
+      "notes": [
+        "用户可在此阶段审核镜头顺序、景别、运镜和时长。",
+        "当前结果只产出分镜结构，不写数据库，不触发图像、视频或 FFmpeg。"
+      ]
+    },
+    "checkpoint": {
+      "required": true,
+      "policy": "pause_for_storyboard_review",
+      "reason": "storyboard_director output should be reviewed before image and video prompt expansion."
+    }
+  },
+  "error": null,
+  "runtime": {
+    "duration_ms": 6.13,
+    "model": "none",
+    "mode": "deterministic-mock",
+    "cost_estimate": 0
+  }
+}

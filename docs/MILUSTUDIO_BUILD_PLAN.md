@@ -1,6 +1,6 @@
 # MiLuStudio 建设方案与下一会话实施手册
 
-更新时间：2026-05-12  
+更新时间：2026-05-13
 定位：给下一次开发会话使用的详细执行依据。  
 硬约束：MiLuStudio 是新的 Windows 原生 AI 漫剧 Agent 产品，不继续套壳旧 MiLuAssistantWeb / MiLuAssistantDesktop，也不把 ArcReel、LumenX、AIComicBuilder 等项目整体搬进来。
 
@@ -836,16 +836,18 @@ D:\code\MiLuStudio\
 2. 定义合法状态迁移表。
 3. 实现 `ProductionJobService`。
 4. 实现 `TaskQueueService`。
-5. Worker 使用 PostgreSQL 领取待执行 task。
+5. Worker 保留 heartbeat 和任务领取边界，本阶段不接真实 PostgreSQL adapter。
 6. 每个 task 失败后记录错误、attempt_count、是否可重试。
 7. 实现暂停、恢复、重试。
 8. 实现阶段 checkpoint。
+9. PostgreSQL `FOR UPDATE SKIP LOCKED` 领取策略留到后续持久化 / Worker 收敛阶段。
 
 验收：
 
 - 任意阶段失败不会导致项目状态丢失。
-- 刷新前端后仍能恢复进度。
+- API 进程存活时，刷新前端后仍能恢复进度。
 - 用户确认后才能继续 checkpoint 阶段。
+- API 重启后的 durable recovery 留给真实 PostgreSQL adapter / EF Core DbContext 阶段。
 
 参考：
 
@@ -859,7 +861,7 @@ D:\code\MiLuStudio\
 步骤：
 
 1. 创建 `backend/sidecars/python-skills`。
-2. 使用 Python 3.11。
+2. 创建目标为 Python `>=3.11,<3.14` 的项目；本地使用 `D:\soft\program\Python\Python313\python.exe` 验证。
 3. 创建 `milu_studio_skills` 包。
 4. 定义统一 CLI：
    - `python -m milu_studio_skills run --skill story_intake --input input.json --output output.json`
@@ -873,9 +875,10 @@ D:\code\MiLuStudio\
 
 验收：
 
-- .NET Worker 能调用 Python skill。
+- Python skill 只能通过统一 CLI / gateway 调用，后续 .NET Worker 不直接调用单个 skill 文件。
 - 输入 JSON 输出 JSON。
-- 输出能被写回数据库。
+- 输出 envelope 结构稳定，后续 Worker / 数据库 adapter 可写回；本阶段不直接接真实数据库。
+- 失败输出包含错误码和错误消息。
 
 参考：
 
@@ -885,23 +888,25 @@ D:\code\MiLuStudio\
 
 ### 阶段 5：故事解析到脚本
 
-目标：输入故事，生成可审阅脚本。
+目标：输入故事，生成可审阅脚本结构。
 
 步骤：
 
 1. 实现 `story_intake`。
 2. 实现 `plot_adaptation`。
 3. 实现 `episode_writer`。
-4. 保存 `episodes.script_text`。
-5. 前端显示脚本卡。
-6. 用户可编辑脚本。
-7. 用户确认后进入角色阶段。
+4. 基于 `story_intake` 的稳定 envelope 串联后续 skill。
+5. 输出 `plot_beats`、`segments`、`subtitle_cues` 和 review checkpoint。
+6. 本阶段不直接保存 `episodes.script_text`。
+7. 数据库写回、前端脚本卡、脚本编辑和用户确认 API 留给 PostgreSQL adapter / EF Core DbContext 与后续 Control API 收敛阶段。
 
 验收：
 
 - 输入 500 字故事，能得到 30 到 60 秒脚本。
 - 脚本包含旁白和对白。
 - 句子长度适合配音和字幕。
+- Python Sidecar 只通过统一 CLI / gateway 产出 JSON envelope。
+- 不接真实模型 provider，不让 UI 直接调用 Python。
 
 参考：
 
@@ -910,23 +915,28 @@ D:\code\MiLuStudio\
 
 ### 阶段 6：角色和风格
 
-目标：生成稳定的角色设定和统一画风。
+目标：在 Python Skills Runtime 内生成稳定的角色设定和统一画风结构。
 
 步骤：
 
-1. 实现 `character_bible`。
-2. 输出角色名、身份、性格、外貌、服装、声音。
-3. 实现 `style_bible`。
-4. 输出画风、色调、镜头语言、负向提示词。
-5. 前端显示角色卡和风格卡。
-6. 支持用户锁定角色设定。
-7. 支持上传角色参考图。
+1. 基于 `episode_writer` 成功 envelope 实现 `character_bible`。
+2. 输出角色名、身份、性格、外貌、服装、声音、稳定 seed、跨镜头一致性规则和审核 checkpoint。
+3. 基于 `episode_writer` 和 `character_bible` 成功 envelope 实现 `style_bible`。
+4. 输出画风、色板、灯光、环境设计、镜头语言、角色渲染规则、负向提示词和可复用 prompt blocks。
+5. 在 `SkillGateway.default()` 注册两个 skill，并补齐 schema、examples、单元测试和 CLI smoke。
+6. 本阶段只产出可审阅 JSON 结构；不保存数据库，不接真实模型，不触发图片/视频/FFmpeg，不让 UI 直接调用 Python。
+
+延后：
+
+- 前端角色卡 / 风格卡展示、锁定、重新生成和参考图上传留给 Control API / PostgreSQL adapter / UI 集成阶段。
+- 角色参考图、三视图、头像特写和图生视频参考素材留给图片生成及资产阶段。
 
 验收：
 
 - 主角能保持跨镜头一致性描述。
 - 风格提示词能被后续图片和视频阶段复用。
-- 用户修改角色后下游分镜能使用新设定。
+- 下游 `storyboard_director` 能通过 envelope 读取 `character_bible` 和 `style_bible`。
+- 用户修改角色后的持久化与下游重算留给后续数据库 / Control API 阶段，不在 Stage 6 直连实现。
 
 参考：
 
@@ -936,22 +946,28 @@ D:\code\MiLuStudio\
 
 ### 阶段 7：分镜
 
-目标：生成可执行的镜头列表。
+目标：在 Python Skills Runtime 内生成可审阅、可执行的镜头列表结构。
 
 步骤：
 
-1. 实现 `storyboard_director`。
-2. 每个镜头包含：时长、场景、角色、景别、运镜、灯光、对白、旁白。
-3. 对总时长做校验。
-4. 前端显示分镜表。
-5. 支持用户增删改分镜。
-6. 支持单个镜头重新生成。
+1. 基于 `episode_writer`、`character_bible` 和 `style_bible` 成功 envelope 实现 `storyboard_director`。
+2. 每个镜头包含：时长、场景、角色、景别、运镜、构图、灯光、对白、旁白、声音提示、角色/风格连续性说明。
+3. 每个镜头产出后续图像和视频提示词阶段可复用的 `image_prompt_seed` 和 `video_prompt_seed`。
+4. 对总时长和镜头数量做校验。
+5. 在 `SkillGateway.default()` 注册 skill，并补齐 schema、examples、单元测试和 CLI smoke。
+6. 本阶段只产出可审阅 JSON 结构；不保存数据库，不接真实模型，不生成分镜图，不触发图片/视频/FFmpeg，不让 UI 直接调用 Python。
+
+延后：
+
+- 前端分镜表展示、增删改分镜、单镜头重新生成和用户编辑持久化留给 Control API / PostgreSQL adapter / UI 集成阶段。
+- 分镜图、首帧、尾帧、视频片段和资产选择留给图片生成、视频生成和资产阶段。
 
 验收：
 
 - 30 到 60 秒项目默认 6 到 12 个镜头。
-- 每个镜头都能单独生成图片和视频。
 - 镜头时长总和接近目标时长。
+- 每个镜头具备后续图片和视频阶段可消费的结构化 prompt seed。
+- 下游 `image_prompt_builder` 和 `video_prompt_builder` 能通过 envelope 读取镜头、角色和画风结构。
 
 参考：
 
@@ -959,55 +975,69 @@ D:\code\MiLuStudio\
 - LumenX StoryBoard。
 - OpenMontage pipeline_defs。
 
-### 阶段 8：图片生成
+### 阶段 8：图片生成边界
 
-目标：生成分镜图、角色图、首帧/尾帧。
+目标：在 Python Skills Runtime 内生成后续图像阶段可消费的提示词请求和 mock 占位资产结构。
+
+本阶段不接真实图片 provider，不写图片文件，不写数据库，不做前端选图，不做单镜头真实重试。
 
 步骤：
 
-1. 实现 `image_prompt_builder`。
-2. 实现 provider abstraction：
-   - OpenAI image
-   - Gemini Imagen
-   - Kling image
-   - 可扩展国产模型
-3. 实现 `image_generation`。
-4. 保存每个镜头的首帧/尾帧。
-5. 记录成本。
-6. 前端允许用户选中最佳图片。
-7. 支持失败重试。
+1. 基于 `storyboard_director`、`character_bible` 和 `style_bible` 成功 envelope 实现 `image_prompt_builder`。
+2. 输出角色参考、分镜图、首帧和尾帧的结构化 `image_requests`。
+3. 每个请求包含 `request_id`、`asset_type`、`shot_id`、`character_ids`、`prompt`、`negative_prompt`、`aspect_ratio`、`style_refs`、`continuity_refs`、`seed_hint` 和 `output_slot`。
+4. 实现 mock `image_generation`，把 `image_requests` 转成可审阅的占位资产结构。
+5. mock 资产只暴露逻辑 `milu://mock-assets/...` URI 和 `storage_intent`，`file_written=false`，`writes_files=false`，`writes_database=false`。
+6. 在 `SkillGateway.default()` 注册两个 skill，并补齐 schema、examples、单元测试和 CLI smoke。
+7. 本阶段继续只产出可审阅 JSON 结构；不保存数据库，不接真实模型，不触发图片/视频/FFmpeg，不让 UI 直接调用 Python。
+
+延后：
+
+- `ImageProvider` interface、OpenAI / Gemini / Kling / 国产图片模型 adapter、真实成本记录和失败重试留给 provider / adapter 阶段。
+- 图片资产持久化、`assets` / `shot_assets` 写入和被选中版本追踪留给 PostgreSQL adapter / EF Core DbContext 阶段。
+- 前端选图、重试和图片预览留给 Control API / UI 集成阶段。
 
 验收：
 
-- 每个分镜至少有一张可用图。
-- 图像资产写入 `assets`。
-- `shot_assets.selected=true` 只允许一个当前有效版本。
+- 每个分镜至少生成 `storyboard_image`、`first_frame` 和 `last_frame` 三类请求。
+- 至少生成角色参考请求，供后续真实角色图资产阶段消费。
+- mock `image_generation` 资产数量与 prompt 请求数量一致。
+- mock 输出明确不写文件、不写数据库、不调用 provider。
 
 参考：
 
-- AIComicBuilder 首尾帧生成。
-- LumenX Assets / StoryBoard。
-- ArcReel 多 provider 抽象。
+- LumenX Assets / StoryBoard / Motion。
+- OpenAI Images API。
+- 主流 image-to-video 首帧 / 尾帧工作流。
 
-### 阶段 9：视频生成
+### 阶段 9：视频生成边界
 
-目标：根据分镜图生成视频片段。
+目标：在 Python Skills Runtime 内生成后续视频阶段可消费的视频提示词请求和 mock 占位视频片段结构。
+
+本阶段不接真实视频 provider，不写 MP4 文件，不写数据库，不调用 FFmpeg，不做前端片段预览，不做单镜头真实重试。
 
 步骤：
 
-1. 实现 `video_prompt_builder`。
-2. 实现 video provider interface。
-3. 支持图生视频优先。
-4. 支持文生视频作为退化方案。
-5. 支持单镜头重试。
-6. 记录模型、耗时、费用。
-7. 保存视频片段到资产库。
+1. 基于 `storyboard_director`、`image_prompt_builder` 和 `image_generation` 成功 envelope 实现 `video_prompt_builder`。
+2. 每个镜头输出一个结构化 `video_requests` 项，包含 `request_id`、`shot_id`、`duration_seconds`、`generation_mode`、`prompt`、`negative_prompt`、`source_images`、`motion_plan`、`continuity_refs`、`seed_hint` 和 `output_slot`。
+3. 图生视频优先：当 `first_frame` 和 `last_frame` mock 资产存在时，输出 `generation_mode=image_to_video`。
+4. 文生视频退化：当只有分镜图或其他逻辑参考资产时，保留 `generation_mode=text_to_video_fallback`，但本阶段仍不调用真实模型。
+5. 实现 mock `video_generation`，把 `video_requests` 转成可审阅的占位视频片段结构。
+6. mock 片段只暴露逻辑 `milu://mock-assets/...` URI 和 `storage_intent`，`file_written=false`，`writes_files=false`，`writes_database=false`，`uses_ffmpeg=false`。
+7. 在 `SkillGateway.default()` 注册两个 skill，并补齐 schema、examples、单元测试和 CLI smoke。
+
+延后：
+
+- `VideoProvider` interface、OpenAI / Veo / Kling / Wanx 等真实视频模型 adapter、真实成本记录和失败重试留给 provider / adapter 阶段。
+- 视频资产持久化、`assets` / `shot_assets` 写入和被选中版本追踪留给 PostgreSQL adapter / EF Core DbContext 阶段。
+- 前端片段预览、单镜头重试和视频选择留给 Control API / UI 集成阶段。
 
 验收：
 
-- 每个镜头有独立视频片段。
-- 失败镜头不影响其他镜头完成。
-- 用户可以重新生成单个镜头。
+- 每个镜头有独立 `video_request` 和 mock `video_clip` 结构。
+- mock 输出数量与分镜镜头数量一致。
+- 图生视频请求能引用 `first_frame` 和 `last_frame` mock 图片资产。
+- mock 输出明确不写文件、不写数据库、不调用 provider、不触发 FFmpeg。
 
 参考：
 

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/storyboard_director/input.schema.json",
+  "title": "storyboard_director input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["episode_writer", "character_bible", "style_bible"],
+  "properties": {
+    "episode_writer": {
+      "type": "object",
+      "description": "A successful episode_writer runtime envelope."
+    },
+    "character_bible": {
+      "type": "object",
+      "description": "A successful character_bible runtime envelope for the same project and episode."
+    },
+    "style_bible": {
+      "type": "object",
+      "description": "A successful style_bible runtime envelope for the same project and episode."
+    }
+  }
+}
+

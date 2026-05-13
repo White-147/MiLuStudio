@@ -1,0 +1,211 @@
+{
+  "ok": true,
+  "skill_name": "video_prompt_builder",
+  "schema_version": "1.0",
+  "data": {
+    "project_id": "demo-episode-01",
+    "episode_index": 1,
+    "title": "The Ledger in the Rain",
+    "language": "zh-CN",
+    "aspect_ratio": "9:16",
+    "prompt_set_id": "demo-episode-01:episode_1:video_prompts",
+    "video_requests": [
+      {
+        "request_id": "vidreq_shot_01_clip",
+        "shot_id": "shot_01",
+        "shot_index": 1,
+        "duration_seconds": 5,
+        "aspect_ratio": "9:16",
+        "generation_mode": "image_to_video",
+        "prompt": "Lin reaches toward the loose brick as rain ripples across the alley light | generation_mode=image_to_video | duration=5s | scene=rainy alley with a flickering sign and a hidden ledger | visual_action=Lin finds the wet ledger behind a loose brick. | camera_motion=slow_push_in | camera_angle=low detail angle | source_images=storyboard, first_frame, last_frame | keep character identity and costume stable across the whole clip | no cuts inside this shot; preserve subtitle-safe lower third",
+        "negative_prompt": [
+          "blurred face",
+          "wrong aspect ratio",
+          "identity drift",
+          "flicker",
+          "warped motion",
+          "jump cut inside shot",
+          "uncontrolled camera shake",
+          "burned-in subtitle text"
+        ],
+        "source_images": [
+          {
+            "role": "storyboard",
+            "asset_id": "mock_image_01_002",
+            "asset_type": "storyboard_image",
+            "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_002.png",
+            "file_written": false,
+            "selected": true
+          },
+          {
+            "role": "first_frame",
+            "asset_id": "mock_image_01_003",
+            "asset_type": "first_frame",
+            "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_003.png",
+            "file_written": false,
+            "selected": true
+          },
+          {
+            "role": "last_frame",
+            "asset_id": "mock_image_01_004",
+            "asset_type": "last_frame",
+            "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_004.png",
+            "file_written": false,
+            "selected": false
+          }
+        ],
+        "character_reference_asset_ids": [
+          "mock_image_01_001"
+        ],
+        "motion_plan": {
+          "camera_motion": "slow_push_in",
+          "camera_angle": "low detail angle",
+          "composition": "vertical frame with subtitle-safe lower third",
+          "subject_motion": "Lin finds the wet ledger behind a loose brick.",
+          "duration_seconds": 5,
+          "transition_in": "cut_from_previous_shot",
+          "transition_out": "cut_to_next_shot"
+        },
+        "continuity_refs": [
+          "reuse Lin coat silhouette and amber pin"
+        ],
+        "seed_hint": "demo-episode-01:episode_1:shot_01:video_clip",
+        "output_slot": {
+          "kind": "video",
+          "intended_use": "video_clip",
+          "selected": true
+        }
+      },
+      {
+        "request_id": "vidreq_shot_02_clip",
+        "shot_id": "shot_02",
+        "shot_index": 2,
+        "duration_seconds": 5,
+        "aspect_ratio": "9:16",
+        "generation_mode": "image_to_video",
+        "prompt": "Lin opens the damp ledger and freezes on the map mark | generation_mode=image_to_video | duration=5s | scene=close reaction beside the alley exit | visual_action=Lin opens the ledger and sees a map mark. | camera_motion=hold | camera_angle=eye level close reaction | source_images=first_frame, last_frame | keep character identity and costume stable across the whole clip | no cuts inside this shot; preserve subtitle-safe lower third",
+        "negative_prompt": [
+          "blurred face",
+          "wrong aspect ratio",
+          "identity drift",
+          "flicker",
+          "warped motion",
+          "jump cut inside shot",
+          "uncontrolled camera shake",
+          "burned-in subtitle text"
+        ],
+        "source_images": [
+          {
+            "role": "first_frame",
+            "asset_id": "mock_image_01_005",
+            "asset_type": "first_frame",
+            "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_005.png",
+            "file_written": false,
+            "selected": true
+          },
+          {
+            "role": "last_frame",
+            "asset_id": "mock_image_01_006",
+            "asset_type": "last_frame",
+            "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_006.png",
+            "file_written": false,
+            "selected": false
+          }
+        ],
+        "character_reference_asset_ids": [
+          "mock_image_01_001"
+        ],
+        "motion_plan": {
+          "camera_motion": "hold",
+          "camera_angle": "eye level close reaction",
+          "composition": "face and clue both readable",
+          "subject_motion": "Lin opens the ledger and sees a map mark.",
+          "duration_seconds": 5,
+          "transition_in": "cut_from_previous_shot",
+          "transition_out": "cut_to_next_shot"
+        },
+        "continuity_refs": [
+          "ledger remains damp and torn at the corner"
+        ],
+        "seed_hint": "demo-episode-01:episode_1:shot_02:video_clip",
+        "output_slot": {
+          "kind": "video",
+          "intended_use": "video_clip",
+          "selected": true
+        }
+      }
+    ],
+    "negative_prompt": [
+      "blurred face",
+      "wrong aspect ratio",
+      "identity drift",
+      "flicker",
+      "warped motion",
+      "jump cut inside shot",
+      "uncontrolled camera shake",
+      "burned-in subtitle text"
+    ],
+    "source_asset_manifest": {
+      "image_asset_count": 6,
+      "by_shot": {
+        "shot_01": [
+          "mock_image_01_002",
+          "mock_image_01_003",
+          "mock_image_01_004"
+        ],
+        "shot_02": [
+          "mock_image_01_005",
+          "mock_image_01_006"
+        ]
+      },
+      "character_references": [
+        "mock_image_01_001"
+      ],
+      "source_manifest_writes_files": false,
+      "source_manifest_writes_database": false,
+      "writes_files": false,
+      "writes_database": false,
+      "notes": [
+        "All source image URIs are logical placeholders until a later asset adapter writes real files.",
+        "Video prompt requests reference mock image assets but do not dereference or read them."
+      ]
+    },
+    "generation_plan": {
+      "mode": "mock_ready",
+      "provider": "none",
+      "model": "none",
+      "request_count": 2,
+      "writes_files": false,
+      "writes_database": false,
+      "uses_ffmpeg": false,
+      "notes": [
+        "Stage 9 only builds video prompt requests and does not call a video model.",
+        "Mock image assets are logical inputs; real files and adapters remain deferred."
+      ]
+    },
+    "review": {
+      "status": "ready_for_video_generation_boundary",
+      "editable_fields": [
+        "video_requests",
+        "negative_prompt",
+        "source_asset_manifest"
+      ],
+      "notes": [
+        "Reviewed storyboard and mock image assets can move into mock video generation through these requests.",
+        "This result writes no database rows, no files, calls no video model, and does not invoke FFmpeg."
+      ]
+    },
+    "checkpoint": {
+      "required": false,
+      "policy": "auto_continue_to_mock_video_generation",
+      "reason": "video prompts can continue to mock video generation without user review in Stage 9."
+    }
+  },
+  "error": null,
+  "runtime": {
+    "duration_ms": 6.51,
+    "model": "none",
+    "mode": "deterministic-mock",
+    "cost_estimate": 0
+  }
+}

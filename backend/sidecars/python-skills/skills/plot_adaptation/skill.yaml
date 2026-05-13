@@ -1,0 +1,15 @@
+name: plot_adaptation
+display_name: Plot Adaptation
+description: Adapts normalized story intake facts into a short-video plot structure.
+stage: PLOT_ADAPTING
+input_schema: schema.input.json
+output_schema: schema.output.json
+timeout_seconds: 20
+max_retries: 1
+cost_policy:
+  model_required: false
+  estimated_cost: 0
+required_provider_capabilities: []
+checkpoint_policy:
+  required: false
+  policy: optional_review

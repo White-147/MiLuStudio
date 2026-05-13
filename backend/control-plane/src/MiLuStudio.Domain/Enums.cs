@@ -24,6 +24,23 @@ public enum ProductionJobStatus
     Failed
 }
 
+public enum ProductionStage
+{
+    Created,
+    StoryIngesting,
+    ScriptReadyForReview,
+    CharacterReadyForReview,
+    StyleReadyForReview,
+    StoryboardReadyForReview,
+    ImagesReadyForReview,
+    VideosReadyForReview,
+    Exporting,
+    Completed,
+    FailedRetryable,
+    FailedNeedsUser,
+    FailedFatal
+}
+
 public enum GenerationTaskStatus
 {
     Waiting,

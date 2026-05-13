@@ -20,6 +20,7 @@ $env:ELECTRON_BUILDER_CACHE = Join-Path $resolvedRoot ".cache\electron-builder"
 $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $resolvedRoot ".ms-playwright"
 $env:HF_HOME = Join-Path $resolvedRoot ".cache\huggingface"
 $env:TRANSFORMERS_CACHE = Join-Path $resolvedRoot ".cache\huggingface\transformers"
+$env:MILUSTUDIO_PYTHON = "D:\soft\program\Python\Python313\python.exe"
 
 @(
   $env:TMP,

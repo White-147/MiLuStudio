@@ -1,0 +1,95 @@
+{
+  "plot_adaptation": {
+    "ok": true,
+    "skill_name": "plot_adaptation",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "language": "zh-CN",
+      "title": "雨夜纸鹤",
+      "logline": "一部悬疑、都市短篇：雨夜里，林溪在旧巷口捡到一只会发光的纸鹤。",
+      "target_duration_seconds": 45,
+      "aspect_ratio": "9:16",
+      "mode": "director",
+      "style_preset": "雨夜悬疑国漫",
+      "genre_tags": ["悬疑", "都市", "奇幻"],
+      "tone_keywords": ["雨夜", "悬疑", "奇幻", "国漫"],
+      "main_characters": [
+        {
+          "name": "林溪",
+          "role": "protagonist",
+          "evidence": "林溪在旧巷口捡到一只会发光的纸鹤。"
+        },
+        {
+          "name": "哥哥",
+          "role": "supporting",
+          "evidence": "哥哥失踪前留下的最后一卷胶片。"
+        }
+      ],
+      "adaptation_strategy": {
+        "format": "vertical_short_video",
+        "narrative_pov": "protagonist",
+        "ending_style": "open_hook",
+        "target_seconds": 45,
+        "recommended_shot_count": 9,
+        "compression_notes": ["保留一个主角、一个核心线索和一个结尾钩子。"]
+      },
+      "plot_beats": [
+        {
+          "beat_id": "beat_01_hook",
+          "label": "前三秒钩子",
+          "purpose": "立刻抛出异常物件和追踪动机。",
+          "summary": "林溪被一个异常线索吸引。",
+          "estimated_seconds": 8,
+          "emotional_value": "好奇、紧张",
+          "required_characters": ["林溪"]
+        },
+        {
+          "beat_id": "beat_02_setup",
+          "label": "追踪与信息铺垫",
+          "purpose": "交代地点、人物牵挂和必须行动的原因。",
+          "summary": "林溪追向关键地点。",
+          "estimated_seconds": 12,
+          "emotional_value": "压迫、牵挂",
+          "required_characters": ["林溪", "哥哥"]
+        },
+        {
+          "beat_id": "beat_03_turn",
+          "label": "发现反转",
+          "purpose": "让观众看到证据，并把危险推到角色面前。",
+          "summary": "哥哥留下的胶片露出关键证据。",
+          "estimated_seconds": 12,
+          "emotional_value": "震惊、犹豫",
+          "required_characters": ["林溪"]
+        },
+        {
+          "beat_id": "beat_04_hook",
+          "label": "结尾钩子",
+          "purpose": "用未解谜团或下一步行动收束，留下继续观看理由。",
+          "summary": "午夜门出现。",
+          "estimated_seconds": 13,
+          "emotional_value": "期待、悬念",
+          "required_characters": ["林溪"]
+        }
+      ],
+      "core_conflict": "林溪必须确认线索真伪。",
+      "turning_point": "哥哥留下的胶片露出关键证据。",
+      "ending_hook": "午夜门出现。",
+      "continuity_notes": ["后续脚本称呼主角为“林溪”。"],
+      "review_points": ["确认短视频主线是否保留原故事最强悬念。"],
+      "risks": [],
+      "checkpoint": {
+        "required": false,
+        "policy": "optional_review",
+        "reason": "plot_adaptation can auto-continue in MVP."
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  }
+}

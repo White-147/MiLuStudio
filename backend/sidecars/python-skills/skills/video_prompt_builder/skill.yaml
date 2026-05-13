@@ -1,0 +1,15 @@
+name: video_prompt_builder
+display_name: Video Prompt Builder
+description: Builds per-shot video prompt requests from storyboard, image prompt, and mock image asset envelopes.
+stage: VIDEO_PROMPTS_READY_FOR_MOCK_GENERATION
+input_schema: schema.input.json
+output_schema: schema.output.json
+timeout_seconds: 20
+max_retries: 1
+cost_policy:
+  model_required: false
+  estimated_cost: 0
+required_provider_capabilities: []
+checkpoint_policy:
+  required: false
+  policy: auto_continue_to_mock_video_generation

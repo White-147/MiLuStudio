@@ -1,7 +1,30 @@
-import { ArrowLeft, Download, FileText, Film, FolderOpen, Image, Lock, RotateCcw, Send, SlidersHorizontal, Video } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Download,
+  FileText,
+  Film,
+  FolderOpen,
+  Image,
+  Lock,
+  Pause,
+  Play,
+  RotateCcw,
+  Send,
+  SlidersHorizontal,
+  Video,
+} from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { getProject, startProductionJob, watchProductionJob } from '../../shared/api/controlPlaneClient';
+import {
+  approveProductionCheckpoint,
+  getProject,
+  pauseProductionJob,
+  resumeProductionJob,
+  retryProductionJob,
+  startProductionJob,
+  watchProductionJob,
+} from '../../shared/api/controlPlaneClient';
 import { mockDeliveryAssets, mockProjects, mockResultCards, mockStages } from '../../shared/mock/studioMock';
 import type { ProjectDetail, ProjectMode, ProductionJob, ProductionJobEvent, ProductionStage, ResultCard } from '../../shared/types/production';
 
@@ -11,6 +34,8 @@ interface ProductionConsolePageProps {
 }
 
 type ApiState = 'loading' | 'control-api' | 'mock-fallback';
+
+type JobCommand = 'pause' | 'resume' | 'retry' | 'checkpoint';
 
 export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePageProps) {
   const fallbackProject = useMemo(() => toProjectDetail(projectId), [projectId]);
@@ -24,6 +49,7 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
   const [stages, setStages] = useState<ProductionStage[]>(mockStages);
   const [streamJobId, setStreamJobId] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState('正在连接 Control API');
+  const [actioning, setActioning] = useState<JobCommand | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -71,7 +97,7 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
         applyProductionEvent(event, setJob, setStages);
         setSyncMessage(event.message);
 
-        if (event.type === 'artifact_ready') {
+        if (event.jobStatus === 'completed' || event.jobStatus === 'failed') {
           setRunning(false);
           setStreamJobId(null);
         }
@@ -122,6 +148,38 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
     }
   };
 
+  const runJobCommand = async (command: JobCommand) => {
+    if (!job || apiState !== 'control-api') {
+      return;
+    }
+
+    setActioning(command);
+
+    try {
+      const commandMap = {
+        pause: pauseProductionJob,
+        resume: resumeProductionJob,
+        retry: retryProductionJob,
+        checkpoint: approveProductionCheckpoint,
+      };
+      const nextJob = await commandMap[command](job.id);
+
+      setJob(nextJob);
+      setStages(nextJob.stages);
+      setRunning(nextJob.status === 'running' || nextJob.status === 'paused');
+
+      if ((command === 'retry' || command === 'resume') && nextJob.status === 'running') {
+        setStreamJobId(nextJob.id);
+      }
+
+      setSyncMessage(commandMessages[command]);
+    } catch {
+      setSyncMessage('Control API 暂时没有接受该操作，请稍后重试。');
+    } finally {
+      setActioning(null);
+    }
+  };
+
   return (
     <section className="console-page">
       <header className="console-header">
@@ -152,7 +210,17 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
           running={running}
           starting={starting}
         />
-        <ProgressPanel job={job} stages={visibleStages} syncMessage={syncMessage} />
+        <ProgressPanel
+          actioning={actioning}
+          canUseActions={apiState === 'control-api'}
+          job={job}
+          onApproveCheckpoint={() => runJobCommand('checkpoint')}
+          onPause={() => runJobCommand('pause')}
+          onResume={() => runJobCommand('resume')}
+          onRetry={() => runJobCommand('retry')}
+          stages={visibleStages}
+          syncMessage={syncMessage}
+        />
         <ResultsPanel jobCompleted={job?.status === 'completed'} />
       </div>
     </section>
@@ -217,8 +285,33 @@ function ConversationPanel({ mode, onModeChange, onStart, project, running, star
   );
 }
 
-function ProgressPanel({ job, stages, syncMessage }: { job: ProductionJob | null; stages: ProductionStage[]; syncMessage: string }) {
+function ProgressPanel({
+  actioning,
+  canUseActions,
+  job,
+  onApproveCheckpoint,
+  onPause,
+  onResume,
+  onRetry,
+  stages,
+  syncMessage,
+}: {
+  actioning: JobCommand | null;
+  canUseActions: boolean;
+  job: ProductionJob | null;
+  onApproveCheckpoint: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onRetry: () => void;
+  stages: ProductionStage[];
+  syncMessage: string;
+}) {
   const activeStage = stages.find((stage) => stage.status === 'running' || stage.status === 'review');
+  const isCheckpointReady = Boolean(activeStage?.needsReview && activeStage.status === 'review');
+  const canPause = canUseActions && job?.status === 'running';
+  const canResume = canUseActions && job?.status === 'paused' && !isCheckpointReady;
+  const canCheckpoint = canUseActions && job?.status === 'paused' && isCheckpointReady;
+  const canRetry = canUseActions && (job?.status === 'failed' || stages.some((stage) => stage.status === 'blocked'));
 
   return (
     <section className="workspace-panel progress-panel" aria-label="任务进度流">
@@ -233,6 +326,25 @@ function ProgressPanel({ job, stages, syncMessage }: { job: ProductionJob | null
       <div className="job-summary">
         <span>{job ? `job ${job.id.slice(0, 12)}` : '尚未创建 job'}</span>
         <strong>{job ? `${job.progress}%` : '0%'}</strong>
+      </div>
+
+      <div className="job-controls" aria-label="生产任务操作">
+        <button className="command-button" disabled={!canPause || actioning !== null} onClick={onPause} type="button">
+          <Pause size={15} />
+          <span>{actioning === 'pause' ? '暂停中' : '暂停'}</span>
+        </button>
+        <button className="command-button" disabled={!canResume || actioning !== null} onClick={onResume} type="button">
+          <Play size={15} />
+          <span>{actioning === 'resume' ? '恢复中' : '恢复'}</span>
+        </button>
+        <button className="command-button confirm" disabled={!canCheckpoint || actioning !== null} onClick={onApproveCheckpoint} type="button">
+          <CheckCircle2 size={15} />
+          <span>{actioning === 'checkpoint' ? '确认中' : '确认节点'}</span>
+        </button>
+        <button className="command-button" disabled={!canRetry || actioning !== null} onClick={onRetry} type="button">
+          <RotateCcw size={15} />
+          <span>{actioning === 'retry' ? '重试中' : '重试失败项'}</span>
+        </button>
       </div>
 
       <p className="sync-message">{syncMessage}</p>
@@ -339,15 +451,15 @@ function applyProductionEvent(
   setStages: Dispatch<SetStateAction<ProductionStage[]>>,
 ) {
   setJob((current) =>
-    current
-      ? {
-          ...current,
-          currentStage: event.stageId,
-          progress: event.progress,
-          status: event.progress >= 100 ? 'completed' : 'running',
-          finishedAt: event.progress >= 100 ? event.occurredAt : current.finishedAt,
-        }
-      : current,
+          current
+            ? {
+                ...current,
+                currentStage: event.stageId,
+                progress: event.progress,
+                status: event.jobStatus,
+                finishedAt: event.jobStatus === 'completed' ? event.occurredAt : current.finishedAt,
+              }
+            : current,
   );
 
   setStages((current) => {
@@ -392,4 +504,11 @@ const resultIcons = {
   storyboard: Image,
   media: Video,
   delivery: Download,
+};
+
+const commandMessages = {
+  pause: '生产任务已暂停。',
+  resume: '生产任务已恢复。',
+  retry: '失败任务已重新排队。',
+  checkpoint: '节点已确认，状态机将继续推进。',
 };

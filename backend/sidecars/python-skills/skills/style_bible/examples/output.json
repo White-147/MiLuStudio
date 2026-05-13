@@ -1,0 +1,152 @@
+{
+  "ok": true,
+  "skill_name": "style_bible",
+  "schema_version": "1.0",
+  "data": {
+    "project_id": "demo-episode-01",
+    "episode_index": 1,
+    "title": "雨夜纸鹤",
+    "language": "zh-CN",
+    "style_name": "轻写实国漫短视频",
+    "visual_style": {
+      "name": "轻写实国漫短视频",
+      "medium": "short-form animation style guide",
+      "rendering": "2D 国漫短视频，半写实角色，雨水和霓虹反光用克制高光处理。",
+      "texture": "背景允许轻微颗粒和旧胶片纹理，角色脸部保持干净。",
+      "mood": "悬念先行，情绪克制，不走恐怖血腥方向。"
+    },
+    "color_palette": [
+      {
+        "name": "midnight_blue",
+        "hex": "#17213A",
+        "usage": "夜景和主背景阴影。"
+      },
+      {
+        "name": "wet_asphalt",
+        "hex": "#2E3438",
+        "usage": "地面、墙面和雨水暗部。"
+      },
+      {
+        "name": "paper_crane_glow",
+        "hex": "#D9F7FF",
+        "usage": "核心线索的冷白发光。"
+      },
+      {
+        "name": "warning_amber",
+        "hex": "#E5A64B",
+        "usage": "门缝、灯箱或结尾钩子的少量暖光。"
+      },
+      {
+        "name": "skin_soft_light",
+        "hex": "#F1D0BE",
+        "usage": "角色脸部受光，避免过灰。"
+      }
+    ],
+    "lighting": {
+      "key_light": "低强度侧光或环境反射光。",
+      "accent_light": "只服务线索、角色眼神和结尾钩子。",
+      "rules": [
+        "主角脸部保留可读高光，环境阴影不压掉表情。",
+        "核心线索出现时使用单一方向的提示光，避免满屏发光。"
+      ]
+    },
+    "environment_design": {
+      "primary_locations": [
+        "雨巷、湿地反光、招牌残光。"
+      ],
+      "density": "竖屏画面每镜只突出一个环境识别点。",
+      "avoid": "背景细节不能抢走角色和线索的可读性。"
+    },
+    "camera_language": {
+      "aspect_ratio": "9:16",
+      "shot_rules": [
+        "开场 2 秒使用线索特写或主角反应近景。",
+        "主角做决定时切到稳定中近景，给表情和字幕空间。",
+        "结尾保留一个未完全解释的画面钩子。"
+      ],
+      "movement_rules": [
+        "移动镜头以慢推、轻跟拍为主，不做炫技摇晃。",
+        "发现证据时允许一次短促推进，但随后稳定住画面。"
+      ],
+      "composition_rules": [
+        "竖屏安全区内保留字幕下沿空间。",
+        "核心线索和角色眼神不要同时贴边。"
+      ],
+      "transition_rules": [
+        "段落间用动作或线索方向衔接。",
+        "避免无意义闪白、故障风和强转场遮挡信息。"
+      ]
+    },
+    "character_rendering_rules": [
+      {
+        "character_id": "char_01",
+        "name": "林溪",
+        "stable_seed": "demo-episode-01:episode_1:char_01",
+        "locked_features": [
+          "林溪的脸型、发型、服装主色和体态在所有镜头保持一致。"
+        ],
+        "costume_lock": "同一集内主色、衣领形状和袖口细节保持一致。",
+        "voice_reference": "克制、清晰、紧张时不拖长尾音。"
+      }
+    ],
+    "negative_prompt": [
+      "角色脸型漂移",
+      "发型或服装主色跨镜头变化",
+      "过度写实摄影皮肤",
+      "血腥恐怖表现",
+      "满屏发光粒子遮挡表情",
+      "字幕安全区被主体遮挡",
+      "随机新增无关角色",
+      "低清晰度、手指畸形、眼神失焦"
+    ],
+    "reusable_prompt_blocks": {
+      "base_style": "轻写实国漫短视频, 2D animated short-video frame, controlled suspense, clean character faces, palette: midnight_blue #17213A, wet_asphalt #2E3438, paper_crane_glow #D9F7FF, warning_amber #E5A64B",
+      "character_consistency": "林溪(char_01): 林溪的脸型、发型、服装主色和体态在所有镜头保持一致。",
+      "environment": "脚本指定场景、核心线索道具",
+      "camera": "vertical composition, readable face, one story clue per frame, room for subtitles",
+      "quality_guardrails": "consistent character identity, no random outfit change, no extra characters, clear focal point"
+    },
+    "image_prompt_guidelines": [
+      "单张图像提示词必须引用 base_style 和对应 character_consistency。",
+      "每张图只强调一个视觉信息点：角色、线索或环境。",
+      "输出给图像模型前再追加 negative_prompt，不在本 skill 调模型。"
+    ],
+    "video_prompt_guidelines": [
+      "整集目标时长 45 秒，视频提示词按 episode_writer.segments 拆分。",
+      "每段视频提示词复用相同 style_name、palette 和角色锁定字段。",
+      "镜头运动只描述慢推、跟拍、稳定中近景等可控动作。"
+    ],
+    "continuity_notes": [
+      "画风结构绑定 episode_writer《雨夜纸鹤》和 character_bible 的 stable_seed。",
+      "后续 storyboard_director、image_prompt 或 video_prompt 阶段必须复用 reusable_prompt_blocks。",
+      "当前阶段不保存数据库；持久化由 PostgreSQL adapter / EF Core DbContext 阶段接入。",
+      "进入画风阶段时必须引用 character_id 和 stable_seed。"
+    ],
+    "review": {
+      "status": "ready_for_review",
+      "editable_fields": [
+        "visual_style",
+        "color_palette",
+        "camera_language",
+        "negative_prompt",
+        "reusable_prompt_blocks"
+      ],
+      "notes": [
+        "用户可在此阶段锁定画风、色板、镜头语言和负面提示词。",
+        "当前结果只产出统一画风结构，不调用图像或视频模型，不写数据库。"
+      ]
+    },
+    "checkpoint": {
+      "required": true,
+      "policy": "pause_for_style_review",
+      "reason": "style_bible output should be reviewed before storyboard and prompt expansion."
+    }
+  },
+  "error": null,
+  "runtime": {
+    "duration_ms": 2.73,
+    "model": "none",
+    "mode": "deterministic-mock",
+    "cost_estimate": 0
+  }
+}

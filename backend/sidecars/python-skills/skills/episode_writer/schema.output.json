@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/episode_writer/output.schema.json",
+  "title": "episode_writer output envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "skill_name", "schema_version", "data", "error", "runtime"],
+  "properties": {
+    "ok": { "type": "boolean" },
+    "skill_name": { "type": "string", "const": "episode_writer" },
+    "schema_version": { "type": "string", "const": "1.0" },
+    "data": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": [
+            "project_id",
+            "episode_index",
+            "title",
+            "language",
+            "target_duration_seconds",
+            "aspect_ratio",
+            "summary",
+            "script_text",
+            "segments",
+            "subtitle_cues",
+            "voice_notes",
+            "review",
+            "checkpoint"
+          ],
+          "properties": {
+            "project_id": { "type": "string" },
+            "episode_index": { "type": "integer" },
+            "title": { "type": "string" },
+            "language": { "type": "string" },
+            "target_duration_seconds": { "type": "integer", "minimum": 30, "maximum": 60 },
+            "aspect_ratio": { "type": "string" },
+            "summary": { "type": "string" },
+            "script_text": { "type": "string" },
+            "segments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "segment_id",
+                  "beat_id",
+                  "start_second",
+                  "duration_seconds",
+                  "purpose",
+                  "visual_direction",
+                  "narration",
+                  "dialogue_lines",
+                  "pacing_note",
+                  "sound_note"
+                ],
+                "properties": {
+                  "segment_id": { "type": "string" },
+                  "beat_id": { "type": "string" },
+                  "start_second": { "type": "integer" },
+                  "duration_seconds": { "type": "integer" },
+                  "purpose": { "type": "string" },
+                  "visual_direction": { "type": "string" },
+                  "narration": { "type": "string" },
+                  "dialogue_lines": { "type": "array", "items": { "type": "object" } },
+                  "pacing_note": { "type": "string" },
+                  "sound_note": { "type": "string" }
+                }
+              }
+            },
+            "subtitle_cues": { "type": "array", "items": { "type": "object" } },
+            "voice_notes": { "type": "object" },
+            "review": { "type": "object" },
+            "checkpoint": { "type": "object" }
+          }
+        }
+      ]
+    },
+    "error": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["code", "message", "details"],
+          "properties": {
+            "code": { "type": "string" },
+            "message": { "type": "string" },
+            "details": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["duration_ms", "model", "mode", "cost_estimate"],
+      "properties": {
+        "duration_ms": { "type": "number" },
+        "model": { "type": "string" },
+        "mode": { "type": "string" },
+        "cost_estimate": { "type": "number" }
+      }
+    }
+  }
+}

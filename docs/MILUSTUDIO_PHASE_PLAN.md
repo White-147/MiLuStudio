@@ -1,6 +1,6 @@
 # MiLuStudio 总任务阶段安排
 
-更新时间：2026-05-12  
+更新时间：2026-05-13
 工作目录：`D:\code\MiLuStudio`
 
 本文件是 MiLuStudio 的总任务阶段安排。  
@@ -92,9 +92,9 @@ Environment check:
 ## 6. 当前焦点
 
 ```text
-Current phase: Stage 3
+Current phase: Stage 10
 Status: pending
-Goal: 建立任务状态机、合法迁移、暂停、恢复、重试和 checkpoint。
+Goal: 基于 mock 视频片段继续收敛音频、字幕和粗剪边界。
 Next handoff owner: next session
 ```
 
@@ -384,7 +384,7 @@ Status: done
 
 ## 10. Stage 3 任务状态机
 
-Status: pending
+Status: done
 
 目标：
 
@@ -396,8 +396,8 @@ Status: pending
 2. 定义合法状态迁移表。
 3. 实现 `ProductionJobService`。
 4. 实现 `TaskQueueService`。
-5. Worker 使用 PostgreSQL 领取任务。
-6. 使用 `FOR UPDATE SKIP LOCKED` 防止重复执行。
+5. Worker 保留 heartbeat 和任务领取边界，不在本阶段接真实 PostgreSQL adapter。
+6. `FOR UPDATE SKIP LOCKED` 领取策略保留到后续持久化 / Worker 收敛阶段。
 7. 实现 pause。
 8. 实现 resume。
 9. 实现 retry。
@@ -408,9 +408,10 @@ Status: pending
 验收：
 
 - 任意阶段失败不会丢状态。
-- 刷新前端后能恢复进度。
+- API 进程存活时，刷新前端后能通过 Control API DTO 恢复进度。
 - 用户确认节点能暂停。
 - 重试只重跑失败任务，不重跑全流程。
+- API 运行期仍是 in-memory repository；API 重启后的 durable recovery 留给 PostgreSQL adapter / EF Core DbContext 阶段。
 
 阶段结束自检重点：
 
@@ -419,7 +420,7 @@ Status: pending
 
 ## 11. Stage 4 Python Skills Runtime
 
-Status: pending
+Status: done
 
 目标：
 
@@ -428,7 +429,7 @@ Status: pending
 具体任务：
 
 1. 创建 `backend\sidecars\python-skills`。
-2. 创建 Python 3.11 项目。
+2. 创建目标为 Python `>=3.11,<3.14` 的项目；本地使用 `D:\soft\program\Python\Python313\python.exe` 验证。
 3. 创建 `milu_studio_skills` 包。
 4. 定义统一 CLI。
 5. 创建 `skills\story_intake`。
@@ -440,13 +441,13 @@ Status: pending
 11. 添加 `validators.py`。
 12. 添加 examples。
 13. 添加单元测试。
-14. .NET Worker 调用 Python skill。
+14. 为后续 .NET Worker 调用 Python skill 留出单一 CLI / gateway 边界。
 
 验收：
 
 - 输入 JSON。
 - 输出 JSON。
-- 输出能写回数据库。
+- 输出 envelope 结构稳定，后续 Worker / 数据库 adapter 可写回；本阶段不直接接真实数据库。
 - 失败有错误码和错误消息。
 
 阶段结束自检重点：
@@ -456,7 +457,7 @@ Status: pending
 
 ## 12. Stage 5 故事解析到脚本
 
-Status: pending
+Status: done
 
 目标：
 
@@ -467,16 +468,29 @@ Status: pending
 1. 实现 `story_intake`。
 2. 实现 `plot_adaptation`。
 3. 实现 `episode_writer`。
-4. 保存脚本到数据库。
-5. 前端显示脚本卡。
-6. 用户可编辑脚本。
-7. 用户确认后进入角色阶段。
+4. 基于 `story_intake` 的稳定 envelope 串联 `plot_adaptation` 和 `episode_writer`。
+5. 输出可审阅 `plot_beats`、`segments`、`subtitle_cues` 和脚本 review checkpoint。
+6. 保存脚本到数据库留给 PostgreSQL adapter / EF Core DbContext 阶段。
+7. 前端脚本卡、脚本编辑和用户确认 API 留给后续 Control API / UI 收敛阶段。
 
 验收：
 
 - 500 到 2000 字输入可生成 30 到 60 秒脚本。
 - 脚本含旁白、对白、节奏说明。
 - 输出适合字幕和配音。
+- Python Sidecar 只通过统一 CLI / gateway 产出 JSON envelope。
+- 不接真实模型 provider，不让 UI 直接调用 Python。
+
+落地状态：
+
+- 已在 `backend\sidecars\python-skills` 新增 `plot_adaptation`。
+- 已在 `backend\sidecars\python-skills` 新增 `episode_writer`。
+- 已新增 `milu_studio_skills.contracts.unwrap_skill_data`，只负责从上游 skill envelope 读取 `data`。
+- `SkillGateway.default()` 已注册 `story_intake`、`plot_adaptation` 和 `episode_writer`。
+- 已添加两个 skill 的 `skill.yaml`、`prompt.md`、input/output schema、executor、validators 和 examples。
+- 已添加 `tests\test_stage5_script_pipeline.py`，覆盖 `story_intake -> plot_adaptation -> episode_writer` 链路。
+- `episode_writer` 输出 `script_text`、`segments`、`subtitle_cues`、`voice_notes`、`review` 和 `checkpoint.required=true`。
+- 当前不写数据库，不接真实模型，不改 UI，不触发 FFmpeg 或配音生成。
 
 阶段结束自检重点：
 
@@ -484,118 +498,152 @@ Status: pending
 
 ## 13. Stage 6 角色和风格
 
-Status: pending
+Status: done
 
 目标：
 
-- 生成稳定角色设定和统一画风。
+- 在 Python Skills Runtime 内生成稳定角色设定和统一画风结构。
 
 具体任务：
 
-1. 实现 `character_bible`。
-2. 实现 `style_bible`。
-3. 前端显示角色卡。
-4. 前端显示风格卡。
-5. 支持角色锁定。
-6. 支持上传角色参考图。
-7. 支持重新生成角色。
+1. 已实现 `character_bible`，输入为 `episode_writer` 成功 envelope。
+2. 已实现 `style_bible`，输入为 `episode_writer` 和 `character_bible` 成功 envelope。
+3. 已注册 `SkillGateway.default()`。
+4. 已补齐 `skill.yaml`、`prompt.md`、input/output schema、examples 和 tests。
+5. 已验证 `story_intake -> plot_adaptation -> episode_writer -> character_bible -> style_bible` 链路。
+
+延后任务：
+
+- 前端角色卡和风格卡展示。
+- 角色锁定、重新生成和参考图上传。
+- 数据库保存、用户编辑持久化和下游重算。
+- 参考图、三视图、头像特写和图生视频参考素材生成。
 
 验收：
 
 - 主角描述能跨镜头复用。
 - 风格提示词能被图片和视频阶段复用。
-- 用户修改角色后下游使用新设定。
+- 下游 Stage 7 可通过 envelope 读取角色和画风结构。
+- Stage 6 不绕过 Control API / Worker 边界，不接真实模型，不写数据库，不触发 FFmpeg。
 
 阶段结束自检重点：
 
 - 对照 AIComicBuilder 角色四视图和 LumenX Art Direction。
+- 已联网对照 LumenX、Codeywood 和 OpenAI Structured Outputs；确认角色/风格应先作为可审核结构和质量门禁产出，参考图和真实模型生成应留给后续资产阶段。
 
 ## 14. Stage 7 分镜
 
-Status: pending
+Status: done
 
 目标：
 
-- 生成可执行镜头列表。
+- 在 Python Skills Runtime 内生成可审阅、可执行镜头列表结构。
 
 具体任务：
 
-1. 实现 `storyboard_director`。
-2. 每个镜头包含时长。
-3. 每个镜头包含角色。
-4. 每个镜头包含景别。
-5. 每个镜头包含运镜。
-6. 每个镜头包含灯光。
-7. 每个镜头包含对白或旁白。
-8. 前端显示分镜表。
-9. 支持增删改分镜。
-10. 支持单镜头重新生成。
+1. 已实现 `storyboard_director`，输入为 `episode_writer`、`character_bible` 和 `style_bible` 成功 envelope。
+2. 每个镜头包含时长、场景、角色、景别、运镜、构图、灯光、对白、旁白和声音提示。
+3. 每个镜头包含角色 / 风格连续性说明、`image_prompt_seed` 和 `video_prompt_seed`。
+4. 已对镜头数量和总时长做校验。
+5. 已注册 `SkillGateway.default()`。
+6. 已补齐 `skill.yaml`、`prompt.md`、input/output schema、examples 和 tests。
+7. 已验证 `story_intake -> plot_adaptation -> episode_writer -> character_bible -> style_bible -> storyboard_director` 链路。
+
+延后任务：
+
+- 前端分镜表展示。
+- 增删改分镜、单镜头重新生成和用户编辑持久化。
+- 数据库保存和下游重算。
+- 分镜图、首帧、尾帧、视频片段和资产选择。
 
 验收：
 
 - 30 到 60 秒项目默认 6 到 12 个镜头。
 - 镜头时长总和接近目标时长。
-- 每个镜头可单独执行图片和视频生成。
+- 每个镜头具备后续图片和视频阶段可消费的结构化 prompt seed。
+- Stage 7 不绕过 Control API / Worker 边界，不接真实模型，不写数据库，不触发 FFmpeg。
 
 阶段结束自检重点：
 
 - 对照 AIComicBuilder shots、LumenX StoryBoard、OpenMontage pipeline_defs。
+- 已联网对照 LumenX、Codeywood 和 OpenMontage；确认分镜应先形成结构化 shot list / storyboard gate，再进入分镜图、首尾帧、视频和编辑阶段。
 
 ## 15. Stage 8 图片生成
 
-Status: pending
+Status: done
 
 目标：
 
-- 生成角色图、分镜图、首帧和尾帧。
+- 在 Python Skills Runtime 内生成后续图像阶段可消费的提示词请求和 mock 占位资产结构。
+- 本阶段不接真实图片 provider，不写图片文件，不写数据库，不做前端选图，不做单镜头真实重试。
 
 具体任务：
 
-1. 实现 `image_prompt_builder`。
-2. 定义 `ImageProvider` interface。
-3. 实现至少一个真实或 mock image provider。
-4. 保存图片资产。
-5. 记录成本。
-6. 前端允许选择最佳图片。
-7. 支持单镜头重试。
+1. 已实现 `image_prompt_builder`，输入为 `storyboard_director`、`character_bible` 和 `style_bible` 成功 envelope。
+2. 已实现 mock `image_generation`，输入为 `image_prompt_builder` 成功 envelope。
+3. 已注册 `SkillGateway.default()`。
+4. 已补齐 `skill.yaml`、`prompt.md`、input/output schema、examples 和 tests。
+5. 已验证 `story_intake -> plot_adaptation -> episode_writer -> character_bible -> style_bible -> storyboard_director -> image_prompt_builder -> image_generation` 链路。
+6. mock 资产只生成逻辑 `milu://mock-assets/...` URI 和 `storage_intent`；`file_written=false`、`writes_files=false`、`writes_database=false`。
+
+延后任务：
+
+- `ImageProvider` interface 和真实 provider adapter。
+- OpenAI / Gemini / Kling / 国产图片模型接入。
+- 图片资产文件写入、上传、缓存和持久化。
+- `assets` / `shot_assets` 写入和被选中版本追踪。
+- 前端选图、单镜头重试和图片预览。
 
 验收：
 
-- 每个分镜至少有一张图片资产。
-- 资产写入 `assets`。
-- 被选中版本可追踪。
+- 每个分镜至少生成 `storyboard_image`、`first_frame` 和 `last_frame` 三类请求。
+- 至少生成角色参考请求，供后续真实角色图资产阶段消费。
+- mock `image_generation` 资产数量与 prompt 请求数量一致。
+- Stage 8 不绕过 Control API / Worker 边界，不接真实模型，不写数据库，不触发 FFmpeg。
 
 阶段结束自检重点：
 
 - 检查主流 image-to-video 工作流对首帧、尾帧、参考图的一致性要求。
+- 已联网对照 LumenX、OpenAI Images API 和首帧/尾帧工作流；确认本阶段应先形成图像 prompt request 与 mock asset review gate，真实图片 provider、文件写入、资产选择和重试留给后续 adapter / UI 阶段。
 
-## 16. Stage 9 视频生成
+## 16. Stage 9 视频生成边界
 
-Status: pending
+Status: done
 
 目标：
 
-- 根据分镜图生成视频片段。
+- 在 Python Skills Runtime 内生成后续视频阶段可消费的视频提示词请求和 mock 占位视频片段结构。
+- 本阶段不接真实视频 provider，不写 MP4 文件，不写数据库，不调用 FFmpeg，不做前端片段预览，不做单镜头真实重试。
 
 具体任务：
 
-1. 实现 `video_prompt_builder`。
-2. 定义 `VideoProvider` interface。
-3. 支持图生视频。
-4. 支持文生视频退化。
-5. 记录模型和成本。
-6. 保存视频片段。
-7. 前端显示片段预览。
+1. 已实现 `video_prompt_builder`，输入为 `storyboard_director`、`image_prompt_builder` 和 `image_generation` 成功 envelope。
+2. 已实现 mock `video_generation`，输入为 `video_prompt_builder` 成功 envelope。
+3. 已在 `SkillGateway.default()` 注册 `video_prompt_builder` 和 `video_generation`。
+4. 已补齐 `skill.yaml`、`prompt.md`、input/output schema、executor、validators、examples 和 CLI output。
+5. 已新增 `tests\test_stage9_video_pipeline.py`，覆盖 Stage 4-9 完整 envelope 链路和失败 envelope。
+6. `video_prompt_builder` 每个镜头输出一个 `video_request`，引用 `first_frame`、`last_frame`、分镜图和角色参考 mock 资产。
+7. mock `video_generation` 每个镜头输出一个占位视频片段结构，只生成逻辑 `milu://mock-assets/...` URI 和 `storage_intent`。
+
+延后任务：
+
+- `VideoProvider` interface 和真实视频模型 adapter。
+- 真实成本记录、失败单镜头重试和 provider 任务轮询。
+- 视频文件写入、`assets` / `shot_assets` 持久化和 PostgreSQL / EF Core DbContext 写回。
+- 前端视频片段预览、选择和重试。
 
 验收：
 
-- 每个镜头有独立视频片段。
-- 失败镜头可单独重试。
-- 不需要重跑全流程。
+- 每个镜头有独立 `video_request` 和 mock `video_clip` 结构。
+- mock `video_generation` 片段数量与分镜镜头数量一致。
+- 图生视频请求可消费 Stage 8 的 `first_frame` 和 `last_frame` mock 图片资产。
+- 输出明确 `file_written=false`、`writes_files=false`、`writes_database=false`、`uses_ffmpeg=false`。
+- Stage 9 不绕过 Control API / Worker 边界，不让 UI 直接访问数据库、文件系统、Python 脚本或 FFmpeg。
 
 阶段结束自检重点：
 
 - 对照 ArcReel / LumenX / LocalMiniDrama 的视频生成链路。
+- 已联网对照 LumenX、OpenAI Videos API 和 Kling 首尾帧图生视频链路；确认本阶段先收敛视频 prompt / mock clip boundary，真实 provider、MP4、FFmpeg、持久化和 UI 预览延后。
 
 ## 17. Stage 10 音频、字幕、剪辑
 

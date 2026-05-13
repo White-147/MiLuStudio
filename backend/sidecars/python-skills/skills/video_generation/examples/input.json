@@ -1,0 +1,98 @@
+{
+  "video_prompt_builder": {
+    "ok": true,
+    "skill_name": "video_prompt_builder",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "title": "The Ledger in the Rain",
+      "language": "zh-CN",
+      "aspect_ratio": "9:16",
+      "prompt_set_id": "demo-episode-01:episode_1:video_prompts",
+      "video_requests": [
+        {
+          "request_id": "vidreq_shot_01_clip",
+          "shot_id": "shot_01",
+          "shot_index": 1,
+          "duration_seconds": 5,
+          "aspect_ratio": "9:16",
+          "generation_mode": "image_to_video",
+          "prompt": "Lin reaches toward the loose brick | generation_mode=image_to_video | duration=5s",
+          "negative_prompt": ["blurred face", "identity drift", "flicker"],
+          "source_images": [
+            {
+              "role": "first_frame",
+              "asset_id": "mock_image_01_003",
+              "asset_type": "first_frame",
+              "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_003.png",
+              "file_written": false,
+              "selected": true
+            },
+            {
+              "role": "last_frame",
+              "asset_id": "mock_image_01_004",
+              "asset_type": "last_frame",
+              "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_004.png",
+              "file_written": false,
+              "selected": false
+            }
+          ],
+          "character_reference_asset_ids": ["mock_image_01_001"],
+          "motion_plan": {
+            "camera_motion": "slow_push_in",
+            "camera_angle": "low detail angle",
+            "composition": "vertical frame with subtitle-safe lower third",
+            "subject_motion": "Lin finds the wet ledger behind a loose brick.",
+            "duration_seconds": 5,
+            "transition_in": "cut_from_previous_shot",
+            "transition_out": "cut_to_next_shot"
+          },
+          "continuity_refs": ["reuse Lin coat silhouette and amber pin"],
+          "seed_hint": "demo-episode-01:episode_1:shot_01:video_clip",
+          "output_slot": {
+            "kind": "video",
+            "intended_use": "video_clip",
+            "selected": true
+          }
+        }
+      ],
+      "negative_prompt": ["blurred face", "identity drift", "flicker"],
+      "source_asset_manifest": {
+        "image_asset_count": 4,
+        "by_shot": {
+          "shot_01": ["mock_image_01_003", "mock_image_01_004"]
+        },
+        "character_references": ["mock_image_01_001"],
+        "writes_files": false,
+        "writes_database": false
+      },
+      "generation_plan": {
+        "mode": "mock_ready",
+        "provider": "none",
+        "model": "none",
+        "request_count": 1,
+        "writes_files": false,
+        "writes_database": false,
+        "uses_ffmpeg": false
+      },
+      "review": {
+        "status": "ready_for_video_generation_boundary",
+        "editable_fields": [],
+        "notes": []
+      },
+      "checkpoint": {
+        "required": false,
+        "policy": "auto_continue_to_mock_video_generation",
+        "reason": "example"
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  }
+}

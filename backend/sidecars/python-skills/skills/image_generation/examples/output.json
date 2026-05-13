@@ -1,0 +1,131 @@
+{
+  "ok": true,
+  "skill_name": "image_generation",
+  "schema_version": "1.0",
+  "data": {
+    "project_id": "demo-episode-01",
+    "episode_index": 1,
+    "title": "The Ledger in the Rain",
+    "language": "zh-CN",
+    "provider": "mock",
+    "model": "none",
+    "mode": "deterministic-placeholder",
+    "assets": [
+      {
+        "asset_id": "mock_image_01_001",
+        "request_id": "imgreq_character_char_lin",
+        "asset_type": "character_reference",
+        "shot_id": null,
+        "character_id": "char_lin",
+        "character_ids": [
+          "char_lin"
+        ],
+        "status": "mock_ready",
+        "provider": "mock",
+        "model": "none",
+        "prompt": "vertical noir comic | single character reference sheet for Lin",
+        "negative_prompt": [
+          "blurred face",
+          "extra fingers",
+          "wrong aspect ratio"
+        ],
+        "aspect_ratio": "1:1",
+        "selected": true,
+        "file_written": false,
+        "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_001.png",
+        "storage_intent": {
+          "root": "D:\\code\\MiLuStudio\\storage",
+          "relative_path": "projects/demo-episode-01/images/mock_image_01_001.png",
+          "will_write_in_future_adapter": true
+        },
+        "metadata": {
+          "seed_hint": "demo-episode-01:lin:character_reference",
+          "kind": "image",
+          "intended_use": "character_reference",
+          "source": "deterministic_mock_no_file"
+        }
+      },
+      {
+        "asset_id": "mock_image_01_002",
+        "request_id": "imgreq_shot_01_storyboard_image",
+        "asset_type": "storyboard_image",
+        "shot_id": "shot_01",
+        "character_id": null,
+        "character_ids": [
+          "char_lin"
+        ],
+        "status": "mock_ready",
+        "provider": "mock",
+        "model": "none",
+        "prompt": "vertical noir comic | Lin finds the wet ledger | single storyboard keyframe",
+        "negative_prompt": [
+          "blurred face",
+          "extra fingers",
+          "wrong aspect ratio"
+        ],
+        "aspect_ratio": "9:16",
+        "selected": true,
+        "file_written": false,
+        "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_002.png",
+        "storage_intent": {
+          "root": "D:\\code\\MiLuStudio\\storage",
+          "relative_path": "projects/demo-episode-01/images/mock_image_01_002.png",
+          "will_write_in_future_adapter": true
+        },
+        "metadata": {
+          "seed_hint": "demo-episode-01:episode_1:shot_01:storyboard_image",
+          "kind": "image",
+          "intended_use": "storyboard_image",
+          "source": "deterministic_mock_no_file"
+        }
+      }
+    ],
+    "asset_manifest": {
+      "prompt_set_id": "demo-episode-01:episode_1:image_prompts",
+      "asset_count": 2,
+      "by_shot": {
+        "shot_01": [
+          "mock_image_01_002"
+        ]
+      },
+      "character_references": [
+        "mock_image_01_001"
+      ],
+      "writes_files": false,
+      "writes_database": false,
+      "notes": [
+        "asset_uri is a logical placeholder and does not mean a real file exists.",
+        "storage_intent describes a later adapter target and does not write to the file system in this stage."
+      ]
+    },
+    "cost_estimate": {
+      "provider": "mock",
+      "currency": "USD",
+      "estimated_cost": 0,
+      "actual_cost": 0
+    },
+    "review": {
+      "status": "ready_for_image_review",
+      "editable_fields": [
+        "assets",
+        "asset_manifest"
+      ],
+      "notes": [
+        "Stage 8 emits mock placeholder asset records, not real image files.",
+        "Real selection, retry, persistence, and provider work stay behind later Control API and adapter stages."
+      ]
+    },
+    "checkpoint": {
+      "required": true,
+      "policy": "pause_for_image_review",
+      "reason": "image_generation output represents the image review boundary, even when assets are mock placeholders."
+    }
+  },
+  "error": null,
+  "runtime": {
+    "duration_ms": 6.19,
+    "model": "none",
+    "mode": "deterministic-mock",
+    "cost_estimate": 0
+  }
+}

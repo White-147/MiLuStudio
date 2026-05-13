@@ -20,6 +20,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<ProductionJobService>();
+builder.Services.AddScoped<TaskQueueService>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<InMemoryControlPlaneStore>();
 builder.Services.AddSingleton<IProjectRepository>(provider => provider.GetRequiredService<InMemoryControlPlaneStore>());
@@ -35,7 +36,7 @@ app.MapGet("/health", () => Results.Ok(new
 {
     service = "MiLuStudio Control API",
     status = "ok",
-    mode = "stage-2-mock"
+    mode = "stage-3-state-machine-mock"
 }));
 
 app.MapGet("/api/projects", async (ProjectService projects, CancellationToken cancellationToken) =>
@@ -115,6 +116,16 @@ app.MapPost("/api/production-jobs/{jobId}/retry", async (
     CancellationToken cancellationToken) =>
 {
     var job = await jobs.RetryAsync(jobId, cancellationToken);
+    return job is null ? Results.NotFound() : Results.Ok(job);
+});
+
+app.MapPost("/api/production-jobs/{jobId}/checkpoint", async (
+    string jobId,
+    ProductionCheckpointRequest request,
+    ProductionJobService jobs,
+    CancellationToken cancellationToken) =>
+{
+    var job = await jobs.CheckpointAsync(jobId, request, cancellationToken);
     return job is null ? Results.NotFound() : Results.Ok(job);
 });
 

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/episode_writer/input.schema.json",
+  "title": "episode_writer input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plot_adaptation"],
+  "properties": {
+    "plot_adaptation": {
+      "type": "object",
+      "description": "A successful plot_adaptation runtime envelope."
+    },
+    "writing_preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dialogue_density": {
+          "type": "string",
+          "enum": ["low", "balanced"],
+          "default": "balanced"
+        }
+      }
+    }
+  }
+}

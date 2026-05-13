@@ -8,7 +8,7 @@ public sealed class ProductionJob
 
     public required string ProjectId { get; init; }
 
-    public required string CurrentStage { get; set; }
+    public ProductionStage CurrentStage { get; set; }
 
     public ProductionJobStatus Status { get; set; }
 

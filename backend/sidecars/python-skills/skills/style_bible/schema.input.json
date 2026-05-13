@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/style_bible/input.schema.json",
+  "title": "style_bible input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["episode_writer", "character_bible"],
+  "properties": {
+    "episode_writer": {
+      "type": "object",
+      "description": "A successful episode_writer runtime envelope."
+    },
+    "character_bible": {
+      "type": "object",
+      "description": "A successful character_bible runtime envelope for the same project and episode."
+    }
+  }
+}
+

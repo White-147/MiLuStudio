@@ -1,0 +1,85 @@
+{
+  "image_prompt_builder": {
+    "ok": true,
+    "skill_name": "image_prompt_builder",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "title": "The Ledger in the Rain",
+      "language": "zh-CN",
+      "aspect_ratio": "9:16",
+      "prompt_set_id": "demo-episode-01:episode_1:image_prompts",
+      "image_requests": [
+        {
+          "request_id": "imgreq_character_char_lin",
+          "asset_type": "character_reference",
+          "shot_id": null,
+          "character_id": "char_lin",
+          "character_ids": ["char_lin"],
+          "prompt": "vertical noir comic | single character reference sheet for Lin",
+          "negative_prompt": ["blurred face", "extra fingers", "wrong aspect ratio"],
+          "aspect_ratio": "1:1",
+          "style_refs": ["base_style", "character_consistency", "quality_guardrails"],
+          "continuity_refs": ["short black hair", "amber lapel pin", "dark raincoat"],
+          "seed_hint": "demo-episode-01:lin:character_reference",
+          "output_slot": {
+            "kind": "image",
+            "intended_use": "character_reference",
+            "selected": true
+          }
+        },
+        {
+          "request_id": "imgreq_shot_01_storyboard_image",
+          "asset_type": "storyboard_image",
+          "shot_id": "shot_01",
+          "character_id": null,
+          "character_ids": ["char_lin"],
+          "prompt": "vertical noir comic | Lin finds the wet ledger | single storyboard keyframe",
+          "negative_prompt": ["blurred face", "extra fingers", "wrong aspect ratio"],
+          "aspect_ratio": "9:16",
+          "style_refs": ["base_style", "camera", "quality_guardrails"],
+          "continuity_refs": ["reuse Lin coat silhouette and amber pin"],
+          "seed_hint": "demo-episode-01:episode_1:shot_01:storyboard_image",
+          "output_slot": {
+            "kind": "image",
+            "intended_use": "storyboard_image",
+            "selected": true
+          }
+        }
+      ],
+      "negative_prompt": ["blurred face", "extra fingers", "wrong aspect ratio"],
+      "reference_strategy": {
+        "requires_uploaded_reference": false,
+        "character_reference_source": "character_bible",
+        "style_reference_source": "style_bible.reusable_prompt_blocks"
+      },
+      "generation_plan": {
+        "mode": "mock_ready",
+        "provider": "none",
+        "model": "none",
+        "request_count": 2,
+        "writes_files": false,
+        "writes_database": false
+      },
+      "review": {
+        "status": "ready_for_generation_boundary",
+        "editable_fields": ["image_requests", "negative_prompt", "reference_strategy"],
+        "notes": []
+      },
+      "checkpoint": {
+        "required": false,
+        "policy": "auto_continue_to_mock_image_generation",
+        "reason": "example input"
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  }
+}
+

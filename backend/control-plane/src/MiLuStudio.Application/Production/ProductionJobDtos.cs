@@ -2,6 +2,8 @@ namespace MiLuStudio.Application.Production;
 
 public sealed record StartProductionJobRequest(string? RequestedBy);
 
+public sealed record ProductionCheckpointRequest(bool? Approved, string? Notes);
+
 public sealed record ProductionJobDto(
     string Id,
     string ProjectId,
@@ -30,6 +32,7 @@ public sealed record ProductionJobEventDto(
     string StageLabel,
     string Skill,
     string Status,
+    string JobStatus,
     int Progress,
     string Message,
     DateTimeOffset OccurredAt);

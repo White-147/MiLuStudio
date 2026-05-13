@@ -15,7 +15,7 @@ public sealed class ProductionWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("MiLuStudio Worker ready. Stage 2 uses mock control-plane jobs; queue claiming lands in Stage 3.");
+        _logger.LogInformation("MiLuStudio Worker ready. Stage 3 uses control-plane state transitions with in-memory runtime storage; durable queue claiming lands in a later adapter stage.");
 
         while (!stoppingToken.IsCancellationRequested)
         {

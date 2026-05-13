@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/plot_adaptation/input.schema.json",
+  "title": "plot_adaptation input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["story_intake"],
+  "properties": {
+    "story_intake": {
+      "type": "object",
+      "description": "A successful story_intake runtime envelope."
+    },
+    "adaptation_preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "narrative_pov": {
+          "type": "string",
+          "enum": ["protagonist", "observer"],
+          "default": "protagonist"
+        },
+        "ending_style": {
+          "type": "string",
+          "enum": ["open_hook", "closed"],
+          "default": "open_hook"
+        }
+      }
+    }
+  }
+}

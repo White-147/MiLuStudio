@@ -1,0 +1,9 @@
+{
+  "project_id": "demo-episode-01",
+  "story_text": "雨夜里，林溪在旧巷口捡到一只会发光的纸鹤。纸鹤不断飞向废弃照相馆，那里藏着哥哥失踪前留下的最后一卷胶片。林溪冲洗胶片后发现，哥哥曾拍到一扇只在午夜出现的门，而门后的光正和纸鹤一模一样。",
+  "language": "zh-CN",
+  "target_duration_seconds": 45,
+  "aspect_ratio": "9:16",
+  "style_preset": "雨夜悬疑国漫",
+  "mode": "director"
+}

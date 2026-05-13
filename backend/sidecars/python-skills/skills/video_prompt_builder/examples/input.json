@@ -1,0 +1,320 @@
+{
+  "storyboard_director": {
+    "ok": true,
+    "skill_name": "storyboard_director",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "title": "The Ledger in the Rain",
+      "language": "zh-CN",
+      "aspect_ratio": "9:16",
+      "shots": [
+        {
+          "shot_id": "shot_01",
+          "shot_index": 1,
+          "duration_seconds": 5,
+          "scene": "rainy alley with a flickering sign and a hidden ledger",
+          "characters": [
+            {
+              "character_id": "char_lin",
+              "name": "Lin"
+            }
+          ],
+          "camera": {
+            "angle": "low detail angle",
+            "motion": "slow_push_in",
+            "composition": "vertical frame with subtitle-safe lower third"
+          },
+          "visual_action": "Lin finds the wet ledger behind a loose brick.",
+          "continuity_notes": ["reuse Lin coat silhouette and amber pin"],
+          "video_prompt_seed": "Lin reaches toward the loose brick as rain ripples across the alley light"
+        },
+        {
+          "shot_id": "shot_02",
+          "shot_index": 2,
+          "duration_seconds": 5,
+          "scene": "close reaction beside the alley exit",
+          "characters": [
+            {
+              "character_id": "char_lin",
+              "name": "Lin"
+            }
+          ],
+          "camera": {
+            "angle": "eye level close reaction",
+            "motion": "hold",
+            "composition": "face and clue both readable"
+          },
+          "visual_action": "Lin opens the ledger and sees a map mark.",
+          "continuity_notes": ["ledger remains damp and torn at the corner"],
+          "video_prompt_seed": "Lin opens the damp ledger and freezes on the map mark"
+        }
+      ]
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "image_prompt_builder": {
+    "ok": true,
+    "skill_name": "image_prompt_builder",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "title": "The Ledger in the Rain",
+      "language": "zh-CN",
+      "aspect_ratio": "9:16",
+      "prompt_set_id": "demo-episode-01:episode_1:image_prompts",
+      "image_requests": [
+        {
+          "request_id": "imgreq_shot_01_first_frame",
+          "asset_type": "first_frame",
+          "shot_id": "shot_01",
+          "prompt": "first readable frame for shot 01",
+          "negative_prompt": ["blurred face", "wrong aspect ratio"],
+          "aspect_ratio": "9:16",
+          "style_refs": ["base_style"],
+          "seed_hint": "demo-episode-01:shot_01:first_frame",
+          "output_slot": {
+            "kind": "image",
+            "intended_use": "first_frame",
+            "selected": true
+          }
+        }
+      ],
+      "negative_prompt": ["blurred face", "wrong aspect ratio"],
+      "reference_strategy": {
+        "requires_uploaded_reference": false
+      },
+      "generation_plan": {
+        "provider": "none",
+        "model": "none",
+        "writes_files": false,
+        "writes_database": false
+      },
+      "review": {
+        "status": "ready_for_generation_boundary",
+        "editable_fields": [],
+        "notes": []
+      },
+      "checkpoint": {
+        "required": false,
+        "policy": "auto_continue_to_mock_image_generation",
+        "reason": "example"
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  },
+  "image_generation": {
+    "ok": true,
+    "skill_name": "image_generation",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "title": "The Ledger in the Rain",
+      "language": "zh-CN",
+      "provider": "mock",
+      "model": "none",
+      "mode": "deterministic-placeholder",
+      "assets": [
+        {
+          "asset_id": "mock_image_01_001",
+          "request_id": "imgreq_character_char_lin",
+          "asset_type": "character_reference",
+          "shot_id": null,
+          "character_id": "char_lin",
+          "character_ids": ["char_lin"],
+          "status": "mock_ready",
+          "provider": "mock",
+          "model": "none",
+          "prompt": "character reference for Lin",
+          "negative_prompt": ["blurred face", "wrong aspect ratio"],
+          "aspect_ratio": "1:1",
+          "selected": true,
+          "file_written": false,
+          "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_001.png",
+          "storage_intent": {
+            "root": "D:\\code\\MiLuStudio\\storage",
+            "relative_path": "projects/demo-episode-01/images/mock_image_01_001.png",
+            "will_write_in_future_adapter": true
+          },
+          "metadata": {
+            "source": "deterministic_mock_no_file"
+          }
+        },
+        {
+          "asset_id": "mock_image_01_002",
+          "request_id": "imgreq_shot_01_storyboard_image",
+          "asset_type": "storyboard_image",
+          "shot_id": "shot_01",
+          "character_id": null,
+          "character_ids": ["char_lin"],
+          "status": "mock_ready",
+          "provider": "mock",
+          "model": "none",
+          "prompt": "storyboard image for shot 01",
+          "negative_prompt": ["blurred face", "wrong aspect ratio"],
+          "aspect_ratio": "9:16",
+          "selected": true,
+          "file_written": false,
+          "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_002.png",
+          "storage_intent": {
+            "root": "D:\\code\\MiLuStudio\\storage",
+            "relative_path": "projects/demo-episode-01/images/mock_image_01_002.png",
+            "will_write_in_future_adapter": true
+          },
+          "metadata": {
+            "source": "deterministic_mock_no_file"
+          }
+        },
+        {
+          "asset_id": "mock_image_01_003",
+          "request_id": "imgreq_shot_01_first_frame",
+          "asset_type": "first_frame",
+          "shot_id": "shot_01",
+          "character_id": null,
+          "character_ids": ["char_lin"],
+          "status": "mock_ready",
+          "provider": "mock",
+          "model": "none",
+          "prompt": "first frame for shot 01",
+          "negative_prompt": ["blurred face", "wrong aspect ratio"],
+          "aspect_ratio": "9:16",
+          "selected": true,
+          "file_written": false,
+          "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_003.png",
+          "storage_intent": {
+            "root": "D:\\code\\MiLuStudio\\storage",
+            "relative_path": "projects/demo-episode-01/images/mock_image_01_003.png",
+            "will_write_in_future_adapter": true
+          },
+          "metadata": {
+            "source": "deterministic_mock_no_file"
+          }
+        },
+        {
+          "asset_id": "mock_image_01_004",
+          "request_id": "imgreq_shot_01_last_frame",
+          "asset_type": "last_frame",
+          "shot_id": "shot_01",
+          "character_id": null,
+          "character_ids": ["char_lin"],
+          "status": "mock_ready",
+          "provider": "mock",
+          "model": "none",
+          "prompt": "last frame for shot 01",
+          "negative_prompt": ["blurred face", "wrong aspect ratio"],
+          "aspect_ratio": "9:16",
+          "selected": false,
+          "file_written": false,
+          "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_004.png",
+          "storage_intent": {
+            "root": "D:\\code\\MiLuStudio\\storage",
+            "relative_path": "projects/demo-episode-01/images/mock_image_01_004.png",
+            "will_write_in_future_adapter": true
+          },
+          "metadata": {
+            "source": "deterministic_mock_no_file"
+          }
+        },
+        {
+          "asset_id": "mock_image_01_005",
+          "request_id": "imgreq_shot_02_first_frame",
+          "asset_type": "first_frame",
+          "shot_id": "shot_02",
+          "character_id": null,
+          "character_ids": ["char_lin"],
+          "status": "mock_ready",
+          "provider": "mock",
+          "model": "none",
+          "prompt": "first frame for shot 02",
+          "negative_prompt": ["blurred face", "wrong aspect ratio"],
+          "aspect_ratio": "9:16",
+          "selected": true,
+          "file_written": false,
+          "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_005.png",
+          "storage_intent": {
+            "root": "D:\\code\\MiLuStudio\\storage",
+            "relative_path": "projects/demo-episode-01/images/mock_image_01_005.png",
+            "will_write_in_future_adapter": true
+          },
+          "metadata": {
+            "source": "deterministic_mock_no_file"
+          }
+        },
+        {
+          "asset_id": "mock_image_01_006",
+          "request_id": "imgreq_shot_02_last_frame",
+          "asset_type": "last_frame",
+          "shot_id": "shot_02",
+          "character_id": null,
+          "character_ids": ["char_lin"],
+          "status": "mock_ready",
+          "provider": "mock",
+          "model": "none",
+          "prompt": "last frame for shot 02",
+          "negative_prompt": ["blurred face", "wrong aspect ratio"],
+          "aspect_ratio": "9:16",
+          "selected": false,
+          "file_written": false,
+          "asset_uri": "milu://mock-assets/demo-episode-01/mock_image_01_006.png",
+          "storage_intent": {
+            "root": "D:\\code\\MiLuStudio\\storage",
+            "relative_path": "projects/demo-episode-01/images/mock_image_01_006.png",
+            "will_write_in_future_adapter": true
+          },
+          "metadata": {
+            "source": "deterministic_mock_no_file"
+          }
+        }
+      ],
+      "asset_manifest": {
+        "prompt_set_id": "demo-episode-01:episode_1:image_prompts",
+        "asset_count": 6,
+        "by_shot": {
+          "shot_01": ["mock_image_01_002", "mock_image_01_003", "mock_image_01_004"],
+          "shot_02": ["mock_image_01_005", "mock_image_01_006"]
+        },
+        "character_references": ["mock_image_01_001"],
+        "writes_files": false,
+        "writes_database": false
+      },
+      "cost_estimate": {
+        "provider": "mock",
+        "currency": "USD",
+        "estimated_cost": 0,
+        "actual_cost": 0
+      },
+      "review": {
+        "status": "ready_for_image_review",
+        "editable_fields": [],
+        "notes": []
+      },
+      "checkpoint": {
+        "required": true,
+        "policy": "pause_for_image_review",
+        "reason": "example"
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "episode_writer": {
+    "ok": true,
+    "skill_name": "episode_writer",
+    "schema_version": "1.0",
+    "data": {
+      "project_id": "demo-episode-01",
+      "episode_index": 1,
+      "title": "雨夜纸鹤",
+      "language": "zh-CN",
+      "target_duration_seconds": 45,
+      "aspect_ratio": "9:16",
+      "summary": "一部悬疑、都市短篇：雨夜里，林溪在旧巷口捡到一只会发光的纸鹤。",
+      "script_text": "标题：雨夜纸鹤\n时长：45 秒\nseg_01\n旁白：林溪以为这只是普通的一晚。\n对白（林溪）：你到底想带我去哪？",
+      "segments": [
+        {
+          "segment_id": "seg_01",
+          "beat_id": "beat_01_hook",
+          "start_second": 0,
+          "duration_seconds": 8,
+          "purpose": "立刻抛出异常物件和追踪动机。",
+          "visual_direction": "竖屏近景，用异常线索贴近镜头开场。",
+          "narration": "林溪以为这只是普通的一晚，直到线索把林溪带向不该出现的地方。",
+          "dialogue_lines": [
+            {
+              "speaker": "林溪",
+              "line": "你到底想带我去哪？",
+              "delivery": "压低声音，带一点试探。"
+            }
+          ],
+          "pacing_note": "8 秒内完成钩子，不解释背景。",
+          "sound_note": "雨夜、悬疑低频氛围。"
+        },
+        {
+          "segment_id": "seg_02",
+          "beat_id": "beat_02_setup",
+          "start_second": 8,
+          "duration_seconds": 12,
+          "purpose": "交代地点、人物牵挂和必须行动的原因。",
+          "visual_direction": "竖屏近景切到关键地点。",
+          "narration": "越靠近真相，熟悉的记忆越像被人重新摆放过。",
+          "dialogue_lines": [
+            {
+              "speaker": "林溪",
+              "line": "哥哥的线索，怎么会在这里？",
+              "delivery": "困惑后迅速紧张。"
+            }
+          ],
+          "pacing_note": "12 秒保持一镜一信息点。",
+          "sound_note": "雨夜、悬疑氛围延续。"
+        }
+      ],
+      "subtitle_cues": [],
+      "voice_notes": {},
+      "review": {},
+      "checkpoint": {
+        "required": true,
+        "policy": "pause_for_script_review",
+        "reason": "demo"
+      }
+    },
+    "error": null,
+    "runtime": {
+      "duration_ms": 0,
+      "model": "none",
+      "mode": "deterministic-mock",
+      "cost_estimate": 0
+    }
+  }
+}
+

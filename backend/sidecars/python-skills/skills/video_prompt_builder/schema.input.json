@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milu.studio/schemas/skills/video_prompt_builder/input.schema.json",
+  "title": "video_prompt_builder input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["storyboard_director", "image_prompt_builder", "image_generation"],
+  "properties": {
+    "storyboard_director": {
+      "type": "object",
+      "description": "A successful storyboard_director runtime envelope."
+    },
+    "image_prompt_builder": {
+      "type": "object",
+      "description": "A successful image_prompt_builder runtime envelope for the same project and episode."
+    },
+    "image_generation": {
+      "type": "object",
+      "description": "A successful mock image_generation runtime envelope for the same project and episode."
+    }
+  }
+}

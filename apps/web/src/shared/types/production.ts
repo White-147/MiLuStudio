@@ -4,6 +4,8 @@ export type ProjectStatus = 'draft' | 'running' | 'paused' | 'completed' | 'fail
 
 export type StageStatus = 'done' | 'running' | 'waiting' | 'review' | 'blocked';
 
+export type ProductionJobStatus = 'queued' | 'running' | 'paused' | 'completed' | 'failed';
+
 export interface ProjectSummary {
   id: string;
   title: string;
@@ -34,7 +36,7 @@ export interface ProductionStage {
 export interface ProductionJob {
   id: string;
   projectId: string;
-  status: 'queued' | 'running' | 'paused' | 'completed' | 'failed';
+  status: ProductionJobStatus;
   currentStage: string;
   progress: number;
   startedAt: string;
@@ -51,6 +53,7 @@ export interface ProductionJobEvent {
   stageLabel: string;
   skill: string;
   status: StageStatus;
+  jobStatus: ProductionJobStatus;
   progress: number;
   message: string;
   occurredAt: string;

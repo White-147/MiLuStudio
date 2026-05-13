@@ -1,0 +1,181 @@
+{
+  "ok": true,
+  "skill_name": "character_bible",
+  "schema_version": "1.0",
+  "data": {
+    "project_id": "demo-episode-01",
+    "episode_index": 1,
+    "title": "雨夜纸鹤",
+    "language": "zh-CN",
+    "source_summary": "一部悬疑、都市短篇：雨夜里，林溪在旧巷口捡到一只会发光的纸鹤。",
+    "characters": [
+      {
+        "character_id": "char_01",
+        "name": "林溪",
+        "role_type": "main",
+        "stable_seed": "demo-episode-01:episode_1:char_01",
+        "identity": "林溪是推动短片行动的主角，负责发现线索、做出选择并承担结尾钩子。",
+        "personality": [
+          "敏锐",
+          "克制",
+          "遇到异常时仍会主动追查",
+          "面对未知时恐惧但不退缩"
+        ],
+        "appearance": {
+          "age_range": "青年",
+          "gender_expression": "unspecified",
+          "silhouette": "偏利落的竖屏主角轮廓，便于近景识别。",
+          "face_hair": "五官保持清晰，发型不在镜头间大幅变化。",
+          "signature_detail": "发光纸鹤作为核心识别道具",
+          "body_language": "紧张时肩颈微收，做决定时视线稳定向前。"
+        },
+        "costume": {
+          "base": "带轻微雨水反光的外套",
+          "palette": "低饱和深色为主，保留一个小面积识别色。",
+          "lock_rule": "同一集内主色、衣领形状和袖口细节保持一致。",
+          "change_policy": "除非用户审核后改设定，否则不在分镜间换装。"
+        },
+        "voice_profile": {
+          "tone": "克制、清晰、紧张时不拖长尾音。",
+          "pace": "短句优先，给竖屏字幕留出阅读空间。",
+          "delivery": "林溪的对白要从试探逐步转向坚定。"
+        },
+        "visual_identity": {
+          "must_keep": [
+            "林溪的脸型、发型、服装主色和体态在所有镜头保持一致。",
+            "角色入画时优先保证可识别轮廓，再处理环境氛围。",
+            "主角与核心线索同框时保留：发光纸鹤作为核心识别道具。",
+            "环境识别点可复用：雨水反光与湿润发梢。"
+          ],
+          "may_vary": [
+            "表情强度可随剧情变化。",
+            "雨水、阴影和镜头距离可按场景调整。"
+          ],
+          "avoid": [
+            "同一角色脸型、发型、服装主色在镜头间漂移。",
+            "用临时道具替代已锁定的标志性线索。"
+          ]
+        },
+        "expression_palette": [
+          {
+            "name": "alert",
+            "description": "眉眼收紧，先观察再行动。"
+          },
+          {
+            "name": "doubt",
+            "description": "视线偏移，嘴角收住，不夸张。"
+          },
+          {
+            "name": "resolve",
+            "description": "眼神稳定，动作放慢半拍。"
+          }
+        ],
+        "continuity_rules": [
+          "同一角色跨镜头保持相同的基础比例、发型轮廓和服装结构。",
+          "除用户审核修改外，不新增会改变身份识别的装饰。",
+          "主角近景、中景、背影都必须能通过服装主色和体态识别。"
+        ],
+        "source_evidence": [
+          "seg_01 dialogue: 你到底想带我去哪？",
+          "seg_01 narration: 林溪以为这只是普通的一晚，直到线索把林溪带向不该出现的地方。",
+          "seg_02 dialogue: 哥哥的线索，怎么会在这里？"
+        ]
+      },
+      {
+        "character_id": "char_02",
+        "name": "哥哥",
+        "role_type": "supporting",
+        "stable_seed": "demo-episode-01:episode_1:char_02",
+        "identity": "哥哥是牵动主角行动的关键关系角色，承担线索来源或情绪压力。",
+        "personality": [
+          "留白感强",
+          "像谜题核心一样被旁人记住",
+          "与主角有明确情感牵引"
+        ],
+        "appearance": {
+          "age_range": "未定，按后续剧本补齐",
+          "gender_expression": "male-presenting",
+          "silhouette": "与主角明显区分的轮廓，避免误认。",
+          "face_hair": "只锁定必要识别点，保留后续扩展空间。",
+          "signature_detail": "与主角形成对照的轮廓或道具线索",
+          "body_language": "出现或被提及时应带来情绪压力，而不是普通背景信息。"
+        },
+        "costume": {
+          "base": "与剧情线索相关的简洁服装或残留物件。",
+          "palette": "弱化饱和度，避免压过主角。",
+          "lock_rule": "每次出现都保留同一个可识别细节。",
+          "change_policy": "可在后续集数扩展，但本集保持统一。"
+        },
+        "voice_profile": {
+          "tone": "可由旁白或记忆感对白承载，保持距离感。",
+          "pace": "信息短促，不展开解释。",
+          "delivery": "哥哥的声音方向服务悬念，不替代主角做决定。"
+        },
+        "visual_identity": {
+          "must_keep": [
+            "哥哥的脸型、发型、服装主色和体态在所有镜头保持一致。",
+            "角色入画时优先保证可识别轮廓，再处理环境氛围。"
+          ],
+          "may_vary": [
+            "表情强度可随剧情变化。",
+            "雨水、阴影和镜头距离可按场景调整。"
+          ],
+          "avoid": [
+            "同一角色脸型、发型、服装主色在镜头间漂移。",
+            "用临时道具替代已锁定的标志性线索。"
+          ]
+        },
+        "expression_palette": [
+          {
+            "name": "absence",
+            "description": "可通过物件、背影或声音暗示。"
+          },
+          {
+            "name": "pressure",
+            "description": "出现时让画面信息更紧，而不是更吵。"
+          }
+        ],
+        "continuity_rules": [
+          "同一角色跨镜头保持相同的基础比例、发型轮廓和服装结构。",
+          "除用户审核修改外，不新增会改变身份识别的装饰。"
+        ],
+        "source_evidence": [
+          "重新摆放过。\n雨夜、悬疑氛围延续。\n哥哥的线索，怎么会在这里？"
+        ]
+      }
+    ],
+    "relationship_notes": [
+      "林溪是观众跟随视角，其余角色必须围绕线索、压力或情绪牵引出现。",
+      "关系描述先服务本集短视频节奏，避免提前展开长篇人物史。"
+    ],
+    "continuity_rules": [
+      "本集角色锁定范围：林溪、哥哥。",
+      "进入画风、分镜、图像或视频提示词阶段时，必须引用 character_id 和 stable_seed。",
+      "角色设定来自 episode_writer《雨夜纸鹤》，后续持久化由数据库 adapter 阶段处理。"
+    ],
+    "review": {
+      "status": "ready_for_review",
+      "editable_fields": [
+        "characters",
+        "relationship_notes",
+        "continuity_rules"
+      ],
+      "notes": [
+        "用户可在此阶段锁定角色外观、服装和声音方向。",
+        "当前结果只产出角色设定结构，不写数据库，不上传参考图，不触发生成模型。"
+      ]
+    },
+    "checkpoint": {
+      "required": true,
+      "policy": "pause_for_character_review",
+      "reason": "character_bible output should be reviewed before style and storyboard generation."
+    }
+  },
+  "error": null,
+  "runtime": {
+    "duration_ms": 3.23,
+    "model": "none",
+    "mode": "deterministic-mock",
+    "cost_estimate": 0
+  }
+}

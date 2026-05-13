@@ -38,6 +38,22 @@ export async function startProductionJob(projectId: string, signal?: AbortSignal
   });
 }
 
+export async function pauseProductionJob(jobId: string, signal?: AbortSignal): Promise<ProductionJob> {
+  return productionJobCommand(jobId, 'pause', undefined, signal);
+}
+
+export async function resumeProductionJob(jobId: string, signal?: AbortSignal): Promise<ProductionJob> {
+  return productionJobCommand(jobId, 'resume', undefined, signal);
+}
+
+export async function retryProductionJob(jobId: string, signal?: AbortSignal): Promise<ProductionJob> {
+  return productionJobCommand(jobId, 'retry', undefined, signal);
+}
+
+export async function approveProductionCheckpoint(jobId: string, signal?: AbortSignal): Promise<ProductionJob> {
+  return productionJobCommand(jobId, 'checkpoint', { approved: true, notes: 'approved-from-web-ui' }, signal);
+}
+
 export function watchProductionJob(
   jobId: string,
   onEvent: (event: ProductionJobEvent) => void,
@@ -51,6 +67,7 @@ export function watchProductionJob(
     'task_completed',
     'task_failed',
     'checkpoint_required',
+    'stage_paused',
     'cost_updated',
     'artifact_ready',
   ];
@@ -64,6 +81,19 @@ export function watchProductionJob(
   source.onerror = onError;
 
   return () => source.close();
+}
+
+async function productionJobCommand(
+  jobId: string,
+  command: 'pause' | 'resume' | 'retry' | 'checkpoint',
+  body?: unknown,
+  signal?: AbortSignal,
+): Promise<ProductionJob> {
+  return request<ProductionJob>(`/api/production-jobs/${encodeURIComponent(jobId)}/${command}`, {
+    method: 'POST',
+    body: JSON.stringify(body ?? {}),
+    signal,
+  });
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {

@@ -1,0 +1,335 @@
+{
+  "ok": true,
+  "skill_name": "image_prompt_builder",
+  "schema_version": "1.0",
+  "data": {
+    "project_id": "demo-episode-01",
+    "episode_index": 1,
+    "title": "The Ledger in the Rain",
+    "language": "zh-CN",
+    "aspect_ratio": "9:16",
+    "prompt_set_id": "demo-episode-01:episode_1:image_prompts",
+    "image_requests": [
+      {
+        "request_id": "imgreq_character_char_lin",
+        "asset_type": "character_reference",
+        "shot_id": null,
+        "character_id": "char_lin",
+        "character_ids": [
+          "char_lin"
+        ],
+        "prompt": "vertical noir comic, cinematic rain, crisp readable faces | preserve face shape, hair, costume, and signature prop | single character reference sheet for Lin (char_lin) | role=protagonist | appearance=short black hair, amber lapel pin, focused eyes | costume_lock=dark raincoat with amber lapel pin | must_keep=short black hair / amber lapel pin / dark raincoat | clean full-body standing pose, front view, neutral expression, plain background",
+        "negative_prompt": [
+          "blurred face",
+          "extra fingers",
+          "logo",
+          "watermark",
+          "unreadable face",
+          "random extra character",
+          "wrong aspect ratio",
+          "cropped subtitle safe area",
+          "inconsistent costume"
+        ],
+        "aspect_ratio": "1:1",
+        "style_refs": [
+          "base_style",
+          "character_consistency",
+          "quality_guardrails"
+        ],
+        "continuity_refs": [
+          "short black hair",
+          "amber lapel pin",
+          "dark raincoat"
+        ],
+        "seed_hint": "demo-episode-01:lin:character_reference",
+        "output_slot": {
+          "kind": "image",
+          "intended_use": "character_reference",
+          "selected": true
+        }
+      },
+      {
+        "request_id": "imgreq_shot_01_storyboard_image",
+        "asset_type": "storyboard_image",
+        "shot_id": "shot_01",
+        "character_id": null,
+        "character_ids": [
+          "char_lin"
+        ],
+        "prompt": "noir vertical comic style | Lin | wet ledger | rainy alley | frame_role=storyboard | visual_action=Lin finds the wet ledger behind a loose brick. | camera_angle=low detail angle | camera_motion_hint=slow_push_in | lighting=keep face readable | single storyboard keyframe for shot timing 0s | clean linework, no warped hands, no unreadable faces",
+        "negative_prompt": [
+          "blurred face",
+          "extra fingers",
+          "logo",
+          "watermark",
+          "unreadable face",
+          "random extra character",
+          "wrong aspect ratio",
+          "cropped subtitle safe area",
+          "inconsistent costume"
+        ],
+        "aspect_ratio": "9:16",
+        "style_refs": [
+          "base_style",
+          "character_consistency",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_refs": [
+          "reuse Lin coat silhouette and amber pin"
+        ],
+        "seed_hint": "demo-episode-01:episode_1:shot_01:storyboard_image",
+        "output_slot": {
+          "kind": "image",
+          "intended_use": "storyboard_image",
+          "selected": true
+        }
+      },
+      {
+        "request_id": "imgreq_shot_01_first_frame",
+        "asset_type": "first_frame",
+        "shot_id": "shot_01",
+        "character_id": null,
+        "character_ids": [
+          "char_lin"
+        ],
+        "prompt": "noir vertical comic style | Lin | wet ledger | rainy alley | frame_role=first_frame | visual_action=Lin finds the wet ledger behind a loose brick. | camera_angle=low detail angle | camera_motion_hint=slow_push_in | lighting=keep face readable | choose the earliest readable moment of this shot, before the main movement completes | clean linework, no warped hands, no unreadable faces",
+        "negative_prompt": [
+          "blurred face",
+          "extra fingers",
+          "logo",
+          "watermark",
+          "unreadable face",
+          "random extra character",
+          "wrong aspect ratio",
+          "cropped subtitle safe area",
+          "inconsistent costume"
+        ],
+        "aspect_ratio": "9:16",
+        "style_refs": [
+          "base_style",
+          "character_consistency",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_refs": [
+          "reuse Lin coat silhouette and amber pin"
+        ],
+        "seed_hint": "demo-episode-01:episode_1:shot_01:first_frame",
+        "output_slot": {
+          "kind": "image",
+          "intended_use": "first_frame",
+          "selected": true
+        }
+      },
+      {
+        "request_id": "imgreq_shot_01_last_frame",
+        "asset_type": "last_frame",
+        "shot_id": "shot_01",
+        "character_id": null,
+        "character_ids": [
+          "char_lin"
+        ],
+        "prompt": "noir vertical comic style | Lin | wet ledger | rainy alley | frame_role=last_frame | visual_action=Lin finds the wet ledger behind a loose brick. | camera_angle=low detail angle | camera_motion_hint=slow_push_in | lighting=keep face readable | choose the final readable moment of this shot, preserving continuity for image-to-video | clean linework, no warped hands, no unreadable faces",
+        "negative_prompt": [
+          "blurred face",
+          "extra fingers",
+          "logo",
+          "watermark",
+          "unreadable face",
+          "random extra character",
+          "wrong aspect ratio",
+          "cropped subtitle safe area",
+          "inconsistent costume"
+        ],
+        "aspect_ratio": "9:16",
+        "style_refs": [
+          "base_style",
+          "character_consistency",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_refs": [
+          "reuse Lin coat silhouette and amber pin"
+        ],
+        "seed_hint": "demo-episode-01:episode_1:shot_01:last_frame",
+        "output_slot": {
+          "kind": "image",
+          "intended_use": "last_frame",
+          "selected": false
+        }
+      },
+      {
+        "request_id": "imgreq_shot_02_storyboard_image",
+        "asset_type": "storyboard_image",
+        "shot_id": "shot_02",
+        "character_id": null,
+        "character_ids": [
+          "char_lin"
+        ],
+        "prompt": "noir vertical comic style | Lin | map mark | damp ledger | frame_role=storyboard | visual_action=Lin opens the ledger and sees a map mark. | camera_angle=eye level close reaction | camera_motion_hint=hold | lighting=avoid unreadable shadow over eyes | single storyboard keyframe for shot timing 5s | clean linework, no warped hands, no unreadable faces",
+        "negative_prompt": [
+          "blurred face",
+          "extra fingers",
+          "logo",
+          "watermark",
+          "unreadable face",
+          "random extra character",
+          "wrong aspect ratio",
+          "cropped subtitle safe area",
+          "inconsistent costume"
+        ],
+        "aspect_ratio": "9:16",
+        "style_refs": [
+          "base_style",
+          "character_consistency",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_refs": [
+          "ledger remains damp and torn at the corner"
+        ],
+        "seed_hint": "demo-episode-01:episode_1:shot_02:storyboard_image",
+        "output_slot": {
+          "kind": "image",
+          "intended_use": "storyboard_image",
+          "selected": true
+        }
+      },
+      {
+        "request_id": "imgreq_shot_02_first_frame",
+        "asset_type": "first_frame",
+        "shot_id": "shot_02",
+        "character_id": null,
+        "character_ids": [
+          "char_lin"
+        ],
+        "prompt": "noir vertical comic style | Lin | map mark | damp ledger | frame_role=first_frame | visual_action=Lin opens the ledger and sees a map mark. | camera_angle=eye level close reaction | camera_motion_hint=hold | lighting=avoid unreadable shadow over eyes | choose the earliest readable moment of this shot, before the main movement completes | clean linework, no warped hands, no unreadable faces",
+        "negative_prompt": [
+          "blurred face",
+          "extra fingers",
+          "logo",
+          "watermark",
+          "unreadable face",
+          "random extra character",
+          "wrong aspect ratio",
+          "cropped subtitle safe area",
+          "inconsistent costume"
+        ],
+        "aspect_ratio": "9:16",
+        "style_refs": [
+          "base_style",
+          "character_consistency",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_refs": [
+          "ledger remains damp and torn at the corner"
+        ],
+        "seed_hint": "demo-episode-01:episode_1:shot_02:first_frame",
+        "output_slot": {
+          "kind": "image",
+          "intended_use": "first_frame",
+          "selected": true
+        }
+      },
+      {
+        "request_id": "imgreq_shot_02_last_frame",
+        "asset_type": "last_frame",
+        "shot_id": "shot_02",
+        "character_id": null,
+        "character_ids": [
+          "char_lin"
+        ],
+        "prompt": "noir vertical comic style | Lin | map mark | damp ledger | frame_role=last_frame | visual_action=Lin opens the ledger and sees a map mark. | camera_angle=eye level close reaction | camera_motion_hint=hold | lighting=avoid unreadable shadow over eyes | choose the final readable moment of this shot, preserving continuity for image-to-video | clean linework, no warped hands, no unreadable faces",
+        "negative_prompt": [
+          "blurred face",
+          "extra fingers",
+          "logo",
+          "watermark",
+          "unreadable face",
+          "random extra character",
+          "wrong aspect ratio",
+          "cropped subtitle safe area",
+          "inconsistent costume"
+        ],
+        "aspect_ratio": "9:16",
+        "style_refs": [
+          "base_style",
+          "character_consistency",
+          "camera",
+          "quality_guardrails"
+        ],
+        "continuity_refs": [
+          "ledger remains damp and torn at the corner"
+        ],
+        "seed_hint": "demo-episode-01:episode_1:shot_02:last_frame",
+        "output_slot": {
+          "kind": "image",
+          "intended_use": "last_frame",
+          "selected": false
+        }
+      }
+    ],
+    "negative_prompt": [
+      "blurred face",
+      "extra fingers",
+      "logo",
+      "watermark",
+      "unreadable face",
+      "random extra character",
+      "wrong aspect ratio",
+      "cropped subtitle safe area",
+      "inconsistent costume"
+    ],
+    "reference_strategy": {
+      "requires_uploaded_reference": false,
+      "character_reference_source": "character_bible",
+      "style_reference_source": "style_bible.reusable_prompt_blocks",
+      "character_ids": [
+        "char_lin"
+      ],
+      "style_name": "vertical noir comic",
+      "notes": [
+        "This stage uploads no reference images and only emits request structures for later image stages.",
+        "Real reference images, turnarounds, and portrait close-ups stay deferred to asset provider stages."
+      ]
+    },
+    "generation_plan": {
+      "mode": "mock_ready",
+      "provider": "none",
+      "model": "none",
+      "request_count": 7,
+      "writes_files": false,
+      "writes_database": false,
+      "notes": [
+        "Stage 8 only builds image prompt requests and does not call an image model.",
+        "Later image_generation can consume these requests through mock or real provider adapters."
+      ]
+    },
+    "review": {
+      "status": "ready_for_generation_boundary",
+      "editable_fields": [
+        "image_requests",
+        "negative_prompt",
+        "reference_strategy"
+      ],
+      "notes": [
+        "Reviewed storyboard data can move into image generation through these requests.",
+        "This result writes no database rows, no files, uploads no references, and calls no image model."
+      ]
+    },
+    "checkpoint": {
+      "required": false,
+      "policy": "auto_continue_to_mock_image_generation",
+      "reason": "image prompts can continue to mock image generation without user review in Stage 8."
+    }
+  },
+  "error": null,
+  "runtime": {
+    "duration_ms": 7.14,
+    "model": "none",
+    "mode": "deterministic-mock",
+    "cost_estimate": 0
+  }
+}
