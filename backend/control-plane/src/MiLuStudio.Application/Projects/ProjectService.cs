@@ -6,6 +6,9 @@ using MiLuStudio.Domain.Entities;
 
 public sealed class ProjectService
 {
+    public const int MinimumStoryLength = 500;
+    public const int MaximumStoryLength = 2000;
+
     private static readonly HashSet<string> AllowedAspectRatios = new(StringComparer.OrdinalIgnoreCase)
     {
         "9:16",
@@ -59,7 +62,7 @@ public sealed class ProjectService
     {
         var now = _clock.Now;
         var title = NormalizeText(request.Title, "未命名漫剧");
-        var storyText = NormalizeText(request.StoryText, "输入一段故事后，MiLuStudio 会从这里开始生产。");
+        var storyText = NormalizeStoryText(request.StoryText);
         var mode = ParseMode(request.Mode);
         var targetDuration = NormalizeDuration(request.TargetDuration);
         var aspectRatio = NormalizeAspectRatio(request.AspectRatio);
@@ -108,9 +111,34 @@ public sealed class ProjectService
             project.Name = request.Title.Trim();
         }
 
+        var storyInput = await _projects.GetStoryInputAsync(project.Id, cancellationToken);
+        var storyTextChanged = request.StoryText is not null;
+
+        if (storyTextChanged)
+        {
+            var storyText = NormalizeStoryText(request.StoryText);
+            storyInput ??= new StoryInput
+            {
+                Id = CreateId("story"),
+                ProjectId = project.Id,
+                SourceType = "text",
+                OriginalText = storyText,
+                Language = "zh-CN",
+                WordCount = CountWords(storyText)
+            };
+
+            storyInput.OriginalText = storyText;
+            storyInput.WordCount = CountWords(storyText);
+            storyInput.ParsedAt = null;
+        }
+
         if (!string.IsNullOrWhiteSpace(request.Description))
         {
             project.Description = request.Description.Trim();
+        }
+        else if (storyTextChanged && storyInput is not null)
+        {
+            project.Description = BuildDescription(storyInput.OriginalText);
         }
 
         if (!string.IsNullOrWhiteSpace(request.Mode))
@@ -135,9 +163,15 @@ public sealed class ProjectService
 
         project.UpdatedAt = _clock.Now;
 
-        await _projects.UpdateAsync(project, cancellationToken);
+        if (storyTextChanged && storyInput is not null)
+        {
+            await _projects.UpdateAsync(project, storyInput, cancellationToken);
+        }
+        else
+        {
+            await _projects.UpdateAsync(project, cancellationToken);
+        }
 
-        var storyInput = await _projects.GetStoryInputAsync(project.Id, cancellationToken);
         var jobs = await _jobs.ListByProjectAsync(project.Id, cancellationToken);
         var latestJob = jobs.OrderByDescending(job => job.StartedAt).FirstOrDefault();
 
@@ -223,6 +257,24 @@ public sealed class ProjectService
         return Math.Clamp(targetDuration ?? 45, 30, 60);
     }
 
+    private static string NormalizeStoryText(string? value)
+    {
+        var storyText = NormalizeText(value, string.Empty);
+        var length = CountWords(storyText);
+
+        if (length < MinimumStoryLength || length > MaximumStoryLength)
+        {
+            throw new ProjectValidationException(
+                $"故事正文建议保持在 {MinimumStoryLength} 到 {MaximumStoryLength} 个非空白字符之间。",
+                [
+                    $"当前正文长度：{length}",
+                    "请补足故事正文后再保存或启动生产任务。"
+                ]);
+        }
+
+        return storyText;
+    }
+
     private static string NormalizeText(string? value, string fallback)
     {
         return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
@@ -248,4 +300,15 @@ public sealed class ProjectService
     {
         return value.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
     }
+}
+
+public sealed class ProjectValidationException : Exception
+{
+    public ProjectValidationException(string message, IReadOnlyList<string> details)
+        : base(message)
+    {
+        Details = details;
+    }
+
+    public IReadOnlyList<string> Details { get; }
 }

@@ -53,6 +53,13 @@ public sealed class ProductionJobService
             return null;
         }
 
+        var activeJob = await FindActiveJobAsync(projectId, cancellationToken);
+        if (activeJob is not null)
+        {
+            var activeTasks = await _jobs.ListTasksAsync(activeJob.Id, cancellationToken);
+            return ToDto(activeJob, activeTasks);
+        }
+
         var now = _clock.Now;
         project.Status = ProjectStatus.Running;
         project.UpdatedAt = now;
@@ -135,13 +142,22 @@ public sealed class ProductionJobService
         _stateMachine.ApplyCheckpoint(
             snapshot.Job,
             snapshot.Tasks,
-            request.Approved ?? true,
+            request.Approved ?? throw new ProductionCommandValidationException("checkpoint must explicitly set approved to true or false."),
             _clock.Now,
             request.Notes);
 
         await PersistAsync(snapshot, cancellationToken);
 
         return ToDto(snapshot.Job, snapshot.Tasks);
+    }
+
+    private async Task<ProductionJob?> FindActiveJobAsync(string projectId, CancellationToken cancellationToken)
+    {
+        var jobs = await _jobs.ListByProjectAsync(projectId, cancellationToken);
+        return jobs
+            .Where(job => job.Status is ProductionJobStatus.Running or ProductionJobStatus.Paused or ProductionJobStatus.Queued)
+            .OrderByDescending(job => job.StartedAt)
+            .FirstOrDefault();
     }
 
     public async IAsyncEnumerable<ProductionJobEventDto> StreamEventsAsync(

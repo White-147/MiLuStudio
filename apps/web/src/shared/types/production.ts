@@ -23,6 +23,15 @@ export interface ProjectDetail extends ProjectSummary {
   storyText: string;
 }
 
+export interface ProjectUpdateRequest {
+  title: string;
+  storyText: string;
+  mode: ProjectMode;
+  targetDuration: number;
+  aspectRatio: '9:16' | '16:9' | '1:1';
+  stylePreset: string;
+}
+
 export interface ProductionStage {
   id: string;
   label: string;
@@ -97,6 +106,7 @@ export interface GenerationTaskRecord {
   lockedBy: string | null;
   lockedUntil: string | null;
   lastHeartbeatAt: string | null;
+  checkpointNotes: string | null;
   errorMessage: string | null;
 }
 
@@ -123,4 +133,73 @@ export interface CostLedgerRecord {
   estimatedCost: number;
   actualCost: number | null;
   createdAt: string;
+}
+
+export interface AuthAccount {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  displayName: string;
+  status: 'active' | 'locked' | 'deleted';
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
+export interface AuthDevice {
+  id: string;
+  deviceName: string;
+  trusted: boolean;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface LicenseStatus {
+  status: 'missing' | 'active' | 'expired' | 'revoked';
+  isActive: boolean;
+  plan: string;
+  licenseType: string;
+  startsAt: string | null;
+  expiresAt: string | null;
+  maxDevices: number;
+  message: string;
+}
+
+export interface AuthSession {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+  account: AuthAccount;
+  device: AuthDevice;
+  license: LicenseStatus;
+}
+
+export interface AuthState {
+  authenticated: boolean;
+  account: AuthAccount | null;
+  device: AuthDevice | null;
+  license: LicenseStatus;
+  errorCode: string | null;
+  message: string;
+}
+
+export interface RegisterAccountRequest {
+  email: string;
+  displayName: string;
+  password: string;
+  deviceFingerprint: string;
+  deviceName: string;
+  activationCode?: string;
+}
+
+export interface LoginRequest {
+  identifier: string;
+  password: string;
+  deviceFingerprint: string;
+  deviceName: string;
+}
+
+export interface ActivateLicenseRequest {
+  activationCode: string;
+  deviceFingerprint: string;
+  deviceName: string;
 }

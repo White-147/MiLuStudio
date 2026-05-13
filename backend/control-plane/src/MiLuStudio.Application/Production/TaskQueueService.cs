@@ -66,6 +66,7 @@ public sealed class TaskQueueService
             task.Status = GenerationTaskStatus.Waiting;
             task.StartedAt = null;
             task.FinishedAt = null;
+            task.CheckpointNotes = null;
             task.ErrorMessage = null;
             changed = true;
         }

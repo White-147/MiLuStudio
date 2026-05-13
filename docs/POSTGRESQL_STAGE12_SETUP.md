@@ -2,12 +2,12 @@
 
 更新时间：2026-05-13
 
-本文记录 Stage 12 / Stage 13 的本地 PostgreSQL 配置和后端检查方式。  
+本文记录 Stage 12 / Stage 13 / Stage 14 的本地 PostgreSQL 配置和后端检查方式。
 数据库能力属于 Control API / Worker / Infrastructure，不属于 Electron 安装器。
 
 ## 当前默认
 
-Stage 13 起，默认开发配置切到 PostgreSQL：
+Stage 13 起，默认开发配置切到 PostgreSQL；Stage 14 起，Control API 默认端口统一为 `5368`：
 
 ```json
 "ControlPlane": {
@@ -40,7 +40,7 @@ powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Init
 启动 Control API 后检查：
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:5268/api/system/preflight
+Invoke-RestMethod http://127.0.0.1:5368/api/system/preflight
 ```
 
 preflight 会检查：
@@ -59,13 +59,13 @@ preflight 会检查：
 查看 migration：
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:5268/api/system/migrations
+Invoke-RestMethod http://127.0.0.1:5368/api/system/migrations
 ```
 
 应用 pending migration：
 
 ```powershell
-Invoke-RestMethod -Method Post http://127.0.0.1:5268/api/system/migrations/apply
+Invoke-RestMethod -Method Post http://127.0.0.1:5368/api/system/migrations/apply
 ```
 
 当前 SQL 文件：
@@ -73,6 +73,7 @@ Invoke-RestMethod -Method Post http://127.0.0.1:5268/api/system/migrations/apply
 ```text
 D:\code\MiLuStudio\backend\control-plane\db\migrations\001_initial_control_plane.sql
 D:\code\MiLuStudio\backend\control-plane\db\migrations\002_stage12_postgresql_claiming.sql
+D:\code\MiLuStudio\backend\control-plane\db\migrations\003_stage14_checkpoint_notes.sql
 ```
 
 `002_stage12_postgresql_claiming.sql` 为 `generation_tasks` 增加：
@@ -105,7 +106,7 @@ Stage 5-13 的 Production Skill envelope 通过 Control API / Worker 写入：
 Invoke-RestMethod `
   -Method Post `
   -ContentType "application/json" `
-  -Uri http://127.0.0.1:5268/api/generation-tasks/{taskId}/output `
+  -Uri http://127.0.0.1:5368/api/generation-tasks/{taskId}/output `
   -Body '{"outputJson":"{\"ok\":true}","assetKind":"skill_envelope","provider":"none","model":"none","unit":"skill_envelope","quantity":1,"estimatedCost":0,"actualCost":0,"requiresReview":false}'
 ```
 

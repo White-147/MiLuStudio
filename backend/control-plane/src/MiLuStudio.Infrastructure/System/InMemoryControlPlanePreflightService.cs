@@ -38,7 +38,17 @@ public sealed class InMemoryControlPlanePreflightService : IControlPlanePrefligh
                 "storage_root",
                 storageStatus,
                 Directory.Exists(_options.StorageRoot) ? "Storage root exists." : "Storage root does not exist yet; backend setup should create it before real asset writes.",
-                new Dictionary<string, string> { ["storageRoot"] = _options.StorageRoot })
+                new Dictionary<string, string> { ["storageRoot"] = _options.StorageRoot }),
+            new(
+                "python_runtime",
+                File.Exists(_options.PythonExecutablePath) ? "ok" : "warning",
+                File.Exists(_options.PythonExecutablePath) ? "Python executable exists for Worker skill sidecar calls." : "Python executable was not found.",
+                new Dictionary<string, string> { ["pythonExecutablePath"] = _options.PythonExecutablePath }),
+            new(
+                "python_skills_root",
+                Directory.Exists(_options.PythonSkillsRoot) ? "ok" : "warning",
+                Directory.Exists(_options.PythonSkillsRoot) ? "Python skills root exists." : "Python skills root was not found.",
+                new Dictionary<string, string> { ["pythonSkillsRoot"] = _options.PythonSkillsRoot })
         };
 
         return Task.FromResult(new ControlPlanePreflightDto(

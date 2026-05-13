@@ -56,3 +56,24 @@ public enum GenerationTaskStatus
     Completed,
     Failed
 }
+
+public enum AccountStatus
+{
+    Active,
+    Locked,
+    Deleted
+}
+
+public enum LicenseKind
+{
+    Trial,
+    Paid,
+    OfflineSigned
+}
+
+public enum LicenseStatus
+{
+    Active,
+    Expired,
+    Revoked
+}

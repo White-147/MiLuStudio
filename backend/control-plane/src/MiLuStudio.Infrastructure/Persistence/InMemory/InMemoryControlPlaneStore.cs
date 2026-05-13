@@ -64,6 +64,17 @@ public sealed class InMemoryControlPlaneStore : IProjectRepository, IProductionJ
         return Task.CompletedTask;
     }
 
+    public Task UpdateAsync(Project project, StoryInput storyInput, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            _projects[project.Id] = Clone(project);
+            _storyInputs[project.Id] = Clone(storyInput);
+        }
+
+        return Task.CompletedTask;
+    }
+
     Task<ProductionJob?> IProductionJobRepository.GetAsync(string jobId, CancellationToken cancellationToken)
     {
         lock (_gate)
@@ -377,6 +388,7 @@ public sealed class InMemoryControlPlaneStore : IProjectRepository, IProductionJ
             LockedBy = task.LockedBy,
             LockedUntil = task.LockedUntil,
             LastHeartbeatAt = task.LastHeartbeatAt,
+            CheckpointNotes = task.CheckpointNotes,
             ErrorMessage = task.ErrorMessage
         };
     }

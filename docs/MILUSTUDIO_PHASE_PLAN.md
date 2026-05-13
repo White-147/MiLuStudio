@@ -95,21 +95,20 @@ Environment check:
 ## 6. 当前焦点
 
 ```text
-Current phase: Stage 14
-Status: pending
-Goal: 桌面端独立打包与 Electron + electron-builder + NSIS 自定义安装器。
-Next handoff owner: next session
+Current phase: Post Stage 16
+Status: pending user confirmation
+Goal: 由用户确认 Stage 17 的正式编号与范围。
+Next handoff owner: current / next session
 ```
 
-当前阶段完成标准：
+Stage 16 已完成：
 
-- 形成 `Electron + electron-builder + NSIS assisted installer + 自定义 installer.nsh` 桌面端独立交付 part。
-- 继续保留 Web UI、Control API、Worker 和 PostgreSQL 作为可独立迭代的前后端与后端基础设施。
-- Electron 不直接访问 PostgreSQL，不执行 migrations，不定义数据库表，不调用 Python 或 FFmpeg。
-- 桌面端只通过 Control API health / preflight 和业务 API 展示状态、错误和修复建议。
-- 安装器具备自定义图标、安装目录、桌面快捷方式、开始菜单、开机自启动、安装完成后启动、实时进度条和付费码 / 激活码输入页。
-- 账号系统只预留入口，不阻塞 Stage 14 桌面安装包 MVP。
-- 阶段完成后完成联网自检、README 检查和相关文档更新。
+- 应用内授权由 Control API / Auth & Licensing adapter 管理，不由 installer 或 Electron 主进程直接判定。
+- Web UI 已新增登录 / 注册 / 激活入口；未登录或未授权时不进入项目工作台。
+- 账号、会话、设备绑定和许可证状态已通过 PostgreSQL migration / repository 持久化。
+- 受保护项目和生产任务 API 已增加最小授权门禁；未登录返回 401，未授权或设备超额返回 403 和清晰错误 DTO。
+- 桌面端继续只承载 Web UI 并管理本地服务，不直接访问 PostgreSQL、业务文件系统、Python 脚本或 FFmpeg。
+- 本阶段未接真实模型，未读取真实媒体文件，未触发 FFmpeg，未生成真实 MP4 / WAV / SRT / ZIP。
 
 ## 7. Stage 0 项目初始化
 
@@ -371,7 +370,7 @@ Status: done
 - 已实现项目 API、production job API、pause、resume、retry 和 SSE mock。
 - 前端已通过 `apps\web\src\shared\api\controlPlaneClient.ts` 接入 Control API DTO 和 SSE。
 - 当前 dev URL：`http://127.0.0.1:5173/project/demo-episode-01`。
-- 当前 API URL：`http://127.0.0.1:5268/health`。
+- 当时 API URL：`http://127.0.0.1:5268/health`；Stage 14 起当前默认 API URL 已统一为 `http://127.0.0.1:5368/health`。
 
 临时债：
 
@@ -781,7 +780,7 @@ Status: done
 - Worker 真正调用 `backend\sidecars\python-skills` 中的 deterministic Production Skills。
 - 通过 Control API / Worker / repository 边界，把 Stage 5-13 deterministic skill envelope 写回数据库。
 - 前端通过 Control API 展示真实项目、任务、skill envelope、资产索引和成本记录，减少静态 mock 对主流程的误导。
-- 桌面打包继续后移为 Stage 14，数据库不和桌面端绑定。
+- 桌面打包继续后移为 Stage 15，数据库不和桌面端绑定；Stage 14 先作为 Stage 13 补丁与打包前收敛阶段。
 
 具体任务：
 
@@ -832,9 +831,71 @@ Status: done
 - 已让前端通过 Control API 读取 production job、tasks、assets 和 cost ledger，并用真实 `outputJson` envelope 构建结果卡和导出区。
 - 本地 smoke 已完成：`milu` 中 `job_ba4b02d1cd534e948fe0fda74aaead3c` 达到 `completed / 100`，15 个 task 全部 completed，15 个 task 均有 output envelope，cost ledger 15 行。
 
-## 21. Stage 14 桌面打包
+## 21. Stage 14 打包前补丁与 Stage 13 收敛
 
-Status: pending
+Status: done
+
+目标：
+
+- 在进入桌面端之前，先修复 Stage 13 收敛验收后暴露出的产品链路、运行配置、测试和演示可信度问题。
+- 继续保持 Web UI、Control API、Worker、PostgreSQL adapter 和 Python Skills 的独立边界。
+- 不接 Electron，不创建安装器，不接真实模型，不读取真实媒体文件，不调用 FFmpeg，不生成真实 MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery 作为生产依赖。
+- UI 仍只通过 Control API 通信，不直接访问数据库、文件系统、Python 脚本或 FFmpeg。
+
+具体任务：
+
+1. 打通真实用户输入链路：Web UI 的故事文本、标题、生产模式、目标时长、画幅和风格选择必须通过 Control API 保存到项目，再由 Worker 读取最新 story input 进入 `story_intake`。
+2. 扩展后端项目更新 DTO / service / repository 能力，支持更新 `story_inputs.original_text`、word count 和项目描述；避免只保存项目元数据而不保存故事正文。
+3. 增加输入校验和错误展示：故事文本至少满足当前产品要求的 500 到 2000 字建议范围，目标时长和画幅校验保持 API 与 UI 一致。
+4. 统一端口和 API base URL：对齐 `launchSettings.json`、README、`VITE_CONTROL_API_BASE`、开发脚本和后续桌面进程管理策略；避免 `5268` 与 `5368` 双轨并存。
+5. 设计 Stage 15 桌面宿主的 API 地址注入方式：Electron 启动或发现 Control API 后，只把 base URL 作为配置传给 Web UI，不让 UI 访问本地系统能力。
+6. 收敛 CORS / 本地承载策略：明确 Vite dev、Control API static hosting 或 Electron 本地 HTTP 承载下的允许源；避免桌面随机端口无法访问 API。
+7. 检查前端路由在桌面静态 / 本地 HTTP 环境下的可用性，必要时改为 hash route 或由本地 HTTP host 兜底 History API fallback。
+8. 清理演示期 UI 残留：移除或改写 `Stage 1 mock` 文案；无实际功能的 `输出目录`、`锁定`、`重生成` 等按钮要禁用、隐藏或接入 Control API 边界。
+9. 增加 checkpoint 的基本人工确认语义：至少区分 approve / reject / notes，避免所有 checkpoint 都被前端硬编码为 approve。
+10. 防止同一项目重复启动多个 running production job；若已有 running / paused job，应返回现有 job 或明确要求用户先处理旧 job。
+11. 加固 PostgreSQL 默认语义：配置节缺失时不应静默回落到 InMemory；如确需 InMemory，必须显式配置并在 preflight / UI 中清楚标识。
+12. 修正过期文档和 schema 注释，例如 `001_initial_control_plane.sql` 中仍称运行期使用 in-memory repository 的旧说明。
+13. 为 `PythonProductionSkillRunner` 增加 skill run 临时目录清理或保留策略，避免 `.tmp\skill-runs` 长期堆积。
+14. 增加 API / Worker / PostgreSQL 自动化集成测试脚本或测试项目，覆盖 migration status、项目创建 / 更新、生产任务执行、checkpoint、API / Worker 重启恢复、lease 过期接管和失败重试。
+15. 检查 Python skill schema、validator 和 `skill.yaml` 是否存在漂移；至少补一个只读契约测试或清单检查，确认 runtime registry、skill.yaml 和 schema 文件一致。
+16. 保持 README 中文、PowerShell 友好和面试展示导向；阶段完成后同步说明 Stage 14 补丁完成、Stage 15 桌面打包进入下一步。
+
+验收：
+
+- 用户在 Web UI 输入或修改故事后，启动生产任务时数据库中的 `story_inputs.original_text` 与 UI 输入一致。
+- Worker 调用 Python deterministic skills 时消费的是最新项目故事和参数，不再只消费固定示例文案。
+- 前端、README、launchSettings 和本地验证命令只保留一套明确的 Control API 默认端口；如使用动态端口，必须由配置注入。
+- 桌面打包前的 CORS / API base URL / 路由策略有明确实现和验证记录。
+- UI 不再显示过期 `Stage 1 mock` 文案；未实现的动作不会表现成可点击成功的真实功能。
+- PostgreSQL provider 是默认业务事实来源；InMemory 只在显式配置时启用，且 UI / preflight 可识别。
+- `.tmp\skill-runs` 不会无限增长，保留策略可解释、可测试。
+- 自动化测试或脚本覆盖 API / Worker / PostgreSQL 的关键恢复路径。
+- 本阶段不创建 Electron 安装包；原 Stage 14 桌面打包继续顺延为 Stage 15。
+
+阶段结束自检重点：
+
+- 联网对照 Electron / electron-builder / NSIS、Electron security、Windows taskbar pinning 和同类 AI 视频 / 短剧项目，确认 Stage 15 仍不需要提前引入 Docker / Redis / Celery 或真实 provider。
+- 检查根 `README.md` 是否需要同步更新；如需要，继续保持中文、PowerShell 友好、面试展示导向。
+- 把本阶段修复内容、验证命令、偏差原因和 Stage 15 下一棒提示词写入 `docs\MILUSTUDIO_TASK_RECORD.md` 和 `docs\MILUSTUDIO_HANDOFF.md`。
+
+落地状态：
+
+- Web UI 保存链路已打通：故事文本、标题、模式、目标时长、画幅和风格会通过 `PATCH /api/projects/{projectId}` 写入 PostgreSQL，启动生产前会先保存草稿。
+- Worker / Python deterministic skills 已消费最新 `story_inputs.original_text` 和项目参数，Stage 14 集成脚本会校验 `story_intake` task input 中的更新标记。
+- Control API 默认端口统一为 `http://127.0.0.1:5368`；Vite `VITE_CONTROL_API_BASE` 与桌面宿主预留 `window.__MILUSTUDIO_CONTROL_API_BASE__` 注入策略已对齐。
+- CORS 已允许 loopback 本地源，Web 路由支持 hash route，便于 Stage 15 静态或本地 HTTP 桌面承载。
+- `Stage 1 mock` 文案和无处理器按钮已清理；checkpoint 已区分 approve / reject / notes，notes 会持久化到 `generation_tasks.checkpoint_notes`。
+- 同一项目已有 active production job 时会返回现有 job，避免重复创建多个 running / paused job。
+- PostgreSQL 是默认 provider；InMemory 只在显式配置 `RepositoryProvider=InMemory` 时启用。
+- `.tmp\skill-runs` 已有保留最近 30 次的清理策略，可通过 `ControlPlane:SkillRunRetentionCount` 调整。
+- 新增 `scripts\windows\Test-MiLuStudioStage14Integration.ps1`，覆盖 migration、项目创建 / 更新、生产执行、checkpoint、API / Worker 重启恢复、lease 过期接管、reject notes 和 retry。
+- 新增 `backend\sidecars\python-skills\tests\test_stage14_skill_contracts.py`，检查 registry、`skill.yaml`、schema、executor 和 validator 契约漂移。
+
+## 22. Stage 15 桌面打包
+
+Status: done
 
 目标：
 
@@ -865,7 +926,7 @@ Status: pending
 
 验收：
 
-- 干净 Windows 环境可安装。
+- 干净 Windows 环境可安装；桌面包必须尽量随包携带运行所需的 .NET / Python runtime，不能依赖开发机固定路径。
 - 用户无需手动启动后端。
 - 桌面端只通过 Control API 检查和使用数据库，不直接访问数据库、文件系统业务目录、Python 脚本或 FFmpeg。
 - 如果数据库未就绪，桌面端展示 Control API preflight 返回的错误和修复建议，不自行创建或迁移数据库。
@@ -876,13 +937,113 @@ Status: pending
 - 任务栏固定不做静默强制 pin；通过正确 AppUserModelID / 快捷方式 / 引导让用户自行固定。
 - 卸载不默认删除用户生成素材。
 - 日志可定位错误。
+- 桌面模式下 Control API 写请求有本地会话令牌保护，CORS 不应继续对任意 loopback origin 过宽放行。
+
+落地状态：
+
+- 已完成。新增 `apps\desktop`，Electron 承载 `apps\web` 构建产物，并由本地 HTTP host 提供静态资源、hash route fallback 和 CSP。
+- 桌面宿主随机绑定 Web host 与 Control API 端口，启动本地 Control API 和 Windows Worker；Python deterministic skills 作为 Worker sidecar runtime 路径注入后端配置。
+- Control API base URL 通过 preload 注入 `window.__MILUSTUDIO_CONTROL_API_BASE__`，桌面会话令牌通过 `window.__MILUSTUDIO_DESKTOP_TOKEN__` 注入并仅用于 Control API 写请求；Web UI 继续只走 Control API DTO / SSE，不碰数据库、文件系统、Python 脚本或 FFmpeg。
+- Web UI 已新增桌面诊断面板，展示 Control API health / preflight、PostgreSQL、storage、Python runtime、Python skills root、Worker 和 Web host 状态，并提供重启服务、打开日志、打开输出目录入口。
+- `scripts\windows\Prepare-MiLuStudioDesktopRuntime.ps1` 会复制 Web dist、self-contained API / Worker 发布产物、SQL migrations、Python deterministic skills 和 `python-runtime` 到 `apps\desktop\runtime`，并从 `apps\web\public\brand\logo.png` 生成多尺寸 `build\icon.ico`。
+- `apps\desktop\package.json` 已配置 electron-builder + NSIS：`oneClick=false`、`allowToChangeInstallationDirectory=true`、`runAfterFinish=true`、`shortcutName=MiLuStudio`、桌面快捷方式、开始菜单快捷方式、AppUserModelID 和自定义 `installer.nsh`。
+- Electron 已升级到 `42.0.1`，主进程限制外部导航、弹窗和 IPC 来源；Electron `userData`、`sessionData` 和 logs 已显式指向 D 盘数据目录，避免默认落到 `C:\Users\...\AppData\Roaming`。
+- 自定义 `apps\desktop\build\installer.nsh` 已预留安装前激活码输入页，以及桌面快捷方式、开始菜单快捷方式和开机自启动复选项；正式授权仍由后续 Control API / Auth & Licensing adapter 负责。
+- 已生成 `D:\code\MiLuStudio\outputs\desktop\MiLuStudio-Setup-0.1.0.exe` 和 `win-unpacked`；打包资源包含 `resources\web`、`resources\control-plane`、`resources\python-skills`、`resources\python-runtime` 和 `resources\build\icon.ico`。
+- 桌面端不执行 migrations、不定义数据库表、不初始化数据库；数据库未就绪时只展示 Control API preflight 返回的问题和建议。
+- 新增 `scripts\windows\Test-MiLuStudioDesktopApiSecurity.ps1`，并接入 `Test-MiLuStudioDesktop.ps1`；验证桌面模式下无令牌写请求为 403、带令牌写请求可进入业务校验、桌面模式 migration apply 为 403。
+- 当前本机安装包 Authenticode 状态仍为 `NotSigned`；正式发布前需要补代码签名证书和签名流水线。
 
 阶段结束自检重点：
 
 - 对照 LocalMiniDrama、Toonflow、MiLuAssistantDesktop 经验。
 - 检查 Electron / electron-builder / NSIS Windows 打包、自定义安装页、图标、快捷方式、自启动、安装激活码和任务栏固定最新注意事项。
 
-## 22. 每阶段联网自检模板
+## 23. Stage 16 账号、会话、设备绑定和许可证授权
+
+Status: done
+
+目标：
+
+- 在桌面 MVP 后补齐应用内账号注册、登录、会话、设备绑定和许可证授权系统。
+- 正式授权由 Control API / Auth & Licensing adapter 统一处理，不由 Electron 主进程或安装器脚本直接判定。
+- Electron 与 Web UI 只通过 Control API 展示登录 / 注册 / 激活入口、授权状态和授权错误。
+- 安装器激活码页继续作为安装前门槛占位，不作为唯一授权安全边界。
+
+边界：
+
+- 不接真实模型 provider。
+- 不读取真实媒体文件。
+- 不触发 FFmpeg。
+- 不生成真实 MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery 作为生产依赖。
+- 不让 UI 或 Electron 绕过 Control API / Worker 边界。
+- 不让桌面端执行 migrations、定义数据库表或负责数据库初始化。
+
+具体任务：
+
+1. 在 Domain / Application 层定义账号、会话、设备、许可证和授权状态模型。
+2. 在 Infrastructure 层补 PostgreSQL repository / adapter，沿用后端 migration 机制，不由 Electron 执行。
+3. 增加 Auth & Licensing service 边界，负责注册、登录、退出、刷新会话、设备绑定、许可证校验和授权错误。
+4. 增加 Control API 端点：注册、登录、退出、当前账号、授权状态、设备绑定、激活码兑换或校验。
+5. 为 Web UI 增加登录 / 注册 / 激活入口；未登录或未授权时只显示认证与授权页面，不进入项目工作台。
+6. 桌面宿主继续只注入 Control API base URL 和桌面会话令牌，不保存账号密码，不直接判断许可证。
+7. 对现有项目、生产任务和管理操作加最小授权门禁；未授权请求返回清晰错误 DTO。
+8. 增加本地开发用 deterministic Auth & Licensing adapter，可使用本地测试账号和测试激活码，不接真实云端授权服务。
+9. 增加 PowerShell 集成测试脚本，覆盖注册、登录、会话刷新、设备绑定、许可证状态、未授权阻断和桌面 UI API 边界。
+10. 同步 README、总参考、任务记录和短棒交接。
+
+验收：
+
+- 未登录用户打开 Web UI / Electron 时只看到登录、注册或激活入口。
+- 登录成功后可进入工作台并继续通过 Control API 使用项目列表、项目详情和生产控制台。
+- 未授权或许可证失效时，受保护 API 返回明确授权错误，UI 不表现为静默失败。
+- 设备绑定信息由 Control API / Auth & Licensing adapter 管理，Electron 不直接读写数据库。
+- 安装器激活码页和应用内授权状态边界清晰，不把安装码当作唯一授权依据。
+- 所有新增数据持久化仍通过 PostgreSQL / backend migration / repository 边界完成。
+- 自动化脚本覆盖主要认证和授权路径。
+
+落地状态：
+
+- 已新增 `Account`、`AuthSession`、`DeviceBinding`、`LicenseGrant` 领域实体，以及 `AccountStatus`、`LicenseKind`、`LicenseStatus` 枚举。
+- 已新增 `IAuthRepository`、`IAuthTokenService`、`IPasswordHasher`、`IAuthLicensingAdapter` 和 `AuthLicensingService`，授权语义集中在 Application / Infrastructure 边界。
+- 已新增 `backend\control-plane\db\migrations\004_stage16_auth_licensing.sql`，创建 `accounts`、`auth_sessions`、`devices` 和 `licenses`。
+- PostgreSQL provider 已新增 `PostgreSqlAuthRepository`；InMemory provider 已新增 `InMemoryAuthRepository` 作为显式 smoke 备选。
+- 已新增 deterministic `DeterministicAuthLicensingAdapter`，默认测试激活码为 `MILU-STAGE16-TEST`，不接真实云端授权服务。
+- Control API 已新增注册、登录、刷新、退出、当前账号、许可证状态、激活和设备绑定端点。
+- 项目、生产任务和 generation task 类 API 已加授权门禁；SSE 使用同一 access token，通过 query 参数传入，避免 UI 绕过 Control API。
+- Web UI 已新增 `features\auth\AuthGate.tsx`，登录 / 注册 / 激活成功后才进入原项目工作台。
+- Electron / preload 未保存账号密码、不判断许可证，只继续注入 Control API base URL 和桌面会话令牌。
+- 已新增 `scripts\windows\Test-MiLuStudioStage16Auth.ps1`，覆盖注册、登录、会话刷新、设备绑定、设备上限阻断、许可证状态、未登录 401、未授权 403 和登出失效。
+- 已更新 `scripts\windows\Test-MiLuStudioStage14Integration.ps1`，先注册并激活测试账号，确保授权门禁不破坏生产链路回归。
+- 已更新 `scripts\windows\Test-MiLuStudioDesktopApiSecurity.ps1`，确认桌面令牌只通过桌面安全门，应用授权仍由 Auth & Licensing gate 处理。
+
+验证：
+
+```powershell
+. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage16-build\
+
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage16Auth.ps1
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage14Integration.ps1
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioDesktopApiSecurity.ps1
+
+Push-Location D:\code\MiLuStudio\apps\desktop
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+```
+
+阶段结束自检重点：
+
+- 联网对照桌面应用登录、设备绑定、许可证授权和离线激活常见方案，确认不把密钥、私钥或可逆授权算法放入客户端。
+- 检查 Electron 安全边界是否仍只暴露受控 IPC 和 Control API 配置。
+- 检查 README 是否需要同步更新，保持中文、PowerShell 友好和面试展示导向。
+
+## 24. 每阶段联网自检模板
 
 每个大阶段结束后必须填写到 `docs\MILUSTUDIO_TASK_RECORD.md`。
 

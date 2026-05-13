@@ -35,6 +35,7 @@ public sealed record CreateProjectRequest(
 public sealed record UpdateProjectRequest(
     string? Title,
     string? Description,
+    string? StoryText,
     string? Mode,
     int? TargetDuration,
     string? AspectRatio,

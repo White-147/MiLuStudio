@@ -6,6 +6,13 @@ bin/
 obj/
 **/bin/
 **/obj/
+!apps/desktop/build/
+!apps/desktop/build/installer.nsh
+!apps/desktop/build/README.md
+apps/desktop/build/*.ico
+apps/desktop/build/*.bmp
+apps/desktop/runtime/
+apps/desktop/release/
 
 .env
 .env.*

@@ -51,6 +51,29 @@ public sealed class PostgreSqlControlPlaneRepository :
         _db.ChangeTracker.Clear();
     }
 
+    public async Task UpdateAsync(Project project, StoryInput storyInput, CancellationToken cancellationToken)
+    {
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+        _db.Projects.Update(project);
+
+        var storyExists = await _db.StoryInputs
+            .AsNoTracking()
+            .AnyAsync(story => story.Id == storyInput.Id || story.ProjectId == project.Id, cancellationToken);
+
+        if (storyExists)
+        {
+            _db.StoryInputs.Update(storyInput);
+        }
+        else
+        {
+            _db.StoryInputs.Add(storyInput);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        _db.ChangeTracker.Clear();
+    }
+
     async Task<ProductionJob?> IProductionJobRepository.GetAsync(string jobId, CancellationToken cancellationToken)
     {
         return await _db.ProductionJobs.AsNoTracking().FirstOrDefaultAsync(job => job.Id == jobId, cancellationToken);

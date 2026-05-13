@@ -1,23 +1,27 @@
 using System.Text.Json;
 using MiLuStudio.Application.Abstractions;
+using MiLuStudio.Application.Auth;
 using MiLuStudio.Application.Production;
 using MiLuStudio.Application.Projects;
 using MiLuStudio.Infrastructure;
+using MiLuStudio.Infrastructure.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
+var allowedDesktopOrigin = builder.Configuration["ControlPlane:AllowedDesktopOrigin"];
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("MiLuStudioLocalDev", policy =>
     {
         policy
-            .WithOrigins("http://127.0.0.1:5173", "http://localhost:5173")
+            .SetIsOriginAllowed(origin => IsAllowedLocalOrigin(origin, allowedDesktopOrigin))
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
 });
 
 builder.Services.AddScoped<ProjectService>();
+builder.Services.AddScoped<AuthLicensingService>();
 builder.Services.AddScoped<ProductionJobService>();
 builder.Services.AddScoped<ProductionSkillExecutionService>();
 builder.Services.AddScoped<SkillEnvelopePersistenceService>();
@@ -28,15 +32,183 @@ var app = builder.Build();
 
 app.UseCors("MiLuStudioLocalDev");
 
+app.Use(async (context, next) =>
+{
+    var desktopMode = context.RequestServices.GetRequiredService<IConfiguration>().GetValue<bool>("ControlPlane:DesktopMode");
+    var desktopSessionToken = context.RequestServices.GetRequiredService<IConfiguration>()["ControlPlane:DesktopSessionToken"];
+
+    if (desktopMode &&
+        HttpMethods.IsPost(context.Request.Method) &&
+        string.Equals(context.Request.Path.Value, "/api/system/migrations/apply", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = "Desktop runtime does not execute database migrations. Run migrations before launching the desktop host."
+        });
+        return;
+    }
+
+    if (!string.IsNullOrWhiteSpace(desktopSessionToken) && IsUnsafeHttpMethod(context.Request.Method))
+    {
+        var providedToken = context.Request.Headers["X-MiLuStudio-Desktop-Token"].ToString();
+        if (!string.Equals(providedToken, desktopSessionToken, StringComparison.Ordinal))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { error = "Desktop session token is missing or invalid." });
+            return;
+        }
+    }
+
+    await next();
+});
+
+app.Use(async (context, next) =>
+{
+    var requirement = GetAuthRequirement(context.Request.Path);
+    if (requirement == AuthRequirement.None)
+    {
+        await next();
+        return;
+    }
+
+    var auth = context.RequestServices.GetRequiredService<AuthLicensingService>();
+    var validation = await auth.ValidateRequestAsync(
+        ResolveAccessToken(context.Request),
+        requirement == AuthRequirement.AuthenticatedWithActiveLicense,
+        context.RequestAborted);
+
+    if (!validation.Allowed)
+    {
+        context.Response.StatusCode = validation.StatusCode;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = validation.Message,
+            code = validation.Code,
+            license = validation.License
+        });
+        return;
+    }
+
+    context.Items["MiLuStudio.Auth"] = validation.Principal;
+    await next();
+});
+
 app.MapGet("/", () => Results.Redirect("/health"));
 
 app.MapGet("/health", (IConfiguration configuration) => Results.Ok(new
 {
     service = "MiLuStudio Control API",
     status = "ok",
-    mode = "stage-13-postgresql-worker-skills",
-    repositoryProvider = configuration["ControlPlane:RepositoryProvider"] ?? "InMemory"
+    mode = "stage-16-auth-licensing",
+    defaultApiBaseUrl = "http://127.0.0.1:5368",
+    repositoryProvider = configuration["ControlPlane:RepositoryProvider"] ?? RepositoryProviderNames.PostgreSql
 }));
+
+app.MapPost("/api/auth/register", async Task<IResult> (
+    RegisterAccountRequest request,
+    AuthLicensingService auth,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await auth.RegisterAsync(request, cancellationToken));
+    }
+    catch (AuthCommandException error)
+    {
+        return AuthError(error);
+    }
+});
+
+app.MapPost("/api/auth/login", async Task<IResult> (
+    LoginRequest request,
+    AuthLicensingService auth,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await auth.LoginAsync(request, cancellationToken));
+    }
+    catch (AuthCommandException error)
+    {
+        return AuthError(error);
+    }
+});
+
+app.MapPost("/api/auth/refresh", async Task<IResult> (
+    RefreshSessionRequest request,
+    AuthLicensingService auth,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await auth.RefreshAsync(request, cancellationToken));
+    }
+    catch (AuthCommandException error)
+    {
+        return AuthError(error);
+    }
+});
+
+app.MapPost("/api/auth/logout", async Task<IResult> (
+    LogoutRequest request,
+    AuthLicensingService auth,
+    HttpContext context) =>
+{
+    await auth.LogoutAsync(ResolveAccessToken(context.Request), request, context.RequestAborted);
+    return Results.Ok(new { status = "signed_out" });
+});
+
+app.MapGet("/api/auth/me", async (
+    AuthLicensingService auth,
+    HttpContext context) =>
+{
+    return Results.Ok(await auth.GetStateAsync(ResolveAccessToken(context.Request), context.RequestAborted));
+});
+
+app.MapGet("/api/auth/license", async Task<IResult> (
+    AuthLicensingService auth,
+    HttpContext context) =>
+{
+    try
+    {
+        return Results.Ok(await auth.GetLicenseAsync(ResolveAccessToken(context.Request), context.RequestAborted));
+    }
+    catch (AuthCommandException error)
+    {
+        return AuthError(error);
+    }
+});
+
+app.MapPost("/api/auth/activate", async Task<IResult> (
+    ActivateLicenseRequest request,
+    AuthLicensingService auth,
+    HttpContext context) =>
+{
+    try
+    {
+        return Results.Ok(await auth.ActivateAsync(ResolveAccessToken(context.Request), request, context.RequestAborted));
+    }
+    catch (AuthCommandException error)
+    {
+        return AuthError(error);
+    }
+});
+
+app.MapPost("/api/auth/devices/bind", async Task<IResult> (
+    BindDeviceRequest request,
+    AuthLicensingService auth,
+    HttpContext context) =>
+{
+    try
+    {
+        return Results.Ok(await auth.BindDeviceAsync(ResolveAccessToken(context.Request), request, context.RequestAborted));
+    }
+    catch (AuthCommandException error)
+    {
+        return AuthError(error);
+    }
+});
 
 app.MapGet("/api/system/preflight", async (
     IControlPlanePreflightService preflight,
@@ -72,13 +244,20 @@ app.MapGet("/api/projects", async (ProjectService projects, CancellationToken ca
     return Results.Ok(results);
 });
 
-app.MapPost("/api/projects", async (
+app.MapPost("/api/projects", async Task<IResult> (
     CreateProjectRequest request,
     ProjectService projects,
     CancellationToken cancellationToken) =>
 {
-    var created = await projects.CreateAsync(request, cancellationToken);
-    return Results.Created($"/api/projects/{created.Id}", created);
+    try
+    {
+        var created = await projects.CreateAsync(request, cancellationToken);
+        return Results.Created($"/api/projects/{created.Id}", created);
+    }
+    catch (ProjectValidationException error)
+    {
+        return Results.BadRequest(new { error = error.Message, details = error.Details });
+    }
 });
 
 app.MapGet("/api/projects/{projectId}", async (
@@ -108,14 +287,21 @@ app.MapGet("/api/projects/{projectId}/cost-ledger", async (
     return Results.Ok(results);
 });
 
-app.MapPatch("/api/projects/{projectId}", async (
+app.MapPatch("/api/projects/{projectId}", async Task<IResult> (
     string projectId,
     UpdateProjectRequest request,
     ProjectService projects,
     CancellationToken cancellationToken) =>
 {
-    var project = await projects.UpdateAsync(projectId, request, cancellationToken);
-    return project is null ? Results.NotFound() : Results.Ok(project);
+    try
+    {
+        var project = await projects.UpdateAsync(projectId, request, cancellationToken);
+        return project is null ? Results.NotFound() : Results.Ok(project);
+    }
+    catch (ProjectValidationException error)
+    {
+        return Results.BadRequest(new { error = error.Message, details = error.Details });
+    }
 });
 
 app.MapPost("/api/projects/{projectId}/production-jobs", async (
@@ -176,6 +362,7 @@ app.MapGet("/api/production-jobs/{jobId}/tasks", async (
         task.LockedBy,
         task.LockedUntil,
         task.LastHeartbeatAt,
+        task.CheckpointNotes,
         task.ErrorMessage
     }));
 });
@@ -207,14 +394,21 @@ app.MapPost("/api/production-jobs/{jobId}/retry", async (
     return job is null ? Results.NotFound() : Results.Ok(job);
 });
 
-app.MapPost("/api/production-jobs/{jobId}/checkpoint", async (
+app.MapPost("/api/production-jobs/{jobId}/checkpoint", async Task<IResult> (
     string jobId,
     ProductionCheckpointRequest request,
     ProductionJobService jobs,
     CancellationToken cancellationToken) =>
 {
-    var job = await jobs.CheckpointAsync(jobId, request, cancellationToken);
-    return job is null ? Results.NotFound() : Results.Ok(job);
+    try
+    {
+        var job = await jobs.CheckpointAsync(jobId, request, cancellationToken);
+        return job is null ? Results.NotFound() : Results.Ok(job);
+    }
+    catch (ProductionCommandValidationException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
 });
 
 app.MapPost("/api/generation-tasks/{taskId}/output", async (
@@ -258,3 +452,67 @@ app.MapGet("/api/production-jobs/{jobId}/events", async (
 });
 
 app.Run();
+
+static bool IsAllowedLocalOrigin(string origin, string? allowedDesktopOrigin)
+{
+    if (!string.IsNullOrWhiteSpace(allowedDesktopOrigin))
+    {
+        return string.Equals(
+            origin.TrimEnd('/'),
+            allowedDesktopOrigin.TrimEnd('/'),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+    {
+        return false;
+    }
+
+    return (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+        (uri.IsLoopback ||
+            string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(uri.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase));
+}
+
+static bool IsUnsafeHttpMethod(string method) =>
+    HttpMethods.IsPost(method) ||
+    HttpMethods.IsPut(method) ||
+    HttpMethods.IsPatch(method) ||
+    HttpMethods.IsDelete(method);
+
+static string? ResolveAccessToken(HttpRequest request)
+{
+    var authorization = request.Headers.Authorization.ToString();
+    if (authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+    {
+        return authorization["Bearer ".Length..].Trim();
+    }
+
+    return request.Query.TryGetValue("access_token", out var accessToken) ? accessToken.ToString() : null;
+}
+
+static IResult AuthError(AuthCommandException error)
+{
+    return Results.Json(
+        new { error = error.Message, code = error.Code },
+        statusCode: error.StatusCode);
+}
+
+static AuthRequirement GetAuthRequirement(PathString path)
+{
+    var value = path.Value ?? string.Empty;
+    if (value.StartsWith("/api/projects", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("/api/production-jobs", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("/api/generation-tasks", StringComparison.OrdinalIgnoreCase))
+    {
+        return AuthRequirement.AuthenticatedWithActiveLicense;
+    }
+
+    return AuthRequirement.None;
+}
+
+internal enum AuthRequirement
+{
+    None,
+    AuthenticatedWithActiveLicense
+}

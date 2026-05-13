@@ -47,7 +47,8 @@ body {
 
 button,
 textarea,
-select {
+select,
+input {
   min-width: 0;
   font: inherit;
 }
@@ -64,7 +65,8 @@ button:disabled {
 
 button:focus-visible,
 textarea:focus-visible,
-select:focus-visible {
+select:focus-visible,
+input:focus-visible {
   outline: 2px solid rgba(79, 70, 229, 0.35);
   outline-offset: 2px;
 }
@@ -77,6 +79,8 @@ select:focus-visible {
 }
 
 .sidebar {
+  display: flex;
+  flex-direction: column;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -266,6 +270,138 @@ h3 {
   width: 100%;
 }
 
+.auth-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(180deg, rgba(238, 237, 255, 0.64), rgba(247, 247, 251, 0) 260px),
+    var(--background);
+}
+
+.auth-panel {
+  display: grid;
+  gap: 18px;
+  width: min(100%, 430px);
+  padding: 22px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-logo.large {
+  width: 58px;
+  height: 48px;
+  border-radius: 8px;
+}
+
+.auth-switch {
+  width: 100%;
+}
+
+.auth-switch button {
+  gap: 6px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-form label,
+.input-panel label {
+  display: grid;
+  gap: 7px;
+}
+
+.auth-form label span,
+.input-panel label span {
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.auth-message {
+  color: var(--muted-strong);
+  line-height: 1.5;
+}
+
+.auth-device,
+.account-strip,
+.license-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-device {
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.license-state {
+  padding: 12px;
+  color: var(--primary-ink);
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-line);
+  border-radius: 8px;
+}
+
+.license-state div,
+.account-strip div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.license-state span,
+.account-strip span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.account-strip {
+  margin-top: auto;
+  padding: 12px 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.account-strip strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-left: auto;
+  color: var(--muted-strong);
+  background: rgba(254, 254, 255, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.icon-button:hover {
+  color: var(--primary-ink);
+  border-color: var(--primary-line);
+  background: var(--primary-soft);
+}
+
 .project-toolbar {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -434,10 +570,9 @@ h3 {
   gap: 16px;
 }
 
-textarea {
+textarea,
+input {
   width: 100%;
-  min-height: 190px;
-  resize: vertical;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -446,10 +581,40 @@ textarea {
   line-height: 1.55;
 }
 
+textarea {
+  min-height: 190px;
+  resize: vertical;
+}
+
+input {
+  min-height: 40px;
+}
+
 textarea:focus,
-select:focus {
+select:focus,
+input:focus {
   border-color: var(--primary-line);
   background: var(--panel);
+}
+
+.input-hint {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: -8px;
+  color: var(--amber);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.input-hint.ok {
+  color: var(--success);
+}
+
+.input-actions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
 }
 
 .segmented-control {
@@ -571,6 +736,18 @@ select {
   color: var(--primary-ink);
   border-color: var(--primary-line);
   background: var(--primary-soft);
+}
+
+.command-button.danger {
+  color: var(--rose);
+  border-color: rgba(180, 35, 66, 0.24);
+  background: rgba(244, 63, 94, 0.1);
+}
+
+.checkpoint-notes {
+  min-height: 66px;
+  margin-top: 10px;
+  font-size: 13px;
 }
 
 .sync-message {
@@ -729,6 +906,138 @@ select {
   margin-bottom: 10px;
 }
 
+.diagnostics-view {
+  display: grid;
+  gap: 18px;
+  max-width: 1040px;
+}
+
+.diagnostics-heading,
+.diagnostics-toolbar,
+.diagnostic-card-title,
+.preflight-row {
+  align-items: center;
+  display: flex;
+}
+
+.diagnostics-heading {
+  justify-content: space-between;
+}
+
+.diagnostics-heading h1 {
+  margin: 0;
+}
+
+.diagnostics-toolbar {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.diagnostics-message {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  color: #9a3412;
+  margin: 0;
+  padding: 11px 13px;
+}
+
+.diagnostics-message.ok {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+}
+
+.diagnostics-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.diagnostic-card,
+.preflight-row,
+.recommendation-list {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+}
+
+.diagnostic-card {
+  display: grid;
+  gap: 10px;
+  min-height: 126px;
+  padding: 16px;
+}
+
+.diagnostic-card-title {
+  gap: 8px;
+}
+
+.diagnostic-card p,
+.recommendation-list p,
+.preflight-row p {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.diagnostic-card small {
+  color: var(--muted);
+}
+
+.status-pill {
+  border-radius: 999px;
+  font-size: 11px;
+  margin-left: auto;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+.status-pill.running,
+.status-pill.ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-pill.starting,
+.status-pill.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-pill.failed,
+.status-pill.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-pill.stopped,
+.status-pill.skipped {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.preflight-list {
+  display: grid;
+  gap: 10px;
+}
+
+.preflight-row {
+  gap: 12px;
+  padding: 13px 15px;
+}
+
+.preflight-row > div {
+  min-width: 0;
+}
+
+.recommendation-list {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -741,7 +1050,8 @@ select {
 
 @media (max-width: 1180px) {
   .console-layout,
-  .project-grid {
+  .project-grid,
+  .diagnostics-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -794,9 +1104,11 @@ select {
   }
 
   textarea,
+  input,
   .segmented-control,
   .field-grid,
   .job-controls,
+  .input-actions,
   .primary-button.full-width {
     width: 100%;
     max-width: 322px;
@@ -815,7 +1127,8 @@ select {
   }
 
   .project-toolbar,
-  .field-grid {
+  .field-grid,
+  .input-actions {
     grid-template-columns: 1fr;
   }
 

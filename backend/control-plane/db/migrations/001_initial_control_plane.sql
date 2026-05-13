@@ -1,5 +1,5 @@
--- MiLuStudio Stage 2 PostgreSQL schema.
--- Runtime still uses the in-memory repository so the API can run without a local database.
+-- MiLuStudio initial PostgreSQL control-plane schema.
+-- Stage 13+ defaults to PostgreSQL as the business state source; InMemory is an explicit smoke-test provider only.
 
 create table if not exists projects (
     id text primary key,

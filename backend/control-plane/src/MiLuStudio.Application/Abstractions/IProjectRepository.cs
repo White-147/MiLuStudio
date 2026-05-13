@@ -13,4 +13,6 @@ public interface IProjectRepository
     Task AddAsync(Project project, StoryInput storyInput, CancellationToken cancellationToken);
 
     Task UpdateAsync(Project project, CancellationToken cancellationToken);
+
+    Task UpdateAsync(Project project, StoryInput storyInput, CancellationToken cancellationToken);
 }

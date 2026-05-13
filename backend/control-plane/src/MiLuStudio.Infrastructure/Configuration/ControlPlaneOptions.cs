@@ -19,4 +19,12 @@ public sealed class ControlPlaneOptions
     public string SkillRunTempRoot { get; set; } = "D:\\code\\MiLuStudio\\.tmp\\skill-runs";
 
     public int SkillRunTimeoutSeconds { get; set; } = 120;
+
+    public int SkillRunRetentionCount { get; set; } = 30;
+
+    public string AuthTestActivationCode { get; set; } = "MILU-STAGE16-TEST";
+
+    public int AuthLicenseValidDays { get; set; } = 30;
+
+    public int AuthMaxDevices { get; set; } = 2;
 }

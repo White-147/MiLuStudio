@@ -28,6 +28,14 @@ public sealed class MiLuStudioDbContext : DbContext
 
     public DbSet<Shot> Shots => Set<Shot>();
 
+    public DbSet<Account> Accounts => Set<Account>();
+
+    public DbSet<AuthSession> AuthSessions => Set<AuthSession>();
+
+    public DbSet<DeviceBinding> DeviceBindings => Set<DeviceBinding>();
+
+    public DbSet<LicenseGrant> LicenseGrants => Set<LicenseGrant>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigureProjects(modelBuilder);
@@ -38,6 +46,10 @@ public sealed class MiLuStudioDbContext : DbContext
         ConfigureCostLedger(modelBuilder);
         ConfigureCharacters(modelBuilder);
         ConfigureShots(modelBuilder);
+        ConfigureAccounts(modelBuilder);
+        ConfigureAuthSessions(modelBuilder);
+        ConfigureDeviceBindings(modelBuilder);
+        ConfigureLicenseGrants(modelBuilder);
     }
 
     private static void ConfigureProjects(ModelBuilder modelBuilder)
@@ -135,6 +147,7 @@ public sealed class MiLuStudioDbContext : DbContext
             entity.Property(task => task.LockedBy).HasColumnName("locked_by");
             entity.Property(task => task.LockedUntil).HasColumnName("locked_until");
             entity.Property(task => task.LastHeartbeatAt).HasColumnName("last_heartbeat_at");
+            entity.Property(task => task.CheckpointNotes).HasColumnName("checkpoint_notes");
             entity.Property(task => task.ErrorMessage).HasColumnName("error_message");
         });
     }
@@ -219,6 +232,88 @@ public sealed class MiLuStudioDbContext : DbContext
             entity.Property(shot => shot.VideoPrompt).HasColumnName("video_prompt");
             entity.Property(shot => shot.Status).HasColumnName("status");
             entity.Property(shot => shot.UserLocked).HasColumnName("user_locked");
+        });
+    }
+
+    private static void ConfigureAccounts(ModelBuilder modelBuilder)
+    {
+        var statusConverter = new ValueConverter<AccountStatus, string>(
+            value => ToAccountStatusValue(value),
+            value => FromAccountStatusValue(value));
+
+        modelBuilder.Entity<Account>(entity =>
+        {
+            entity.ToTable("accounts");
+            entity.HasKey(account => account.Id);
+            entity.Property(account => account.Id).HasColumnName("id");
+            entity.Property(account => account.Email).HasColumnName("email");
+            entity.Property(account => account.Phone).HasColumnName("phone");
+            entity.Property(account => account.DisplayName).HasColumnName("display_name");
+            entity.Property(account => account.PasswordHash).HasColumnName("password_hash");
+            entity.Property(account => account.Status).HasColumnName("status").HasConversion(statusConverter);
+            entity.Property(account => account.CreatedAt).HasColumnName("created_at");
+            entity.Property(account => account.LastLoginAt).HasColumnName("last_login_at");
+        });
+    }
+
+    private static void ConfigureAuthSessions(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AuthSession>(entity =>
+        {
+            entity.ToTable("auth_sessions");
+            entity.HasKey(session => session.Id);
+            entity.Property(session => session.Id).HasColumnName("id");
+            entity.Property(session => session.AccountId).HasColumnName("account_id");
+            entity.Property(session => session.DeviceId).HasColumnName("device_id");
+            entity.Property(session => session.AccessTokenHash).HasColumnName("access_token_hash");
+            entity.Property(session => session.RefreshTokenHash).HasColumnName("refresh_token_hash");
+            entity.Property(session => session.CreatedAt).HasColumnName("created_at");
+            entity.Property(session => session.LastSeenAt).HasColumnName("last_seen_at");
+            entity.Property(session => session.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(session => session.RevokedAt).HasColumnName("revoked_at");
+        });
+    }
+
+    private static void ConfigureDeviceBindings(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<DeviceBinding>(entity =>
+        {
+            entity.ToTable("devices");
+            entity.HasKey(device => device.Id);
+            entity.Property(device => device.Id).HasColumnName("id");
+            entity.Property(device => device.AccountId).HasColumnName("account_id");
+            entity.Property(device => device.MachineFingerprintHash).HasColumnName("machine_fingerprint_hash");
+            entity.Property(device => device.DeviceName).HasColumnName("device_name");
+            entity.Property(device => device.FirstSeenAt).HasColumnName("first_seen_at");
+            entity.Property(device => device.LastSeenAt).HasColumnName("last_seen_at");
+            entity.Property(device => device.Trusted).HasColumnName("trusted");
+        });
+    }
+
+    private static void ConfigureLicenseGrants(ModelBuilder modelBuilder)
+    {
+        var typeConverter = new ValueConverter<LicenseKind, string>(
+            value => ToLicenseKindValue(value),
+            value => FromLicenseKindValue(value));
+        var statusConverter = new ValueConverter<LicenseStatus, string>(
+            value => ToLicenseStatusValue(value),
+            value => FromLicenseStatusValue(value));
+
+        modelBuilder.Entity<LicenseGrant>(entity =>
+        {
+            entity.ToTable("licenses");
+            entity.HasKey(license => license.Id);
+            entity.Property(license => license.Id).HasColumnName("id");
+            entity.Property(license => license.AccountId).HasColumnName("account_id");
+            entity.Property(license => license.LicenseType).HasColumnName("license_type").HasConversion(typeConverter);
+            entity.Property(license => license.Plan).HasColumnName("plan");
+            entity.Property(license => license.ActivationCodeHash).HasColumnName("activation_code_hash");
+            entity.Property(license => license.Status).HasColumnName("status").HasConversion(statusConverter);
+            entity.Property(license => license.StartsAt).HasColumnName("starts_at");
+            entity.Property(license => license.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(license => license.MaxDevices).HasColumnName("max_devices");
+            entity.Property(license => license.CreatedAt).HasColumnName("created_at");
+            entity.Property(license => license.UpdatedAt).HasColumnName("updated_at");
         });
     }
 
@@ -355,6 +450,66 @@ public sealed class MiLuStudioDbContext : DbContext
             "completed" => GenerationTaskStatus.Completed,
             "failed" => GenerationTaskStatus.Failed,
             _ => GenerationTaskStatus.Waiting
+        };
+    }
+
+    private static string ToAccountStatusValue(AccountStatus value)
+    {
+        return value switch
+        {
+            AccountStatus.Locked => "locked",
+            AccountStatus.Deleted => "deleted",
+            _ => "active"
+        };
+    }
+
+    private static AccountStatus FromAccountStatusValue(string value)
+    {
+        return value.ToLowerInvariant() switch
+        {
+            "locked" => AccountStatus.Locked,
+            "deleted" => AccountStatus.Deleted,
+            _ => AccountStatus.Active
+        };
+    }
+
+    private static string ToLicenseKindValue(LicenseKind value)
+    {
+        return value switch
+        {
+            LicenseKind.Trial => "trial",
+            LicenseKind.OfflineSigned => "offline_signed",
+            _ => "paid"
+        };
+    }
+
+    private static LicenseKind FromLicenseKindValue(string value)
+    {
+        return value.ToLowerInvariant() switch
+        {
+            "trial" => LicenseKind.Trial,
+            "offline_signed" => LicenseKind.OfflineSigned,
+            _ => LicenseKind.Paid
+        };
+    }
+
+    private static string ToLicenseStatusValue(LicenseStatus value)
+    {
+        return value switch
+        {
+            LicenseStatus.Expired => "expired",
+            LicenseStatus.Revoked => "revoked",
+            _ => "active"
+        };
+    }
+
+    private static LicenseStatus FromLicenseStatusValue(string value)
+    {
+        return value.ToLowerInvariant() switch
+        {
+            "expired" => LicenseStatus.Expired,
+            "revoked" => LicenseStatus.Revoked,
+            _ => LicenseStatus.Active
         };
     }
 }

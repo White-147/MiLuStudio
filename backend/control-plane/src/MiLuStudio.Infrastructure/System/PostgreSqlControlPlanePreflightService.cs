@@ -113,6 +113,30 @@ public sealed class PostgreSqlControlPlanePreflightService : IControlPlanePrefli
             storageExists ? "Storage root exists." : "Storage root does not exist yet; backend setup should create it before real asset writes.",
             new Dictionary<string, string> { ["storageRoot"] = _options.StorageRoot }));
 
+        var pythonExists = File.Exists(_options.PythonExecutablePath);
+        checks.Add(new(
+            "python_runtime",
+            pythonExists ? "ok" : "error",
+            pythonExists ? "Python executable exists for Worker skill sidecar calls." : "Python executable was not found.",
+            new Dictionary<string, string> { ["pythonExecutablePath"] = _options.PythonExecutablePath }));
+        if (!pythonExists)
+        {
+            healthy = false;
+            recommendations.Add("Configure ControlPlane:PythonExecutablePath to a valid Python runtime on D drive.");
+        }
+
+        var skillsRootExists = Directory.Exists(_options.PythonSkillsRoot);
+        checks.Add(new(
+            "python_skills_root",
+            skillsRootExists ? "ok" : "error",
+            skillsRootExists ? "Python skills root exists." : "Python skills root was not found.",
+            new Dictionary<string, string> { ["pythonSkillsRoot"] = _options.PythonSkillsRoot }));
+        if (!skillsRootExists)
+        {
+            healthy = false;
+            recommendations.Add("Configure ControlPlane:PythonSkillsRoot to the packaged or repository Python skills root.");
+        }
+
         return new ControlPlanePreflightDto(
             RepositoryProviderNames.PostgreSql,
             healthy,

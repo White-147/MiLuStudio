@@ -1,0 +1,91 @@
+{
+  "name": "@milu-studio/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MiLuStudio Windows desktop host",
+  "main": "dist/main.js",
+  "author": "MiLuStudio",
+  "homepage": "./",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare:runtime": "powershell -ExecutionPolicy Bypass -File ../../scripts/windows/Prepare-MiLuStudioDesktopRuntime.ps1",
+    "dev": "npm run prepare:runtime && npm run build && electron .",
+    "smoke": "npm run prepare:runtime && npm run build && electron . --smoke-test",
+    "pack:dir": "npm run prepare:runtime && npm run build && electron-builder --dir",
+    "dist:win": "npm run prepare:runtime && npm run build && electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "electron": "^42.0.1",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.0"
+  },
+  "build": {
+    "appId": "com.milustudio.desktop",
+    "productName": "MiLuStudio",
+    "artifactName": "MiLuStudio-Setup-${version}.${ext}",
+    "asar": true,
+    "directories": {
+      "buildResources": "build",
+      "output": "../../outputs/desktop"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "build/icon.ico"
+      },
+      {
+        "from": "runtime/web",
+        "to": "web",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "runtime/control-plane",
+        "to": "control-plane",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "runtime/python-skills",
+        "to": "python-skills",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "runtime/python-runtime",
+        "to": "python-runtime",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false,
+      "shortcutName": "MiLuStudio",
+      "include": "build/installer.nsh",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
+    }
+  }
+}

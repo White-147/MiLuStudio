@@ -4,15 +4,15 @@ import {
   Download,
   FileText,
   Film,
-  FolderOpen,
   Image,
-  Lock,
   Pause,
   Play,
   RotateCcw,
+  Save,
   Send,
   SlidersHorizontal,
   Video,
+  XCircle,
 } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -24,9 +24,11 @@ import {
   listProjectAssets,
   listProjectCosts,
   pauseProductionJob,
+  rejectProductionCheckpoint,
   resumeProductionJob,
   retryProductionJob,
   startProductionJob,
+  updateProject,
   watchProductionJob,
 } from '../../shared/api/controlPlaneClient';
 import { mockDeliveryAssets, mockProjects, mockResultCards, mockStages } from '../../shared/mock/studioMock';
@@ -35,7 +37,7 @@ import type {
   GenerationTaskRecord,
   ProjectAssetRecord,
   ProjectDetail,
-  ProjectMode,
+  ProjectUpdateRequest,
   ProductionJob,
   ProductionJobEvent,
   ProductionStage,
@@ -49,14 +51,17 @@ interface ProductionConsolePageProps {
 
 type ApiState = 'loading' | 'control-api' | 'mock-fallback';
 
-type JobCommand = 'pause' | 'resume' | 'retry' | 'checkpoint';
+type JobCommand = 'pause' | 'resume' | 'retry' | 'checkpoint-approve' | 'checkpoint-reject';
+
+type ProjectDraft = ProjectUpdateRequest;
 
 export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePageProps) {
   const fallbackProject = useMemo(() => toProjectDetail(projectId), [projectId]);
   const [project, setProject] = useState<ProjectDetail>(fallbackProject);
-  const [mode, setMode] = useState<ProjectMode>(fallbackProject.mode);
+  const [draft, setDraft] = useState<ProjectDraft>(() => toProjectDraft(fallbackProject));
   const [running, setRunning] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [activeIndex, setActiveIndex] = useState(2);
   const [apiState, setApiState] = useState<ApiState>('loading');
   const [job, setJob] = useState<ProductionJob | null>(null);
@@ -67,6 +72,7 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
   const [taskOutputs, setTaskOutputs] = useState<GenerationTaskRecord[]>([]);
   const [projectAssets, setProjectAssets] = useState<ProjectAssetRecord[]>([]);
   const [costLedger, setCostLedger] = useState<CostLedgerRecord[]>([]);
+  const [draftMessage, setDraftMessage] = useState('输入尚未保存');
 
   const refreshProductionArtifacts = useCallback(
     async (jobId: string) => {
@@ -95,15 +101,17 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
     getProject(projectId, controller.signal)
       .then((nextProject) => {
         setProject(nextProject);
-        setMode(nextProject.mode);
+        setDraft(toProjectDraft(nextProject));
         setApiState('control-api');
         setSyncMessage('Control API 已连接');
+        setDraftMessage('输入已从 Control API 恢复');
       })
       .catch(() => {
         setProject(fallbackProject);
-        setMode(fallbackProject.mode);
+        setDraft(toProjectDraft(fallbackProject));
         setApiState('mock-fallback');
-        setSyncMessage('Control API 未启动，当前使用前端 mock 数据');
+        setSyncMessage('Control API 未启动，当前只显示本地示例数据');
+        setDraftMessage('Control API 未连接，暂不能保存输入');
       });
 
     return () => controller.abort();
@@ -141,7 +149,7 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
         }
       },
       () => {
-        setSyncMessage('SSE 连接已结束或等待下一次 mock 事件');
+        setSyncMessage('SSE 连接已结束或等待下一次进度事件');
       },
     );
   }, [refreshProductionArtifacts, streamJobId]);
@@ -164,11 +172,44 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
     });
   }, [activeIndex, apiState, running, stages]);
 
+  const saveDraft = useCallback(async () => {
+    const validationError = validateProjectDraft(draft);
+    if (validationError) {
+      setDraftMessage(validationError);
+      return null;
+    }
+
+    if (apiState !== 'control-api') {
+      setDraftMessage('Control API 未连接，暂不能保存输入');
+      return null;
+    }
+
+    setSaving(true);
+
+    try {
+      const savedProject = await updateProject(project.id, draft);
+      setProject(savedProject);
+      setDraft(toProjectDraft(savedProject));
+      setDraftMessage('输入已保存到 Control API / PostgreSQL');
+      return savedProject;
+    } catch (error) {
+      setDraftMessage(error instanceof Error ? error.message : '输入保存失败');
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }, [apiState, draft, project.id]);
+
   const startJob = async () => {
+    const savedProject = await saveDraft();
+    if (!savedProject) {
+      return;
+    }
+
     setStarting(true);
 
     try {
-      const nextJob = await startProductionJob(project.id);
+      const nextJob = await startProductionJob(savedProject.id);
       setJob(nextJob);
       setStages(nextJob.stages);
       setRunning(true);
@@ -176,18 +217,15 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
       setStreamJobId(nextJob.id);
       setSyncMessage(`Control API 已启动 job ${nextJob.id}`);
       void refreshProductionArtifacts(nextJob.id);
-    } catch {
-      setRunning(true);
-      setApiState('mock-fallback');
-      setJob(null);
-      setStages(mockStages);
-      setSyncMessage('Control API 未响应，已切回前端 mock 进度');
+    } catch (error) {
+      setRunning(false);
+      setSyncMessage(error instanceof Error ? error.message : 'Control API 暂时无法启动生产任务。');
     } finally {
       setStarting(false);
     }
   };
 
-  const runJobCommand = async (command: JobCommand) => {
+  const runJobCommand = async (command: JobCommand, notes = '') => {
     if (!job || apiState !== 'control-api') {
       return;
     }
@@ -195,20 +233,24 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
     setActioning(command);
 
     try {
-      const commandMap = {
+      const commandMap: Record<'pause' | 'resume' | 'retry', (jobId: string) => Promise<ProductionJob>> = {
         pause: pauseProductionJob,
         resume: resumeProductionJob,
         retry: retryProductionJob,
-        checkpoint: approveProductionCheckpoint,
       };
-      const nextJob = await commandMap[command](job.id);
+      const nextJob =
+        command === 'checkpoint-approve'
+          ? await approveProductionCheckpoint(job.id, notes)
+          : command === 'checkpoint-reject'
+            ? await rejectProductionCheckpoint(job.id, notes)
+            : await commandMap[command](job.id);
 
       setJob(nextJob);
       setStages(nextJob.stages);
       setRunning(nextJob.status === 'running' || nextJob.status === 'paused');
       void refreshProductionArtifacts(nextJob.id);
 
-      if ((command === 'retry' || command === 'resume') && nextJob.status === 'running') {
+      if ((command === 'retry' || command === 'resume' || command === 'checkpoint-approve') && nextJob.status === 'running') {
         setStreamJobId(nextJob.id);
       }
 
@@ -232,30 +274,30 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
         </div>
         <div className="console-header-actions">
           <span className={apiState === 'control-api' ? 'api-chip connected' : 'api-chip'}>
-            {apiState === 'control-api' ? 'Control API' : apiState === 'loading' ? '连接中' : 'Mock fallback'}
+            {apiState === 'control-api' ? 'Control API' : apiState === 'loading' ? '连接中' : '示例数据'}
           </span>
-          <button className="secondary-button" type="button">
-            <FolderOpen size={17} />
-            <span>输出目录</span>
-          </button>
         </div>
       </header>
 
       <div className="console-layout">
         <ConversationPanel
-          mode={mode}
-          onModeChange={setMode}
+          apiReady={apiState === 'control-api'}
+          draft={draft}
+          draftMessage={draftMessage}
+          onDraftChange={setDraft}
+          onSave={saveDraft}
           onStart={startJob}
-          project={project}
           running={running}
+          saving={saving}
           starting={starting}
         />
         <ProgressPanel
           actioning={actioning}
           canUseActions={apiState === 'control-api'}
           job={job}
-          onApproveCheckpoint={() => runJobCommand('checkpoint')}
+          onApproveCheckpoint={(notes) => runJobCommand('checkpoint-approve', notes)}
           onPause={() => runJobCommand('pause')}
+          onRejectCheckpoint={(notes) => runJobCommand('checkpoint-reject', notes)}
           onResume={() => runJobCommand('resume')}
           onRetry={() => runJobCommand('retry')}
           stages={visibleStages}
@@ -274,15 +316,30 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
 }
 
 interface ConversationPanelProps {
-  mode: ProjectMode;
-  onModeChange: (mode: ProjectMode) => void;
+  apiReady: boolean;
+  draft: ProjectDraft;
+  draftMessage: string;
+  onDraftChange: Dispatch<SetStateAction<ProjectDraft>>;
+  onSave: () => Promise<ProjectDetail | null>;
   onStart: () => void;
-  project: ProjectDetail;
   running: boolean;
+  saving: boolean;
   starting: boolean;
 }
 
-function ConversationPanel({ mode, onModeChange, onStart, project, running, starting }: ConversationPanelProps) {
+function ConversationPanel({
+  apiReady,
+  draft,
+  draftMessage,
+  onDraftChange,
+  onSave,
+  onStart,
+  running,
+  saving,
+  starting,
+}: ConversationPanelProps) {
+  const storyLength = countStoryCharacters(draft.storyText);
+
   return (
     <section className="workspace-panel input-panel" aria-label="对话输入区">
       <div className="panel-heading">
@@ -293,13 +350,39 @@ function ConversationPanel({ mode, onModeChange, onStart, project, running, star
         <SlidersHorizontal size={18} />
       </div>
 
-      <textarea defaultValue={project.storyText} key={project.id} aria-label="故事或创作要求" />
+      <label>
+        <span>标题</span>
+        <input
+          aria-label="项目标题"
+          value={draft.title}
+          onChange={(event) => onDraftChange((current) => ({ ...current, title: event.target.value }))}
+        />
+      </label>
+
+      <textarea
+        aria-label="故事或创作要求"
+        value={draft.storyText}
+        onChange={(event) => onDraftChange((current) => ({ ...current, storyText: event.target.value }))}
+      />
+
+      <div className={storyLength >= 500 && storyLength <= 2000 ? 'input-hint ok' : 'input-hint'}>
+        <span>{storyLength}/2000</span>
+        <span>{draftMessage}</span>
+      </div>
 
       <div className="segmented-control" aria-label="生产模式">
-        <button className={mode === 'fast' ? 'selected' : ''} onClick={() => onModeChange('fast')} type="button">
+        <button
+          className={draft.mode === 'fast' ? 'selected' : ''}
+          onClick={() => onDraftChange((current) => ({ ...current, mode: 'fast' }))}
+          type="button"
+        >
           极速模式
         </button>
-        <button className={mode === 'director' ? 'selected' : ''} onClick={() => onModeChange('director')} type="button">
+        <button
+          className={draft.mode === 'director' ? 'selected' : ''}
+          onClick={() => onDraftChange((current) => ({ ...current, mode: 'director' }))}
+          type="button"
+        >
           导演模式
         </button>
       </div>
@@ -307,7 +390,12 @@ function ConversationPanel({ mode, onModeChange, onStart, project, running, star
       <div className="field-grid">
         <label>
           <span>目标时长</span>
-          <select defaultValue={String(project.targetDuration)} key={`${project.id}-duration`}>
+          <select
+            value={String(draft.targetDuration)}
+            onChange={(event) =>
+              onDraftChange((current) => ({ ...current, targetDuration: Number(event.target.value) }))
+            }
+          >
             <option value="30">30 秒</option>
             <option value="45">45 秒</option>
             <option value="60">60 秒</option>
@@ -315,7 +403,15 @@ function ConversationPanel({ mode, onModeChange, onStart, project, running, star
         </label>
         <label>
           <span>画幅</span>
-          <select defaultValue={project.aspectRatio} key={`${project.id}-ratio`}>
+          <select
+            value={draft.aspectRatio}
+            onChange={(event) =>
+              onDraftChange((current) => ({
+                ...current,
+                aspectRatio: event.target.value as ProjectDraft['aspectRatio'],
+              }))
+            }
+          >
             <option value="9:16">9:16 竖屏</option>
             <option value="16:9">16:9 横屏</option>
             <option value="1:1">1:1 方屏</option>
@@ -323,10 +419,30 @@ function ConversationPanel({ mode, onModeChange, onStart, project, running, star
         </label>
       </div>
 
-      <button className="primary-button full-width" disabled={starting} onClick={onStart} type="button">
+      <label>
+        <span>风格</span>
+        <input
+          aria-label="风格预设"
+          value={draft.stylePreset}
+          onChange={(event) => onDraftChange((current) => ({ ...current, stylePreset: event.target.value }))}
+        />
+      </label>
+
+      <div className="input-actions">
+        <button
+          className="secondary-button"
+          disabled={!apiReady || saving || starting}
+          onClick={() => void onSave()}
+          type="button"
+        >
+          <Save size={17} />
+          <span>{saving ? '保存中' : '保存'}</span>
+        </button>
+        <button className="primary-button full-width" disabled={!apiReady || starting || saving} onClick={onStart} type="button">
         {running ? <RotateCcw size={18} /> : <Send size={18} />}
         <span>{starting ? '启动中' : running ? '重新监听进度' : '开始生成'}</span>
       </button>
+      </div>
     </section>
   );
 }
@@ -337,6 +453,7 @@ function ProgressPanel({
   job,
   onApproveCheckpoint,
   onPause,
+  onRejectCheckpoint,
   onResume,
   onRetry,
   stages,
@@ -345,13 +462,15 @@ function ProgressPanel({
   actioning: JobCommand | null;
   canUseActions: boolean;
   job: ProductionJob | null;
-  onApproveCheckpoint: () => void;
+  onApproveCheckpoint: (notes: string) => void;
   onPause: () => void;
+  onRejectCheckpoint: (notes: string) => void;
   onResume: () => void;
   onRetry: () => void;
   stages: ProductionStage[];
   syncMessage: string;
 }) {
+  const [checkpointNotes, setCheckpointNotes] = useState('');
   const activeStage = stages.find((stage) => stage.status === 'running' || stage.status === 'review');
   const isCheckpointReady = Boolean(activeStage?.needsReview && activeStage.status === 'review');
   const canPause = canUseActions && job?.status === 'running';
@@ -383,15 +502,39 @@ function ProgressPanel({
           <Play size={15} />
           <span>{actioning === 'resume' ? '恢复中' : '恢复'}</span>
         </button>
-        <button className="command-button confirm" disabled={!canCheckpoint || actioning !== null} onClick={onApproveCheckpoint} type="button">
+        <button
+          className="command-button confirm"
+          disabled={!canCheckpoint || actioning !== null}
+          onClick={() => onApproveCheckpoint(checkpointNotes)}
+          type="button"
+        >
           <CheckCircle2 size={15} />
-          <span>{actioning === 'checkpoint' ? '确认中' : '确认节点'}</span>
+          <span>{actioning === 'checkpoint-approve' ? '确认中' : '通过'}</span>
+        </button>
+        <button
+          className="command-button danger"
+          disabled={!canCheckpoint || actioning !== null}
+          onClick={() => onRejectCheckpoint(checkpointNotes)}
+          type="button"
+        >
+          <XCircle size={15} />
+          <span>{actioning === 'checkpoint-reject' ? '拒绝中' : '拒绝'}</span>
         </button>
         <button className="command-button" disabled={!canRetry || actioning !== null} onClick={onRetry} type="button">
           <RotateCcw size={15} />
           <span>{actioning === 'retry' ? '重试中' : '重试失败项'}</span>
         </button>
       </div>
+
+      {canCheckpoint && (
+        <textarea
+          className="checkpoint-notes"
+          value={checkpointNotes}
+          onChange={(event) => setCheckpointNotes(event.target.value)}
+          aria-label="checkpoint notes"
+          placeholder="确认备注"
+        />
+      )}
 
       <p className="sync-message">{syncMessage}</p>
 
@@ -463,16 +606,6 @@ function ResultCardView({ card }: { card: ResultCard }) {
           <li key={detail}>{detail}</li>
         ))}
       </ul>
-      <div className="card-actions">
-        <button type="button">
-          <Lock size={15} />
-          <span>锁定</span>
-        </button>
-        <button type="button">
-          <RotateCcw size={15} />
-          <span>重生成</span>
-        </button>
-      </div>
     </article>
   );
 }
@@ -735,8 +868,48 @@ function toProjectDetail(projectId: string): ProjectDetail {
   return {
     ...project,
     stylePreset: '轻写实国漫',
-    storyText: '雨夜里，林溪在旧巷口捡到一只会发光的纸鹤。纸鹤不断飞向废弃照相馆，那里藏着哥哥失踪前留下的最后一卷胶片。',
+    storyText: fallbackStoryText,
   };
+}
+
+function toProjectDraft(project: ProjectDetail): ProjectDraft {
+  return {
+    title: project.title,
+    storyText: project.storyText,
+    mode: project.mode,
+    targetDuration: project.targetDuration,
+    aspectRatio: project.aspectRatio,
+    stylePreset: project.stylePreset,
+  };
+}
+
+function validateProjectDraft(draft: ProjectDraft): string | null {
+  if (!draft.title.trim()) {
+    return '标题不能为空。';
+  }
+
+  if (!draft.stylePreset.trim()) {
+    return '风格不能为空。';
+  }
+
+  const storyLength = countStoryCharacters(draft.storyText);
+  if (storyLength < 500 || storyLength > 2000) {
+    return `故事正文需保持在 500 到 2000 个非空白字符之间，当前 ${storyLength}。`;
+  }
+
+  if (![30, 45, 60].includes(draft.targetDuration)) {
+    return '目标时长只能选择 30、45 或 60 秒。';
+  }
+
+  if (!['9:16', '16:9', '1:1'].includes(draft.aspectRatio)) {
+    return '画幅只能选择 9:16、16:9 或 1:1。';
+  }
+
+  return null;
+}
+
+function countStoryCharacters(storyText: string): number {
+  return Array.from(storyText).filter((character) => !/\s/.test(character)).length;
 }
 
 const resultIcons = {
@@ -752,5 +925,9 @@ const commandMessages = {
   pause: '生产任务已暂停。',
   resume: '生产任务已恢复。',
   retry: '失败任务已重新排队。',
-  checkpoint: '节点已确认，状态机将继续推进。',
+  'checkpoint-approve': '节点已通过，状态机将继续推进。',
+  'checkpoint-reject': '节点已拒绝，任务进入可重试失败状态。',
 };
+
+const fallbackStoryText =
+  '雨夜里，林溪在旧巷口捡到一只会发光的纸鹤。纸鹤飞得很慢，像在等她跟上。它穿过挂满旧招牌的巷子，落在一间废弃照相馆门口。林溪的哥哥三年前在这里失踪，警方只找到一卷被雨水泡坏的胶片。她推门进去，发现暗房里亮着微弱红光，墙上贴满哥哥拍下的陌生人影。纸鹤钻进显影盘，胶片上忽然浮出一行字：不要相信明天早上的自己。林溪以为这是恶作剧，却在玻璃柜里看到一张刚冲洗好的照片，照片中的她站在同一间暗房，手里拿着哥哥的相机，身后有一道没有脸的影子。她开始按照纸鹤留下的光点寻找线索，每一步都揭开一段被人刻意删除的记忆。最后她发现哥哥并不是失踪，而是被困在照片之间的时间缝隙里，只有在天亮前拍下真正凶手的脸，才能把他带回现实。林溪带着相机回到巷口，发现所有招牌都变成了哥哥当年拍过的日期。纸鹤停在钟楼下，翅膀上浮出一串倒计时。她必须在雨停之前找到照片里那道影子的主人，否则第二天醒来，她会忘记哥哥，也会忘记自己为什么来到这里。她最终选择把镜头对准橱窗里的倒影，才看见凶手一直跟在她身后，披着哥哥的雨衣，脸却和未来的她一模一样。快门按下时，整条巷子的灯同时熄灭，纸鹤化成一束光钻进相机，哥哥的声音从暗房深处传来：别回头，把我带出去。';

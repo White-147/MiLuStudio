@@ -152,6 +152,7 @@ internal sealed class ProductionStateMachine
         if (!approved)
         {
             task.Status = GenerationTaskStatus.Failed;
+            task.CheckpointNotes = NormalizeNotes(notes);
             task.ErrorMessage = string.IsNullOrWhiteSpace(notes) ? "用户拒绝 checkpoint。" : notes;
             job.Status = ProductionJobStatus.Failed;
             job.CurrentStage = ProductionStage.FailedRetryable;
@@ -159,10 +160,16 @@ internal sealed class ProductionStateMachine
             return false;
         }
 
+        task.CheckpointNotes = NormalizeNotes(notes);
         _taskQueue.MarkCompleted(task, now);
         job.Status = ProductionJobStatus.Running;
         job.ErrorMessage = null;
         return true;
+    }
+
+    private static string? NormalizeNotes(string? notes)
+    {
+        return string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
     }
 
     internal void PrepareRetry(ProductionJob job, IReadOnlyList<GenerationTask> tasks)
@@ -418,7 +425,7 @@ internal sealed class ProductionStateMachine
             "export_packager",
             GenerationTaskStatus.Completed,
             100,
-            "mock 生产任务已完成，后续阶段会接入真实 Worker 和资产索引。",
+            "生产任务已完成，当前阶段输出可审阅 JSON envelope 和逻辑资产索引。",
             IsTerminal: true);
     }
 

@@ -4,6 +4,14 @@ public sealed record StartProductionJobRequest(string? RequestedBy);
 
 public sealed record ProductionCheckpointRequest(bool? Approved, string? Notes);
 
+public sealed class ProductionCommandValidationException : Exception
+{
+    public ProductionCommandValidationException(string message)
+        : base(message)
+    {
+    }
+}
+
 public sealed record ProductionJobDto(
     string Id,
     string ProjectId,

@@ -30,6 +30,8 @@ public sealed class PythonProductionSkillRunner : IProductionSkillRunner
             throw new DirectoryNotFoundException($"MiLuStudio Python skills root was not found: {_options.PythonSkillsRoot}");
         }
 
+        PruneOldRunDirectories();
+
         var runRoot = Path.Combine(_options.SkillRunTempRoot, $"{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}");
         Directory.CreateDirectory(runRoot);
 
@@ -94,6 +96,33 @@ public sealed class PythonProductionSkillRunner : IProductionSkillRunner
 
         return Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start Python skill process for '{skillName}'.");
+    }
+
+    private void PruneOldRunDirectories()
+    {
+        Directory.CreateDirectory(_options.SkillRunTempRoot);
+
+        var retentionCount = Math.Max(1, _options.SkillRunRetentionCount);
+        var oldRuns = Directory
+            .GetDirectories(_options.SkillRunTempRoot)
+            .Select(path => new DirectoryInfo(path))
+            .OrderByDescending(directory => directory.CreationTimeUtc)
+            .Skip(retentionCount)
+            .ToList();
+
+        foreach (var oldRun in oldRuns)
+        {
+            try
+            {
+                oldRun.Delete(recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
     }
 
     private static void TryKill(Process process)

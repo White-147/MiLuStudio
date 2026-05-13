@@ -40,5 +40,7 @@ public sealed class GenerationTask
 
     public DateTimeOffset? LastHeartbeatAt { get; set; }
 
+    public string? CheckpointNotes { get; set; }
+
     public string? ErrorMessage { get; set; }
 }
