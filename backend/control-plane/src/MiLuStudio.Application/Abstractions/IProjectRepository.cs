@@ -15,4 +15,6 @@ public interface IProjectRepository
     Task UpdateAsync(Project project, CancellationToken cancellationToken);
 
     Task UpdateAsync(Project project, StoryInput storyInput, CancellationToken cancellationToken);
+
+    Task<bool> DeleteAsync(string projectId, CancellationToken cancellationToken);
 }

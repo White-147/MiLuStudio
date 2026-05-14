@@ -75,6 +75,48 @@ public sealed class InMemoryControlPlaneStore : IProjectRepository, IProductionJ
         return Task.CompletedTask;
     }
 
+    public Task<bool> DeleteAsync(string projectId, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            if (!_projects.Remove(projectId))
+            {
+                return Task.FromResult(false);
+            }
+
+            _storyInputs.Remove(projectId);
+
+            var jobIds = _jobs.Values
+                .Where(job => string.Equals(job.ProjectId, projectId, StringComparison.OrdinalIgnoreCase))
+                .Select(job => job.Id)
+                .ToList();
+
+            foreach (var jobId in jobIds)
+            {
+                _jobs.Remove(jobId);
+                _tasksByJob.Remove(jobId);
+            }
+
+            foreach (var assetId in _assets.Values
+                .Where(asset => string.Equals(asset.ProjectId, projectId, StringComparison.OrdinalIgnoreCase))
+                .Select(asset => asset.Id)
+                .ToList())
+            {
+                _assets.Remove(assetId);
+            }
+
+            foreach (var entryId in _costLedger.Values
+                .Where(entry => string.Equals(entry.ProjectId, projectId, StringComparison.OrdinalIgnoreCase))
+                .Select(entry => entry.Id)
+                .ToList())
+            {
+                _costLedger.Remove(entryId);
+            }
+
+            return Task.FromResult(true);
+        }
+    }
+
     Task<ProductionJob?> IProductionJobRepository.GetAsync(string jobId, CancellationToken cancellationToken)
     {
         lock (_gate)

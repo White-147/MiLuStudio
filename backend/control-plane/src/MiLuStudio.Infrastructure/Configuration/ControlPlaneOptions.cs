@@ -10,6 +10,10 @@ public sealed class ControlPlaneOptions
 
     public string StorageRoot { get; set; } = "D:\\code\\MiLuStudio\\storage";
 
+    public string ProviderSettingsPath { get; set; } = string.Empty;
+
+    public string ProviderSecretStorePath { get; set; } = string.Empty;
+
     public string WorkerId { get; set; } = Environment.MachineName;
 
     public string PythonExecutablePath { get; set; } = "D:\\soft\\program\\Python\\Python313\\python.exe";

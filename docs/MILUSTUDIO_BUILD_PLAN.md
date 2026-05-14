@@ -1395,7 +1395,7 @@ D:\code\MiLuStudio\
 - Electron 已升级到 `42.0.1`；主进程限制外部导航、弹窗和 IPC 来源，`userData`、`sessionData` 和 logs 已显式指向 D 盘数据目录，避免默认落到 `C:\Users\...\AppData\Roaming`。
 - electron-builder + NSIS 已生成 `D:\code\MiLuStudio\outputs\desktop\MiLuStudio-Setup-0.1.0.exe`，配置 `oneClick=false`、`allowToChangeInstallationDirectory=true`、`runAfterFinish=true`、`shortcutName=MiLuStudio` 和自定义 `installer.nsh`。
 - `installer.nsh` 当前只保留桌面快捷方式、开始菜单快捷方式和开机自启动复选项；安装前激活码页已按当前 MVP 范围撤下。
-- 当前本机生成的 NSIS 安装包 Authenticode 状态为 `NotSigned`；正式商业发布前需要补代码签名证书、签名配置和干净 Windows 安装 / 卸载验收。
+- Stage 19 已补桌面发布验收脚本和签名前置检查；当前本机生成的 NSIS 安装包 Authenticode 状态仍为 `NotSigned`，正式商业发布前必须配置真实代码签名证书并使用 `-RequireSigned` 阻断未签名产物。
 
 参考：
 
@@ -1460,7 +1460,53 @@ Stage 17 当前落地状态：
 - Stage 17 已正式确认为生产控制台可编辑能力，并已完成分镜表编辑、单镜头备注驱动本地确定性重算、保存后重置下游任务、Control API 新接口和 Web 结果卡编辑 UI。
 - 新增 `PATCH /api/generation-tasks/{taskId}/storyboard` 与 `POST /api/generation-tasks/{taskId}/storyboard/shots/{shotId}/regenerate`；两个接口只写回 `storyboard_director` JSON envelope，不接真实模型、不读真实媒体、不触发 FFmpeg、不生成真实 MP4 / WAV / SRT / ZIP。
 - 新增 `scripts\windows\Test-MiLuStudioStage17StoryboardEditing.ps1`，覆盖完整 deterministic job 完成后编辑分镜、下游任务重置、单镜头重算和 no-provider/no-media 边界。
-- Stage 18 尚未正式确认，候选方向为真实 provider adapter 前配置页、正式代码签名与干净 Windows 安装验收，或继续扩展角色 / 画风 / 提示词编辑能力。
+
+Stage 18 当前落地状态：
+
+- Stage 18 已正式确认为真实 provider adapter 前配置页，并已完成 Web “模型”设置页、Control API settings endpoint、Application service 和 Infrastructure 本地文件 repository。
+- 新增 `GET /api/settings/providers`、`PATCH /api/settings/providers` 和 `GET /api/settings/providers/preflight`；这些接口只管理本地占位配置，不访问真实 provider。
+- 支持 Text / Image / Video / Audio / Edit 五类 adapter 的供应商、默认模型、启用开关、API Key 占位、单项目成本上限和失败重试次数。
+- API Key 请求体只被转换成遮罩和 SHA256 指纹；API 响应与本地 provider settings 文件不保存、不返回可用于真实调用的明文 key。
+- Provider preflight 明确 `adapterMode=placeholder_only`、`externalNetwork=disabled`、`mediaGenerated=false`，不读取真实媒体、不触发 FFmpeg、不生成真实 MP4 / WAV / SRT / ZIP。
+- 本阶段不新增数据库 migration；provider 前配置由 Control API / Infrastructure 写入 D 盘 storage 下的本地 JSON，UI / Electron 不直接读写。
+- 新增 `scripts\windows\Test-MiLuStudioStage18ProviderSettings.ps1`，覆盖配置保存、明文 key 不泄漏、preflight 占位边界和 clear key。
+
+Stage 19 当前落地状态：
+
+- Stage 19 已正式确认为桌面发布验收与代码签名前置准备，并已完成 `scripts\windows\Test-MiLuStudioStage19DesktopRelease.ps1`。
+- `apps\desktop\package.json` 新增 `verify:release` 和 `verify:release:signed`；前者记录未签名阻塞项，后者要求安装器和主 exe Authenticode 状态为 `Valid`。
+- Stage 19 脚本可检查 electron-builder / NSIS 配置、安装器与 `win-unpacked` 产物、Web dist、Control API / Worker runtime、Python runtime、Python Skills、最新 backend migration、Electron 安全设置、桌面 Web host CSP / nosniff、安装器快捷方式 / 自启动脚本和桌面 Control API 边界。
+- 联网自检后已补强桌面本地 Web host 响应头：CSP 增加 `form-action 'self'` 和 `frame-ancestors 'none'`，并把 CSP / `X-Content-Type-Options: nosniff` 纳入 Stage 19 验收脚本。
+- Stage 19 重打包发现旧 `outputs\desktop` 产物缺少 `004_stage16_auth_licensing.sql`，已通过 `-BuildPackage` 重新生成并纳入验收。
+- `.gitignore` 已忽略 `*.pfx`、`*.p12`、`*.pvk`、`*.spc` 和 `*.key`，避免代码签名证书或私钥容器进入仓库。
+- 新增 `docs\MILUSTUDIO_STAGE19_DESKTOP_RELEASE_CHECKLIST.md`，记录签名前置配置、干净 Windows 安装 / 卸载 / 自启动 / 快捷方式手工验收步骤。
+- 当前本机安装器和 `win-unpacked\MiLuStudio.exe` 仍为 `NotSigned`；这是正式公开发布前阻塞项，不伪造签名成功。
+
+Stage 20 当前落地状态：
+
+- Stage 20 已正式确认为 Codex 式前端工作台重构，并已完成登录后主入口替换。
+- Web 工作台采用左侧历史项目、中央单输入框、右侧固定流程进度与生成结果、左下角设置入口。
+- 工作台已补 Codex 式附件卡片和加号上传菜单，并按当前生产阶段启用文本 / 图片 / 视频入口。
+- 媒体附件只记录文件名、类型和大小，不读取真实媒体、不解析帧、不触发 FFmpeg、不扩展后端真实媒体上传链路。
+
+Stage 21 当前落地状态：
+
+- Stage 21 已正式确认为新工作台结构化产物编辑增强，并已完成角色、画风、图片提示词和视频提示词编辑。
+- 新增 `PATCH /api/generation-tasks/{taskId}/structured-output`，只允许编辑白名单顶层字段，保存对象仍是 generation task 的 JSON envelope。
+- 角色与画风编辑后回到 review / paused；图片提示词与视频提示词编辑后保持 completed / running；所有下游任务会重置为 waiting 并清空旧 output。
+- 保存后的 envelope 会记录 `stage21_edit_summary`，明确 `model_provider=none`、`media_read=false`、`media_generated=false`、`ffmpeg_invoked=false`。
+- 新增 `scripts\windows\Test-MiLuStudioStage21StructuredOutputEditing.ps1`，覆盖完整 deterministic 生产链路、四类结构化产物编辑和下游重置边界。
+
+Stage 22 当前落地状态：
+
+- Stage 22 已正式确认为 Provider Adapter 安全前置层设计与占位落地。
+- Provider settings 响应新增 `safety` 状态，覆盖 metadata-only secret store、spend guard 和 provider sandbox。
+- 新增 `IProviderSecretStore` 与 `FileProviderSecretStore`，只在 `provider-secrets.local.json` 保存遮罩、SHA256 指纹和不可调用 secret reference，不保存明文 key，不提供可用于真实 provider 调用的 secret material。
+- 新增 `GET /api/settings/providers/safety` 和 `POST /api/settings/providers/spend-guard/check`；spend guard 可以判断预算与重试边界，但在 Stage 22 仍统一返回真实 provider 调用阻断。
+- Provider preflight 新增 `secret_store`、`spend_guard` 和 `provider_sandbox` 三个安全前置检查，并继续为各 adapter 标明 `providerCalls=blocked`、`externalNetwork=disabled`、`mediaRead=false`、`ffmpegInvoked=false`。
+- Web “模型”设置页已展示 Stage 22 安全前置层状态和真实 provider 调用阻断，不绕过 Control API 读取本地文件。
+- 新增 `scripts\windows\Test-MiLuStudioStage22ProviderSafety.ps1`，覆盖密钥明文不泄漏、安全状态、preflight、预算阻断、重试阻断和 clear key。
+- 本阶段不新增数据库 migration，不接真实 provider，不读取真实媒体，不触发 FFmpeg，不生成真实 PNG / MP4 / WAV / SRT / ZIP。
 
 ## 13. 模型与供应商策略
 
@@ -1511,6 +1557,14 @@ Stage 17 当前落地状态：
 - 单项目成本上限。
 - 失败重试次数。
 
+Stage 18 已先落地“provider adapter 前配置页”：
+
+- 路由为 `/settings/providers`。
+- 后端 endpoint 为 `/api/settings/providers`、`/api/settings/providers/preflight`、`/api/settings/providers/safety` 和 `/api/settings/providers/spend-guard/check`。
+- 当前保存的是本地占位配置和 metadata-only secret 描述，不保存明文 API Key，不触发任何真实 provider 请求。
+- `TextProvider`、`ImageProvider`、`VideoProvider`、`AudioProvider` 和 `EditProvider` 的真实 SDK / HTTP adapter 仍未实现。
+- Stage 22 已把 secret store、spend guard 和 provider sandbox 作为真实 provider 接入前的硬前置层；当前仍处于 placeholder-only / sandbox-blocked 状态。
+
 不要暴露：
 
 - Prompt 工程细节。
@@ -1534,11 +1588,12 @@ Stage 17 当前落地状态：
 
 安全要求：
 
-- API Key 只存在本机。
+- API Key 只存在本机；Stage 22 当前只保存遮罩、指纹和不可调用引用，真实 secret material 仍不落库、不进响应、不交给 provider。
 - 不把用户故事、图片、音频上传到自有服务器。
 - 不提交 `.env`、真实素材、输出视频、服务账号。
 - 所有本地生成数据放入 `storage/` 或用户数据目录。
 - Git 默认忽略 `storage/`、`outputs/`、`logs/`、`.env*`、`*.mp4`、`*.wav` 等。
+- 任何后续真实 provider 调用必须先通过 secret store、spend guard 和 sandbox 前置检查，并继续由 Control API / Worker 边界编排。
 
 ## 15. 下一会话建议执行顺序
 

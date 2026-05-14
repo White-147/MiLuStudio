@@ -38,7 +38,9 @@ export async function startWebHost(webRoot: string): Promise<WebHost> {
       "font-src 'self' data:",
       "connect-src 'self' http://127.0.0.1:* http://localhost:*",
       "object-src 'none'",
-      "base-uri 'self'"
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'"
     ].join('; '));
     response.setHeader('X-Content-Type-Options', 'nosniff');
 

@@ -4,6 +4,12 @@ import type {
   CostLedgerRecord,
   GenerationTaskRecord,
   LoginRequest,
+  ProviderSafetyStatus,
+  ProviderSpendGuardCheckRequest,
+  ProviderSpendGuardDecision,
+  ProviderSettingsPreflight,
+  ProviderSettingsResponse,
+  ProviderSettingsUpdateRequest,
   ProductionJob,
   ProductionJobEvent,
   ProjectAssetRecord,
@@ -11,6 +17,8 @@ import type {
   ProjectUpdateRequest,
   ProjectSummary,
   RegisterAccountRequest,
+  StructuredOutputEditRequest,
+  StructuredOutputEditResponse,
   StoryboardEditRequest,
   StoryboardEditResponse,
   StoryboardShotRegenerateRequest,
@@ -169,6 +177,13 @@ export async function updateProject(
   });
 }
 
+export async function deleteProject(projectId: string, signal?: AbortSignal): Promise<void> {
+  await request<void>(`/api/projects/${encodeURIComponent(projectId)}`, {
+    method: 'DELETE',
+    signal,
+  });
+}
+
 export async function startProductionJob(projectId: string, signal?: AbortSignal): Promise<ProductionJob> {
   return request<ProductionJob>(`/api/projects/${encodeURIComponent(projectId)}/production-jobs`, {
     method: 'POST',
@@ -233,6 +248,18 @@ export async function updateStoryboardTask(
   });
 }
 
+export async function updateStructuredOutputTask(
+  taskId: string,
+  payload: StructuredOutputEditRequest,
+  signal?: AbortSignal,
+): Promise<StructuredOutputEditResponse> {
+  return request<StructuredOutputEditResponse>(`/api/generation-tasks/${encodeURIComponent(taskId)}/structured-output`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
 export async function regenerateStoryboardShot(
   taskId: string,
   shotId: string,
@@ -247,6 +274,40 @@ export async function regenerateStoryboardShot(
       signal,
     },
   );
+}
+
+export async function getProviderSettings(signal?: AbortSignal): Promise<ProviderSettingsResponse> {
+  return request<ProviderSettingsResponse>('/api/settings/providers', { signal });
+}
+
+export async function updateProviderSettings(
+  payload: ProviderSettingsUpdateRequest,
+  signal?: AbortSignal,
+): Promise<ProviderSettingsResponse> {
+  return request<ProviderSettingsResponse>('/api/settings/providers', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
+export async function getProviderSettingsPreflight(signal?: AbortSignal): Promise<ProviderSettingsPreflight> {
+  return request<ProviderSettingsPreflight>('/api/settings/providers/preflight', { signal });
+}
+
+export async function getProviderSafety(signal?: AbortSignal): Promise<ProviderSafetyStatus> {
+  return request<ProviderSafetyStatus>('/api/settings/providers/safety', { signal });
+}
+
+export async function checkProviderSpendGuard(
+  payload: ProviderSpendGuardCheckRequest,
+  signal?: AbortSignal,
+): Promise<ProviderSpendGuardDecision> {
+  return request<ProviderSpendGuardDecision>('/api/settings/providers/spend-guard/check', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    signal,
+  });
 }
 
 export function watchProductionJob(
@@ -297,22 +358,44 @@ async function request<T>(
   init: RequestInit = {},
   options: { allowAnonymous?: boolean } = {},
 ): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...(injectedDesktopToken ? { 'X-MiLuStudio-Desktop-Token': injectedDesktopToken } : {}),
-      ...init.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(injectedDesktopToken ? { 'X-MiLuStudio-Desktop-Token': injectedDesktopToken } : {}),
+        ...init.headers,
+      },
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+
+    throw new Error(formatNetworkError(error));
+  }
 
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(parseErrorMessage(response.status, detail));
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return (await response.json()) as T;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
+function formatNetworkError(error: unknown): string {
+  const detail = error instanceof Error && error.message ? ` 原始错误：${error.message}` : '';
+  return `Control API 未连接（${apiBaseUrl}）。请确认本地服务已启动并可访问。${detail}`;
 }
 
 function parseErrorMessage(status: number, detail: string): string {

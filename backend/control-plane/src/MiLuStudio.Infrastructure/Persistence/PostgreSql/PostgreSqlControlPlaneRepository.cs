@@ -74,6 +74,21 @@ public sealed class PostgreSqlControlPlaneRepository :
         _db.ChangeTracker.Clear();
     }
 
+    public async Task<bool> DeleteAsync(string projectId, CancellationToken cancellationToken)
+    {
+        var project = await _db.Projects.FirstOrDefaultAsync(project => project.Id == projectId, cancellationToken);
+
+        if (project is null)
+        {
+            return false;
+        }
+
+        _db.Projects.Remove(project);
+        await _db.SaveChangesAsync(cancellationToken);
+        _db.ChangeTracker.Clear();
+        return true;
+    }
+
     async Task<ProductionJob?> IProductionJobRepository.GetAsync(string jobId, CancellationToken cancellationToken)
     {
         return await _db.ProductionJobs.AsNoTracking().FirstOrDefaultAsync(job => job.Id == jobId, cancellationToken);

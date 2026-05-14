@@ -3,6 +3,7 @@ using MiLuStudio.Application.Abstractions;
 using MiLuStudio.Application.Auth;
 using MiLuStudio.Application.Production;
 using MiLuStudio.Application.Projects;
+using MiLuStudio.Application.Settings;
 using MiLuStudio.Infrastructure;
 using MiLuStudio.Infrastructure.Configuration;
 
@@ -26,6 +27,8 @@ builder.Services.AddScoped<ProductionJobService>();
 builder.Services.AddScoped<ProductionSkillExecutionService>();
 builder.Services.AddScoped<SkillEnvelopePersistenceService>();
 builder.Services.AddScoped<StoryboardEditingService>();
+builder.Services.AddScoped<StructuredOutputEditingService>();
+builder.Services.AddScoped<ProviderSettingsService>();
 builder.Services.AddScoped<TaskQueueService>();
 builder.Services.AddMiLuStudioInfrastructure(builder.Configuration);
 
@@ -209,6 +212,57 @@ app.MapPost("/api/system/migrations/apply", async (
     return Results.Ok(result);
 });
 
+app.MapGet("/api/settings/providers", async (
+    ProviderSettingsService providers,
+    CancellationToken cancellationToken) =>
+{
+    return Results.Ok(await providers.GetAsync(cancellationToken));
+});
+
+app.MapGet("/api/settings/providers/preflight", async (
+    ProviderSettingsService providers,
+    CancellationToken cancellationToken) =>
+{
+    return Results.Ok(await providers.CheckAsync(cancellationToken));
+});
+
+app.MapGet("/api/settings/providers/safety", async (
+    ProviderSettingsService providers,
+    CancellationToken cancellationToken) =>
+{
+    return Results.Ok(await providers.GetSafetyAsync(cancellationToken));
+});
+
+app.MapPost("/api/settings/providers/spend-guard/check", async Task<IResult> (
+    ProviderSpendGuardCheckRequest request,
+    ProviderSettingsService providers,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await providers.CheckSpendGuardAsync(request, cancellationToken));
+    }
+    catch (ProviderSettingsValidationException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+});
+
+app.MapPatch("/api/settings/providers", async Task<IResult> (
+    ProviderSettingsUpdateRequest request,
+    ProviderSettingsService providers,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await providers.UpdateAsync(request, cancellationToken));
+    }
+    catch (ProviderSettingsValidationException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+});
+
 app.MapGet("/api/projects", async (ProjectService projects, CancellationToken cancellationToken) =>
 {
     var results = await projects.ListAsync(cancellationToken);
@@ -272,6 +326,22 @@ app.MapPatch("/api/projects/{projectId}", async Task<IResult> (
     catch (ProjectValidationException error)
     {
         return Results.BadRequest(new { error = error.Message, details = error.Details });
+    }
+});
+
+app.MapDelete("/api/projects/{projectId}", async Task<IResult> (
+    string projectId,
+    ProjectService projects,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var deleted = await projects.DeleteAsync(projectId, cancellationToken);
+        return deleted ? Results.NoContent() : Results.NotFound();
+    }
+    catch (ProjectDeleteNotAllowedException error)
+    {
+        return Results.Conflict(new { error = error.Message });
     }
 });
 
@@ -390,6 +460,27 @@ app.MapPost("/api/generation-tasks/{taskId}/output", async (
 {
     var result = await persistence.PersistAsync(taskId, request, cancellationToken);
     return result is null ? Results.NotFound() : Results.Ok(result);
+});
+
+app.MapPatch("/api/generation-tasks/{taskId}/structured-output", async Task<IResult> (
+    string taskId,
+    StructuredOutputEditRequest request,
+    StructuredOutputEditingService structuredOutputs,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await structuredOutputs.SaveAsync(taskId, request, cancellationToken);
+        return result is null ? Results.NotFound() : Results.Ok(result);
+    }
+    catch (StructuredOutputEditValidationException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+    catch (JsonException error)
+    {
+        return Results.BadRequest(new { error = $"Structured output is not valid JSON: {error.Message}" });
+    }
 });
 
 app.MapPatch("/api/generation-tasks/{taskId}/storyboard", async Task<IResult> (
@@ -517,7 +608,8 @@ static AuthRequirement GetAuthRequirement(PathString path)
     var value = path.Value ?? string.Empty;
     if (value.StartsWith("/api/projects", StringComparison.OrdinalIgnoreCase) ||
         value.StartsWith("/api/production-jobs", StringComparison.OrdinalIgnoreCase) ||
-        value.StartsWith("/api/generation-tasks", StringComparison.OrdinalIgnoreCase))
+        value.StartsWith("/api/generation-tasks", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("/api/settings", StringComparison.OrdinalIgnoreCase))
     {
         return AuthRequirement.Authenticated;
     }

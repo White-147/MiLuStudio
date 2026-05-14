@@ -12,7 +12,9 @@
     "dev": "npm run prepare:runtime && npm run build && electron .",
     "smoke": "npm run prepare:runtime && npm run build && electron . --smoke-test",
     "pack:dir": "npm run prepare:runtime && npm run build && electron-builder --dir",
-    "dist:win": "npm run prepare:runtime && npm run build && electron-builder --win nsis"
+    "dist:win": "npm run prepare:runtime && npm run build && electron-builder --win nsis",
+    "verify:release": "powershell -ExecutionPolicy Bypass -File ../../scripts/windows/Test-MiLuStudioStage19DesktopRelease.ps1",
+    "verify:release:signed": "powershell -ExecutionPolicy Bypass -File ../../scripts/windows/Test-MiLuStudioStage19DesktopRelease.ps1 -RequireSigned"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -8,6 +8,7 @@ using MiLuStudio.Infrastructure.Auth;
 using MiLuStudio.Infrastructure.Configuration;
 using MiLuStudio.Infrastructure.Persistence.InMemory;
 using MiLuStudio.Infrastructure.Persistence.PostgreSql;
+using MiLuStudio.Infrastructure.Settings;
 using MiLuStudio.Infrastructure.Skills;
 using MiLuStudio.Infrastructure.System;
 using MiLuStudio.Infrastructure.Time;
@@ -24,6 +25,8 @@ public static class ServiceCollectionExtensions
             configured.RepositoryProvider = options.RepositoryProvider;
             configured.MigrationsPath = options.MigrationsPath;
             configured.StorageRoot = options.StorageRoot;
+            configured.ProviderSettingsPath = options.ProviderSettingsPath;
+            configured.ProviderSecretStorePath = options.ProviderSecretStorePath;
             configured.WorkerId = options.WorkerId;
             configured.PythonExecutablePath = options.PythonExecutablePath;
             configured.PythonSkillsRoot = options.PythonSkillsRoot;
@@ -38,6 +41,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAuthTokenService, LocalAuthTokenService>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<IAuthLicensingAdapter, DeterministicAuthLicensingAdapter>();
+        services.AddSingleton<IProviderSettingsRepository, FileProviderSettingsRepository>();
+        services.AddSingleton<IProviderSecretStore, FileProviderSecretStore>();
         services.AddScoped<IProductionSkillRunner, PythonProductionSkillRunner>();
 
         if (string.Equals(options.RepositoryProvider, RepositoryProviderNames.PostgreSql, StringComparison.OrdinalIgnoreCase))
@@ -88,6 +93,8 @@ public static class ServiceCollectionExtensions
             RepositoryProvider = section["RepositoryProvider"] ?? RepositoryProviderNames.PostgreSql,
             MigrationsPath = section["MigrationsPath"] ?? "backend/control-plane/db/migrations",
             StorageRoot = section["StorageRoot"] ?? "D:\\code\\MiLuStudio\\storage",
+            ProviderSettingsPath = section["ProviderSettingsPath"] ?? string.Empty,
+            ProviderSecretStorePath = section["ProviderSecretStorePath"] ?? string.Empty,
             WorkerId = section["WorkerId"] ?? Environment.MachineName,
             PythonExecutablePath = section["PythonExecutablePath"] ?? "D:\\soft\\program\\Python\\Python313\\python.exe",
             PythonSkillsRoot = section["PythonSkillsRoot"] ?? "D:\\code\\MiLuStudio\\backend\\sidecars\\python-skills",

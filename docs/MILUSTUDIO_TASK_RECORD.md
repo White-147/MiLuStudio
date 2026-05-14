@@ -2379,3 +2379,692 @@ Next phase:
 
 - Stage 18 尚未正式确认。
 - 候选方向：真实 provider adapter 前配置页、正式代码签名与干净 Windows 安装验收，或继续扩展生产控制台角色 / 画风 / 提示词编辑能力。
+
+### 2026-05-14 Stage 18 真实 provider adapter 前配置页完成
+
+Date:
+
+- 2026-05-14
+
+Stage:
+
+- Stage 18：真实 provider adapter 前配置页。
+
+Trigger:
+
+- 用户确认按推荐路径继续。
+- Stage 18 正式范围收敛为：先落地真实 provider adapter 前配置页、配置 DTO、本地 preflight 和成本边界；仍不接真实模型、不读取真实媒体、不触发 FFmpeg、不生成真实媒体文件。
+
+Action:
+
+- 新增 `ProviderSettingsService`、provider settings DTO 和 `IProviderSettingsRepository`。
+- 新增 `FileProviderSettingsRepository`，默认通过 `ControlPlane:StorageRoot` 下的本地 JSON 保存 provider 前占位配置。
+- 新增 `GET /api/settings/providers`、`PATCH /api/settings/providers` 和 `GET /api/settings/providers/preflight`。
+- `/api/settings` 已纳入登录门禁；桌面 unsafe 写请求仍受桌面 session token 保护。
+- Web 左侧“模型”导航已接入真实 `ProviderSettingsPage`，不再停留在占位页。
+- Web provider 配置页支持 Text / Image / Video / Audio / Edit 五类 adapter 的启用、供应商选择、默认模型、API Key 占位输入与清除、单项目成本上限和失败重试次数。
+- API Key 明文只进入请求体，服务端只保存遮罩和 SHA256 指纹；API 响应与本地 provider settings 文件不返回、不保存可用于真实调用的明文 key。
+- Provider preflight 明确 `adapterMode=placeholder_only`、`externalNetwork=disabled`、`mediaGenerated=false`。
+- 新增 `scripts\windows\Test-MiLuStudioStage18ProviderSettings.ps1`，覆盖配置保存、明文 key 不泄漏、preflight 占位边界和 clear key。
+- README、总参考、阶段计划和短棒交接同步 Stage 18 完成状态。
+
+Boundary:
+
+- 不接真实模型 provider。
+- 不读取真实媒体文件。
+- 不触发 FFmpeg。
+- 不生成真实 PNG / MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery。
+- UI 与 Electron 仍只能走 Control API，不直接访问 PostgreSQL、业务文件系统、Python 脚本、模型 SDK 或 FFmpeg。
+- 桌面端不执行 migrations、不定义数据库表、不负责数据库初始化。
+- 本阶段未新增数据库 migration；provider 前配置由 Control API / Infrastructure 写入 D 盘本地 JSON。
+- 本阶段未实现真实 secure secret store；当前只保存 key 遮罩与指纹，不能用于真实 provider 调用。
+
+Local verification:
+
+```powershell
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage18-build\
+
+Push-Location D:\code\MiLuStudio\apps\web
+npm run build
+Pop-Location
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage18ProviderSettings.ps1
+```
+
+Verification result:
+
+- .NET build：通过，0 warning / 0 error。
+- Web build：通过，Vite 成功输出生产包。
+- Stage 18 provider settings integration：通过；脚本确认 API 响应和本地 provider settings 文件不包含明文测试 key。
+- Stage 18 脚本确认启用且配置完整的 text adapter preflight 为 `ok`，且 `externalNetwork=disabled`、`mediaGenerated=false`。
+
+Design check:
+
+- cohesion：provider settings DTO、service、repository 和 Web 页面均围绕“provider 前配置”单一能力组织。
+- coupling：Web 只依赖 Control API DTO；provider 配置写入隐藏在 Application service 和 Infrastructure repository 后。
+- boundaries：未让 UI / Electron 直接访问数据库、文件系统、模型 SDK、Python 脚本或 FFmpeg；未让 Worker 或 Skills 读取真实媒体。
+- temporary debt：API Key 当前只保存遮罩和指纹，不能作为真实 adapter secret store；后续如接真实 provider，需要先补 secure secret store、费用硬阈值、provider sandbox 和真实 key 校验边界。
+
+Environment check:
+
+- project-local files：新增脚本、前端页面、后端 service/repository 和文档均在 `D:\code\MiLuStudio` 内。
+- D drive only：验收脚本使用 `.tmp\stage18-provider-settings\...` 临时目录和 D 盘本地 API build 输出。
+- C drive risk：未新增 C 盘依赖、缓存、模型、媒体或外部服务写入。
+
+Web searches:
+
+- OpenAI API key safety：官方文档要求不要把 API key 暴露在浏览器 / 客户端代码中，建议通过后端和环境变量或 secret management 管理。
+- OpenAI production best practices：官方文档强调 API key 应安全保存，并使用 spend limits / usage limits 监控成本。
+- Electron security checklist：官方文档强调限制导航、不要向不可信 Web 暴露 Electron API、校验 IPC sender；当前 Stage 18 继续保持 Web 只走 Control API。
+
+Sources:
+
+- https://help.openai.com/en/articles/5112595-best-practices-for-api
+- https://platform.openai.com/docs/guides/production-best-practices/model-overview
+- https://www.electronjs.org/docs/latest/tutorial/security
+
+Findings:
+
+- Stage 18 的“响应和本地文件不保存明文 key”与官方 key safety 方向一致；真实 provider 接入前仍需要正式 secret store。
+- 成本上限和重试次数作为配置 DTO 先落地是合理的，但真实 provider 调用前还需要硬执行 spend guard，而不是只在 UI 展示。
+- Electron / Web 继续不直接保存 secret 或调用 provider SDK，符合当前桌面安全边界。
+
+Deviation risk:
+
+- 无方向偏差；本阶段仍是 adapter 前配置，不是 provider 接入。
+- 当前 key 只保存遮罩/指纹，后续不能误认为已有可用 provider secret。
+
+README check:
+
+- 已更新根 README，加入 Stage 18 完成状态、Provider 前配置章节、当前边界和下一阶段建议。
+
+Build plan changes:
+
+- 已更新 Stage 18 当前落地状态和 13.2 第一版配置页说明。
+
+Phase plan changes:
+
+- 当前焦点改为 Post Stage 18，新增 Stage 18 完整章节。
+
+Task record changes:
+
+- 已追加本记录。
+
+Handoff changes:
+
+- 已更新短棒交接，下一步改为确认 Stage 19 正式编号与范围。
+
+Next phase:
+
+- Stage 19 尚未正式确认。
+- 候选方向：正式代码签名与干净 Windows 安装验收、继续扩展生产控制台角色 / 画风 / 提示词编辑能力，或 provider adapter 后续 secure secret store / spend guard / sandbox 设计。
+
+### 2026-05-14 Stage 19 桌面发布验收与代码签名前置准备完成
+
+Date:
+
+- 2026-05-14
+
+Stage:
+
+- Stage 19：桌面发布验收与代码签名前置准备。
+
+Trigger:
+
+- 用户要求“按照建议方向继续”。
+- Stage 19 正式范围收敛为：先补桌面发布验收、签名前置检查和干净 Windows 安装 / 卸载 / 自启动 / 快捷方式清单；仍不接真实 provider、不读取真实媒体、不触发 FFmpeg、不生成真实媒体文件。
+
+Action:
+
+- 新增 `scripts\windows\Test-MiLuStudioStage19DesktopRelease.ps1`，覆盖 desktop package 配置、安装器产物、`win-unpacked`、Web dist、Control API / Worker runtime、Python runtime、Python Skills、最新 migration 和 Electron 安全边界。
+- 脚本检查 `installer.nsh` 的快捷方式 / 开机自启动选项，并确认安装器脚本中不恢复许可证、激活码或付费码门槛。
+- 脚本检查 Authenticode 状态：默认把 `NotSigned` 记录为本地验收警告；`-RequireSigned` 模式要求安装器和主 exe 均为 `Valid`。
+- 脚本检查签名前置配置：支持证书路径 / thumbprint / timestamp URL 检查，证书路径不得位于仓库内。
+- 脚本继续调用桌面 API 安全验证，确认桌面模式下 unsafe 写请求、登录门禁和 migration apply 禁止边界没有回退。
+- `apps\desktop\package.json` 新增 `verify:release` 和 `verify:release:signed`。
+- `.gitignore` 新增 `*.pfx`、`*.p12`、`*.pvk`、`*.spc`、`*.key`，避免证书或私钥容器入仓。
+- 新增 `docs\MILUSTUDIO_STAGE19_DESKTOP_RELEASE_CHECKLIST.md`，记录签名前置配置和干净 Windows 安装 / 卸载 / 自启动 / 快捷方式手工验收步骤。
+- README、总参考、阶段计划和短棒交接同步 Stage 19 完成状态。
+
+Boundary:
+
+- 不接真实模型 provider。
+- 不读取真实媒体文件。
+- 不触发 FFmpeg。
+- 不生成真实 PNG / MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery。
+- UI 与 Electron 仍只能走 Control API，不直接访问 PostgreSQL、业务文件系统、Python 脚本、模型 SDK 或 FFmpeg。
+- 桌面端不执行 migrations、不定义数据库表、不负责数据库初始化。
+- 本阶段不提交代码签名证书、私钥或真实签名密钥；当前只做签名前置检查。
+
+Local verification:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage19DesktopRelease.ps1 -BuildPackage
+
+Push-Location D:\code\MiLuStudio\apps\desktop
+D:\soft\program\nodejs\npm.ps1 run verify:release
+Pop-Location
+
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage19DesktopRelease.ps1 -SkipDesktopBuild -SkipApiSecurity -RequireSigned
+```
+
+Verification result:
+
+- `-BuildPackage`：通过；重新生成 `outputs\desktop\MiLuStudio-Setup-0.1.0.exe` 和 `win-unpacked`，并确认已包含 `004_stage16_auth_licensing.sql`。
+- `verify:release`：通过；脚本确认安装器、blockmap、主 exe、`app.asar`、Web dist、Control API / Worker runtime、Python runtime、Python Skills 和 storyboard director skill 均在发布产物内。
+- 桌面 API 安全验证：通过；无桌面 token 的 unsafe 写请求为 403，带 token 后进入账号登录门禁，桌面模式 migration apply 为 403。
+- Authenticode：安装器和 `win-unpacked\MiLuStudio.exe` 当前均为 `NotSigned`；本地验收记录为警告，正式发布前阻塞。
+- `-RequireSigned` 负向检查：按预期失败，确认当前未签名产物不会被误判为正式可发布。
+- Stage 19 重打包前的旧 `outputs\desktop` 产物缺少 `004_stage16_auth_licensing.sql`，已通过本阶段重打包修正。
+- `git diff --check`：通过；仅出现工作区 LF/CRLF 提示，无空白错误。
+
+Design check:
+
+- cohesion：新增脚本和清单只围绕“桌面发布验收与签名前置准备”组织，不混入 provider、媒体生成或业务编辑能力。
+- coupling：脚本读取 package、源文件和发布产物做验收；业务边界仍由 Control API / Application / Worker 负责。
+- boundaries：Electron 继续只承载 Web、启动本地服务和注入 Control API 配置；未让 UI / Electron 直接接触数据库、Python、模型 SDK 或 FFmpeg。
+- temporary debt：当前未接入真实签名证书、Azure Trusted Signing 或硬件 EV 证书；正式发布前必须补真实证书和签名流水线，并在干净 Windows 环境回归。
+
+Environment check:
+
+- project-local files：新增脚本、清单、package 配置和文档均在 `D:\code\MiLuStudio` 内。
+- D drive only：打包输出仍位于 `D:\code\MiLuStudio\outputs\desktop`；报告输出位于 `D:\code\MiLuStudio\.tmp\stage19-desktop-release-report.json`。
+- C drive risk：未新增 C 盘依赖、缓存、模型、媒体或外部服务写入；脚本拒绝使用仓库内证书路径。
+
+Web searches:
+
+- Microsoft SignTool：官方文档说明签名和时间戳需要明确 digest algorithm，推荐 SHA256，并提供 `/tr`、`/td`、`/pa` 等签名 / 验证选项。
+- Electron code signing：官方文档强调打包分发的 Electron 应用应进行代码签名；Windows 分发涉及 EV / 云签名等正式证书约束。
+- electron-builder Windows signing：官方文档说明 Windows code signing 在配置正确时可由 electron-builder 自动执行，并支持 Azure Trusted Signing 配置。
+- Electron security checklist：官方文档强调不要启用 Node integration、启用 context isolation、启用 renderer sandbox、不要关闭 webSecurity。
+
+Sources:
+
+- https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool
+- https://www.electronjs.org/docs/latest/tutorial/code-signing
+- https://www.electron.build/code-signing-win.html
+- https://www.electronjs.org/docs/latest/tutorial/security
+
+Findings:
+
+- Stage 19 的 `NotSigned` 记录和 `-RequireSigned` 阻断符合 Windows / Electron 桌面发布方向：本地包可验收，但正式分发必须真实签名。
+- timestamp URL 作为正式签名前置项是必要的；后续签名流水线应使用 SHA256 digest 与可信时间戳。
+- 当前 Electron 主进程的 context isolation、sandbox、Node integration 禁用、webSecurity、导航限制和 IPC sender guard 与官方安全清单方向一致。
+- electron-builder 的正式签名配置仍留给后续证书落地；本阶段不伪造证书、不把密钥放入仓库。
+
+Deviation risk:
+
+- 无方向偏差；Stage 19 只做桌面发布验收和签名前置准备，不接真实 provider 或真实媒体链路。
+- 正式签名仍是阻塞项，不能把当前 `NotSigned` 本地验收通过误读为可公开发布。
+
+README check:
+
+- 已更新根 README，加入 Stage 19 完成状态、桌面发布验收章节、当前边界、运行命令和下一阶段建议。
+
+Build plan changes:
+
+- 已更新 Stage 15 桌面打包状态和 Stage 19 当前落地状态。
+
+Phase plan changes:
+
+- 当前焦点改为 Post Stage 19，新增完整 Stage 19 章节，下一步改为确认 Stage 20。
+
+Task record changes:
+
+- 已追加本记录。
+
+Handoff changes:
+
+- 已更新短棒交接，下一棒提示词改为 Stage 0 到 Stage 19 已完成，并提示 Stage 20 候选方向。
+
+Next phase:
+
+- Stage 20 尚未正式确认。
+- 推荐方向：继续扩展生产控制台角色 / 画风 / 图片提示词 / 视频提示词编辑，或先做 provider adapter 后续 secure secret store / spend guard / sandbox 设计；拿到正式证书后再做 signed release 回归。
+
+### 2026-05-14 Stage 19 联网自检补强
+
+Date:
+
+- 2026-05-14
+
+Trigger:
+
+- 用户要求在进入新阶段前进行联网自检项目，如发现需要修改或完善则优先补齐。
+
+Self-check scope:
+
+- Microsoft SignTool / Authenticode 签名与时间戳。
+- Electron code signing 与 Windows 发布签名要求。
+- electron-builder Windows signing / Azure Trusted Signing 配置方向。
+- Electron security checklist、context isolation、renderer sandbox 和 IPC sender 校验。
+
+Findings:
+
+- Stage 19 已覆盖 Authenticode `NotSigned` / `-RequireSigned`、证书不入仓、桌面 token、migration apply 禁止、contextIsolation、sandbox、nodeIntegration=false、webSecurity、导航限制和 IPC sender guard。
+- 官方 Electron security checklist 还强调内容来源限制；当前桌面本地 Web host 已有基础 CSP 与 `X-Content-Type-Options: nosniff`，但 Stage 19 脚本尚未检查，且 CSP 可补 `form-action` 和 `frame-ancestors`。
+
+Action:
+
+- 更新 `apps\desktop\src\webHost.ts`：CSP 增加 `form-action 'self'` 和 `frame-ancestors 'none'`。
+- 更新 `scripts\windows\Test-MiLuStudioStage19DesktopRelease.ps1`：把 CSP 与 `X-Content-Type-Options: nosniff` 纳入发布验收，检查 `default-src`、`script-src`、loopback `connect-src`、`object-src`、`base-uri`、`form-action` 和 `frame-ancestors`。
+- 同步 README、总构建计划、阶段计划、短棒交接和 Stage 19 桌面发布验收清单。
+
+Sources:
+
+- https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool
+- https://www.electronjs.org/docs/latest/tutorial/code-signing
+- https://www.electron.build/code-signing-win.html
+- https://www.electronjs.org/docs/latest/tutorial/security
+- https://www.electronjs.org/docs/latest/tutorial/context-isolation
+- https://www.electronjs.org/docs/latest/tutorial/sandbox
+
+Verification:
+
+- `Test-MiLuStudioStage19DesktopRelease.ps1 -BuildPackage`：通过；重新打包后 Stage 19 脚本已确认 CSP / nosniff 检查通过，并继续确认桌面 API 安全边界。
+- `Test-MiLuStudioStage19DesktopRelease.ps1 -SkipDesktopBuild -SkipApiSecurity -RequireSigned`：按预期失败，继续阻断当前 `NotSigned` 安装器。
+
+Next check:
+
+- 无需在 Stage 20 前继续补 Stage 19；下一阶段可按用户要求进入前端重构规划。
+
+### 2026-05-14 Stage 20 Codex 式前端工作台重构完成
+
+Date:
+
+- 2026-05-14
+
+Stage:
+
+- Stage 20：Codex 式前端工作台重构。
+
+Trigger:
+
+- 用户要求把整个前端改成 Codex 风格：左侧历史项目，新项目默认只有一个对话框，支持上传剧本或直接输入要求；进行中时右侧显示当前进度、生成结果预览和打开入口；现有导航与账户相关入口统一收束到左下角设置。
+
+Action:
+
+- 新增 `apps\web\src\features\workspace\StudioWorkspacePage.tsx`，作为登录后的主工作台入口。
+- `apps\web\src\app\App.tsx` 改为只负责认证态检查和工作台挂载，不再渲染旧多导航壳。
+- `apps\web\src\styles.css` 重写为三栏工作台样式：历史项目侧栏、中央单输入框、右侧进度 / 结果卡、设置弹层。
+- 新项目空态不显示顶部页面标题，只保留中央输入框；输入框支持粘贴剧本 / 要求和上传 txt / md 文本。
+- 启动生产前仍通过 `createProject` / `updateProject` 保存项目，再调用 `startProductionJob`；SSE 仍通过 `watchProductionJob` 更新进度。
+- 右侧结果卡只展示真实 generation task output；“打开”结果会显示结构化预览，`storyboard_director` 结果保留分镜表编辑和单镜头备注重算入口。
+- 模型配置、桌面诊断和账户退出统一放入左下角设置菜单；ProviderSettingsPage 和 DesktopDiagnosticsPanel 仍只通过 Control API。
+- `AuthGate` 清理为正常中文文案。
+
+Boundary:
+
+- 未接真实模型 provider。
+- 未读取真实媒体文件。
+- 未触发 FFmpeg。
+- 未生成真实 MP4 / WAV / SRT / ZIP。
+- 未引入 Linux / Docker / Redis / Celery。
+- UI / Electron 仍只通过 Control API / DTO / SSE 与业务系统通信，不直接访问数据库、业务文件系统、模型 SDK、Python 脚本或 FFmpeg。
+- 桌面端仍不执行 migrations、不定义数据库表、不负责数据库初始化。
+- 没有删除或修改 `D:\code\XiaoLouAI`。
+
+Local verification:
+
+```powershell
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+
+git diff --check
+
+Invoke-WebRequest -Uri http://127.0.0.1:5174/ -UseBasicParsing
+```
+
+Verification result:
+
+- Web build：通过。
+- `git diff --check`：通过；仅有工作区 LF/CRLF 提示，无空白错误。
+- 本地 Vite 预览服务已启动在 `http://127.0.0.1:5174/`，HTTP 200。
+
+Design check:
+
+- cohesion：新增 `workspace` feature 聚合 Codex 式工作台交互，旧 `production-console` 代码保留但不作为主入口。
+- coupling：工作台只调用既有 Control API client；分镜保存和单镜头重算仍走 Stage 17 endpoint。
+- boundaries：设置入口只是 UI 收束，不让 Web 或 Electron 直接读写 provider settings 文件或访问底层服务。
+- temporary debt：角色 / 画风 / 提示词等更细编辑能力尚未迁入新工作台；下一阶段可继续扩展结果打开面板。
+
+Web searches:
+
+- OpenAI Codex 官方页与文档确认 Codex 是面向真实工程任务的对话式 / 工作区式 coding agent；本阶段只参考交互方向，不下载或引入外部参考项目。
+
+Sources:
+
+- https://openai.com/codex
+- https://platform.openai.com/docs/codex/overview
+
+README check:
+
+- 已更新根 `README.md`，加入 Stage 20 当前状态、Web 工作台章节、当前边界和下一阶段建议。
+
+Phase plan changes:
+
+- 已补 Stage 20 章节，下一阶段改为 Stage 21 候选方向。
+
+Task record changes:
+
+- 已追加本记录。
+
+Handoff changes:
+
+- 已更新短棒交接，下一棒提示词改为 Stage 0 到 Stage 20 已完成。
+
+Next phase:
+
+- Stage 21 尚未正式确认。
+- 建议候选方向：继续细化新工作台中的角色 / 画风 / 图片提示词 / 视频提示词编辑能力；或做 provider adapter 后续 secure secret store / spend guard / sandbox；或拿到正式证书后做 signed release 回归。
+
+### 2026-05-14 Stage 20 工作台附件阶段门禁与短棒归档
+
+Date:
+
+- 2026-05-14
+
+Stage:
+
+- Post Stage 20 frontend hardening：Codex 式附件菜单、阶段门禁和短棒 handoff 归档。
+
+Trigger:
+
+- 用户确认上传入口应改为 Codex 同款加号，并希望根据当前生产阶段限制文本 / 图片 / 视频上传入口；同时要求把短棒 handoff 重构清楚，将目前已完成阶段归档。
+
+Action:
+
+- `apps\web\src\features\workspace\StudioWorkspacePage.tsx`：把左下角上传按钮改为加号菜单，提供“文本 / 图片 / 视频”三类入口。
+- 根据当前 `ProductionJob.currentStage` 和 job / project 状态计算上传权限：
+  - 新项目、故事解析、短剧改编、脚本生成、图片提示词、配音任务、字幕结构：只允许文本。
+  - 角色设定、画风设定、图片资产：允许文本和图片。
+  - 分镜审核、视频提示词、视频片段、粗剪计划、质量检查：允许文本、图片和视频。
+  - 排队中、导出占位、已完成和失败状态：禁用新附件。
+- 禁用的菜单项不可点击，并通过 title 与菜单内说明解释当前阶段限制。
+- 文件 input 的 `accept` 随用户选择的类型动态切换；选择后仍做二次类型校验。
+- 文本附件仅在故事来源阶段作为剧本文本读取；后续阶段的文本、图片、视频只作为参考附件元数据。
+- 图片 / 视频不读取真实媒体内容、不解析帧、不触发 FFmpeg、不扩后端真实媒体上传链路。
+- `apps\web\src\styles.css`：新增 Codex 式加号菜单、上传项和禁用态样式。
+- 新增 `docs\archive\MILUSTUDIO_COMPLETED_STAGES_ARCHIVE_2026-05-14_stage0-20.md`，归档 Stage 0-20 完成摘要。
+- 重写 `docs\MILUSTUDIO_HANDOFF.md` 为更短的短棒交接，只保留当前状态、最近补丁、固定约束、技术债、验证和下一棒提示。
+
+Boundary:
+
+- 未接真实模型 provider。
+- 未读取真实媒体文件。
+- 未触发 FFmpeg。
+- 未生成真实 MP4 / WAV / SRT / ZIP。
+- 未引入 Linux / Docker / Redis / Celery。
+- UI / Electron 仍只通过 Control API / DTO / SSE 与业务系统通信。
+- 未让前端或 Electron 直接访问数据库、业务文件系统、模型 SDK、Python 脚本或 FFmpeg。
+
+Local verification:
+
+```powershell
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+```
+
+Verification result:
+
+- Web build：通过。
+
+Design check:
+
+- cohesion：上传菜单规则聚合在 workspace 组件内，与当前固定生产流程一致。
+- coupling：只使用前端已有 job / project DTO 判断阶段，不新增后端上传链路。
+- boundaries：图片 / 视频仍只是附件元数据，不进入真实媒体读取或存储。
+- accessibility：禁用项不可点击，并保留 title / 小字说明，解释为什么当前阶段不能上传该类型。
+
+README check:
+
+- 已更新根 `README.md`，说明 Stage 20 工作台包含阶段门禁加号上传菜单，媒体附件只记录元数据。
+
+Phase plan changes:
+
+- 已更新 Stage 20 任务、验收、落地状态和阶段结束自检，补入加号上传菜单和阶段门禁。
+
+Task record changes:
+
+- 已追加本记录。
+
+Handoff changes:
+
+- 已将 Stage 0-20 完成摘要归档到 `docs\archive\MILUSTUDIO_COMPLETED_STAGES_ARCHIVE_2026-05-14_stage0-20.md`。
+- 已重写短棒 handoff，下一棒提示词加入阶段门禁上传规则。
+
+Next phase:
+
+- Stage 21 尚未正式确认。
+- 建议候选方向保持：继续细化新工作台角色 / 画风 / 图片提示词 / 视频提示词编辑能力；或做 provider adapter 后续 secure secret store / spend guard / sandbox；或拿到正式证书后做 signed release 回归。
+
+### 2026-05-14 Stage 21 新工作台结构化产物编辑增强完成
+
+Date:
+
+- 2026-05-14
+
+Stage:
+
+- Stage 21：新工作台结构化产物编辑增强。
+
+Trigger:
+
+- 用户要求“按照建议的方向继续”。
+- 正式范围确认为：继续细化新 Codex 式工作台中的角色、画风、图片提示词和视频提示词编辑能力；provider secure secret store / spend guard / sandbox 与 signed release 回归留作后续候选。
+
+Action:
+
+- 新增 `StructuredOutputEditingDtos` 与 `StructuredOutputEditingService`，以 Application service 管理结构化产物编辑、字段白名单、envelope 写回和下游任务重置。
+- 新增 `PATCH /api/generation-tasks/{taskId}/structured-output`，支持编辑 `character_bible`、`style_bible`、`image_prompt_builder` 和 `video_prompt_builder` 的顶层白名单字段。
+- 保存时只修改当前 task 的 JSON envelope，追加 `stage21_edit_summary`、review metadata 和 no-provider / no-media / no-FFmpeg 标记。
+- 角色与画风编辑后回到 `review` / `paused`；图片提示词和视频提示词编辑后保持 `completed` / `running`，等待下游重新计算。
+- 保存后重置当前任务之后的所有下游任务为 `waiting`，清空旧 `outputJson`、时间、锁和错误状态。
+- Web 工作台结果面板新增角色、画风、图片提示词和视频提示词编辑表单、字段级 diff 和保存动作。
+- 新增 `scripts\windows\Test-MiLuStudioStage21StructuredOutputEditing.ps1`，覆盖完整 deterministic 生产链路、四类结构化产物编辑、下游重置和边界标记。
+- README、建设方案、阶段计划和短棒交接已同步 Stage 21 状态。
+
+Boundary:
+
+- 未接真实模型 provider。
+- 未读取真实媒体文件。
+- 未触发 FFmpeg。
+- 未生成真实 PNG / MP4 / WAV / SRT / ZIP。
+- 未引入 Linux / Docker / Redis / Celery。
+- UI / Electron 仍只通过 Control API / DTO / SSE 与业务系统通信。
+- 未让 Web 或 Electron 直接访问 PostgreSQL、业务文件系统、Python 脚本、模型 SDK 或 FFmpeg。
+- 桌面端仍不执行 migrations、不定义数据库表、不负责数据库初始化。
+- 本阶段未新增数据库 migration，未扩展真实媒体上传链路。
+
+Local verification:
+
+```powershell
+. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage21-build\
+
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage21StructuredOutputEditing.ps1
+
+git diff --check
+```
+
+Verification result:
+
+- .NET build：通过。
+- Web build：通过。
+- Stage 21 structured output editing integration：通过；脚本完成生产流后依次编辑视频提示词、图片提示词、画风和角色，并验证下游重置。
+- `git diff --check`：通过，仅有工作区 LF / CRLF 提示，无空白错误。
+
+Design check:
+
+- cohesion：后端编辑能力聚合在 `StructuredOutputEditingService`，前端编辑 UI 聚合在工作台结果面板内，围绕“已生成结构化产物编辑”单一职责组织。
+- coupling：Web 只调用 Control API client；后端只写 task envelope 和任务状态，不接 provider SDK、Python skill 或 FFmpeg。
+- boundaries：媒体附件仍只保留元数据；结构化编辑不读取真实媒体、不生成真实文件、不绕过 Worker / Control API 边界。
+- temporary debt：当前只支持白名单顶层字段编辑；提示词批量操作、镜头增删、更细粒度 diff 和高级重算策略留给后续阶段。
+
+Environment check:
+
+- project-local files：新增代码、脚本和文档均位于 `D:\code\MiLuStudio`。
+- D drive only：build 输出使用 `D:\code\MiLuStudio\.tmp\stage21-build` 和 `.tmp\stage21-integration-build`。
+- C drive risk：未新增 C 盘依赖、缓存、模型、媒体或外部服务写入。
+
+Web searches:
+
+- MDN File API：确认 Web `File` 对象可访问 name / size / type / lastModified 等元数据；真实内容读取需要 `FileReader` 等额外动作。Stage 21 继续只记录媒体附件元数据，不读取真实媒体内容。
+- Electron security：继续保持 context isolation、sandbox、nodeIntegration=false、webSecurity 和 IPC 边界方向；Stage 21 未让 Electron 暴露数据库、Python、模型 SDK 或 FFmpeg。
+- OpenAI Codex 官方页面 / 文档：Codex 式工作区是工程任务交互参考；本阶段只借鉴工作台组织方式，不接 OpenAI Codex、外部 agent、真实 provider 或远端 sandbox。
+
+Sources:
+
+- https://developer.mozilla.org/en-US/docs/Web/API/File_API
+- https://www.electronjs.org/docs/latest/tutorial/security
+- https://www.electronjs.org/docs/latest/tutorial/context-isolation
+- https://openai.com/codex
+- https://platform.openai.com/docs/codex/overview
+
+README check:
+
+- 已更新根 `README.md`，加入 Stage 21 完成状态、工作台结构化产物编辑说明、当前边界和下一阶段建议。
+
+Build plan changes:
+
+- 已更新 `docs\MILUSTUDIO_BUILD_PLAN.md`，补入 Stage 20 / Stage 21 当前落地状态。
+
+Phase plan changes:
+
+- 当前焦点改为 Post Stage 21；新增 Stage 21 完整章节；下一阶段候选改为 Stage 22。
+
+Task record changes:
+
+- 已追加本记录。
+
+Handoff changes:
+
+- 已更新短棒交接，下一棒提示词改为 Stage 0 到 Stage 21 已完成，并建议先确认 Stage 22。
+
+Next phase:
+
+- Stage 22 尚未正式确认。
+- 建议优先方向：provider adapter secure secret store / spend guard / sandbox 设计，仍不接真实模型；或继续扩展工作台高级编辑与 signed release 回归。
+
+### 2026-05-14 Stage 22 Provider Adapter 安全前置层设计与占位落地完成
+
+Date:
+
+- 2026-05-14
+
+Stage:
+
+- Stage 22：Provider Adapter 安全前置层设计与占位落地。
+
+Trigger:
+
+- 用户要求“按照推荐的方案继续”。
+- 正式范围确认为：先补 provider adapter secure secret store / spend guard / sandbox 安全前置层，仍不接真实模型；工作台批量编辑、镜头增删、更细粒度 diff 和 signed release 回归留作 Stage 23 候选。
+
+Action:
+
+- `ProviderSettingsDtos` 新增 provider safety / adapter safety / secret store / spend guard / sandbox DTO。
+- 新增 `IProviderSecretStore` 和 `FileProviderSecretStore`；当前只保存 API Key 遮罩、SHA256 指纹、不可调用 secret reference 和 metadata-only 状态。
+- `ProviderSettingsService` 接入 metadata-only secret store，保存 provider key 时不再把明文写入 settings 文件或 API 响应。
+- `ProviderSettingsService` 新增 safety 状态构建、preflight 安全检查和 spend guard 判断；预算内仍返回真实 provider 调用阻断，超预算与重试溢出会被拒绝。
+- Control API 新增 `GET /api/settings/providers/safety` 和 `POST /api/settings/providers/spend-guard/check`。
+- Provider preflight 新增 `secret_store`、`spend_guard` 和 `provider_sandbox` 三个安全前置检查。
+- Web provider 设置页显示 Stage 22 安全前置层、metadata-only secret store、spend guard 和 sandbox 状态。
+- 新增 `scripts\windows\Test-MiLuStudioStage22ProviderSafety.ps1`，覆盖密钥明文不泄漏、安全状态、preflight、预算阻断、重试阻断和 clear key。
+- README、建设方案、阶段计划和短棒交接已同步 Stage 22 状态。
+
+Boundary:
+
+- 未接真实模型 provider。
+- 未读取真实媒体文件。
+- 未触发 FFmpeg。
+- 未生成真实 PNG / MP4 / WAV / SRT / ZIP。
+- 未引入 Linux / Docker / Redis / Celery。
+- UI / Electron 仍只通过 Control API / DTO / SSE 与业务系统通信。
+- 未让 Web 或 Electron 直接访问 PostgreSQL、业务文件系统、Python 脚本、模型 SDK 或 FFmpeg。
+- 桌面端仍不执行 migrations、不定义数据库表、不负责数据库初始化。
+- 本阶段未新增数据库 migration，未实现真实 provider SDK / HTTP adapter，未保存可用于真实调用的明文 key。
+
+Local verification:
+
+```powershell
+. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage22-build\
+
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage22ProviderSafety.ps1
+
+git diff --check
+```
+
+Verification result:
+
+- .NET build：通过。
+- Web build：通过。
+- Stage 22 provider safety integration：通过；脚本完成 settings / safety / preflight / spend guard / clear key 检查，并验证明文 key 不出现在响应、settings 文件或 secret metadata 文件中。
+- `git diff --check`：通过，仅有工作区 LF / CRLF 提示，无空白错误。
+
+Design check:
+
+- cohesion：provider 安全前置状态集中在 `ProviderSettingsService`、provider safety DTO 和 `IProviderSecretStore` 边界内，围绕“真实 provider 接入前安全占位”单一职责组织。
+- coupling：Web 只通过 Control API client 读取 / 保存 provider 设置；secret metadata 文件只由 Infrastructure store 写入，UI / Electron 不直接访问。
+- boundaries：sandbox 明确阻断 provider calls、external network、media read、FFmpeg 和真实 artifact generation；spend guard 只做前置判断，不触发 provider。
+- temporary debt：当前 secret store 是 metadata-only 占位，并非真实 OS secure storage / DPAPI / 硬件密钥方案；真实 provider 接入前仍需补可审计的真实安全存储、运行时解密边界和 dry-run / audit contract。
+
+Environment check:
+
+- project-local files：新增代码、脚本和文档均位于 `D:\code\MiLuStudio`。
+- D drive only：build 输出使用 `D:\code\MiLuStudio\.tmp\stage22-build` 和 `.tmp\stage22-provider-safety-build`；测试 secret metadata 位于 `.tmp\stage22-provider-safety\...`。
+- C drive risk：未新增 C 盘依赖、缓存、模型、媒体或外部服务写入。
+
+Web searches:
+
+- OWASP Secrets Management Cheat Sheet：确认 secret 管理应覆盖生命周期、访问控制、metadata、审计和限制；Stage 22 先保留 metadata-only，不声称已完成真实生产级 secret manager。
+- OpenAI API key safety：确认 API key 不应放在浏览器 / 移动端等客户端环境，不应提交到仓库，生产系统应考虑 secret management 工具。
+- OpenAI project key / spend controls：确认协作和生产系统应使用可审计、隔离的 project key、usage visibility、rate / spend controls；Stage 22 的 spend guard 是本地前置占位，不替代供应商侧限制。
+- OpenAI rate limit best practices：确认重试应考虑 backoff、token / usage 估算和 limits；Stage 22 只实现重试次数硬边界，不发真实请求。
+- Electron security checklist：继续保持 context isolation、sandbox、nodeIntegration=false、webSecurity 和 IPC 边界方向；Stage 22 未让 Electron 暴露 provider secret store、数据库、Python、模型 SDK 或 FFmpeg。
+
+Sources:
+
+- https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
+- https://help.openai.com/en/articles/5112595-best-practices-for-api-key-safety
+- https://help.openai.com/en/articles/5008148-can-i-share-my-api-key-with-my-teammate-coworker
+- https://help.openai.com/en/articles/6891753-what-are-the-best-practices-for-managing-my-rate-limits-in-the-api
+- https://www.electronjs.org/docs/latest/tutorial/security
+
+README check:
+
+- 已更新根 `README.md`，加入 Stage 22 完成状态、provider 安全前置层、当前边界和下一阶段建议。
+
+Build plan changes:
+
+- 已更新 `docs\MILUSTUDIO_BUILD_PLAN.md`，补入 Stage 22 当前落地状态，并更新 provider 配置页与成本安全说明。
+
+Phase plan changes:
+
+- 当前焦点改为 Post Stage 22；新增 Stage 22 完整章节；下一阶段候选改为 Stage 23。
+
+Task record changes:
+
+- 已追加本记录。
+
+Handoff changes:
+
+- 已更新短棒交接，下一棒提示词改为 Stage 0 到 Stage 22 已完成，并建议先确认 Stage 23。
+
+Next phase:
+
+- Stage 23 尚未正式确认。
+- 建议候选方向：工作台高级编辑（提示词批量操作、镜头增删、更细粒度 diff 和重算策略）；provider adapter 真实接入前 dry-run / audit contract；拿到正式证书后的 signed release 回归。

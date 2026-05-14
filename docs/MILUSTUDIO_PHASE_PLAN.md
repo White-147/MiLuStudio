@@ -95,9 +95,9 @@ Environment check:
 ## 6. 当前焦点
 
 ```text
-Current phase: Post Stage 17
-Status: pending Stage 18 confirmation
-Goal: Stage 17 已正式确认为生产控制台可编辑能力并完成；下一步由用户确认 Stage 18 方向。
+Current phase: Post Stage 22
+Status: done
+Goal: Stage 22 已正式确认为 Provider Adapter 安全前置层设计与占位落地并完成；下一步建议在不接真实 provider 的前提下进入工作台高级编辑、provider dry-run 审计契约或 signed release 回归。
 Next handoff owner: current / next session
 ```
 
@@ -124,11 +124,31 @@ Stage 17 已确认并完成：
 
 1. 生产控制台可编辑能力：分镜表编辑、单镜头重新生成、备注驱动重试和审核后重算。
 
-Stage 18 候选方向：
+Stage 18 已确认并完成：
 
 1. 真实 provider adapter 前配置页：模型供应商、密钥、能力开关、成本边界和预检状态，但仍不接真实模型。
-2. 桌面发布验收：代码签名、安装器品牌细节和干净 Windows 安装 / 卸载 / 自启动 / 快捷方式验收。
-3. 继续扩展生产控制台可编辑能力：角色、画风、图片提示词和视频提示词编辑。
+
+Stage 19 已确认并完成：
+
+1. 桌面发布验收与代码签名前置准备：安装包、`win-unpacked`、运行时资源、Electron 安全边界、桌面模式 migration 禁止、签名状态和干净 Windows 手工验收清单。
+
+Stage 20 已确认并完成：
+
+1. Codex 式前端工作台重构：左侧历史项目、中央单输入框、右侧固定流程进度与生成结果、左下角设置入口、Codex 式附件卡片和阶段门禁加号上传菜单。
+
+Stage 21 已确认并完成：
+
+1. 新工作台结构化产物编辑增强：角色、画风、图片提示词和视频提示词可通过 Control API 编辑 JSON envelope，并重置下游任务等待重新计算。
+
+Stage 22 已确认并完成：
+
+1. Provider Adapter 安全前置层设计与占位落地：metadata-only secret store、spend guard、provider sandbox、安全状态 endpoint、preflight 增强和 Web 安全状态展示。
+
+Stage 23 候选方向：
+
+1. 继续扩展工作台高级编辑：提示词批量操作、镜头增删、更细粒度 diff 和重算策略。
+2. provider adapter 真实接入前设计评审：只做接口契约、审计日志和 dry-run，不发送真实请求。
+3. 发布验收补强：拿到正式证书后跑 `verify:release:signed` 和干净 Windows 虚拟机安装 / 卸载回归。
 
 ## 7. Stage 0 项目初始化
 
@@ -1137,7 +1157,378 @@ powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test
 - 检查下游 task reset 语义是否会破坏 checkpoint / retry / Worker claiming。
 - 检查 README 是否需要同步更新，保持中文、PowerShell 友好和面试展示导向。
 
-## 25. 每阶段联网自检模板
+## 25. Stage 18 真实 provider adapter 前配置页
+
+Status: done
+
+目标：
+
+- 把真实 provider adapter 接入前的配置页、DTO、后端边界和本地预检先落地。
+- 支持 Text / Image / Video / Audio / Edit 五类 adapter 的供应商、默认模型、启用开关和 API Key 占位配置。
+- 支持单项目成本上限和失败重试次数配置，为后续真实成本控制做界面和 DTO 铺垫。
+- preflight 只检查本地占位配置完整性，不访问外部 provider，不校验真实 key。
+
+边界：
+
+- 不接真实模型 provider。
+- 不读取真实媒体文件。
+- 不触发 FFmpeg。
+- 不生成真实 MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery 作为生产依赖。
+- UI / Electron 只能调用 Control API，不能直接访问数据库、业务文件系统、模型 SDK、Python 脚本或 FFmpeg。
+- 桌面端不执行 migrations、不定义数据库表、不负责数据库初始化。
+- 本阶段不新增数据库 migration；provider 前配置由 Control API / Infrastructure 写入 D 盘 storage 下的本地 JSON。
+- 本阶段不保存可用于真实 provider 调用的明文 API Key；只保留遮罩和 SHA256 指纹。
+
+具体任务：
+
+1. 在 Application 层新增 `ProviderSettingsService`、DTO 和 `IProviderSettingsRepository`。
+2. 在 Infrastructure 层新增 `FileProviderSettingsRepository`，默认使用 `ControlPlane:StorageRoot` 下的本地 provider settings 文件。
+3. 在 Control API 新增 `GET /api/settings/providers`、`PATCH /api/settings/providers` 和 `GET /api/settings/providers/preflight`。
+4. 把 `/api/settings` 纳入登录门禁；桌面 unsafe 写请求仍需要桌面 session token。
+5. 在 Web `settings` feature 下新增 `ProviderSettingsPage`，接入“模型”导航入口。
+6. UI 支持五类 adapter 的启用、供应商选择、默认模型输入、API Key 占位输入与清除、成本上限和重试次数。
+7. 增加 Stage 18 PowerShell 验收脚本，覆盖配置保存、遮罩/指纹、不泄漏明文 key、placeholder preflight 和 no-provider/no-media 边界。
+8. 同步 README、总参考、任务记录和短棒交接。
+
+验收：
+
+- “模型”页可从 Web 左侧导航进入，并能读取 / 保存 provider 前配置。
+- 配置写入只走 Control API，不让 UI 或 Electron 直接读写文件。
+- API Key 明文不出现在 API 响应或本地 provider settings 文件中。
+- `preflight` 对启用且配置完整的 adapter 返回 `ok`，并明确 `externalNetwork=disabled`、`mediaGenerated=false`。
+- Web build 和 .NET build 通过。
+- `scripts\windows\Test-MiLuStudioStage18ProviderSettings.ps1` 通过。
+
+落地状态：
+
+- 已新增 `backend\control-plane\src\MiLuStudio.Application\Settings\ProviderSettingsDtos.cs`。
+- 已新增 `backend\control-plane\src\MiLuStudio.Application\Settings\ProviderSettingsService.cs`。
+- 已新增 `backend\control-plane\src\MiLuStudio.Application\Abstractions\IProviderSettingsRepository.cs`。
+- 已新增 `backend\control-plane\src\MiLuStudio.Infrastructure\Settings\FileProviderSettingsRepository.cs`。
+- `backend\control-plane\src\MiLuStudio.Api\Program.cs` 已注册 Stage 18 服务和三个 settings endpoint。
+- `apps\web\src\features\settings\ProviderSettingsPage.tsx` 已实现 provider 前配置页。
+- `apps\web\src\shared\api\controlPlaneClient.ts` 和 `apps\web\src\shared\types\production.ts` 已补 provider settings client / DTO。
+- 已新增 `scripts\windows\Test-MiLuStudioStage18ProviderSettings.ps1`。
+
+验证：
+
+```powershell
+. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
+dotnet build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage18-build\
+
+Push-Location D:\code\MiLuStudio\apps\web
+npm run build
+Pop-Location
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage18ProviderSettings.ps1
+```
+
+阶段结束自检重点：
+
+- 检查 provider 配置是否仍只通过 Control API / Application service / Infrastructure repository。
+- 检查 Web / Electron 是否没有直接保存密钥、访问数据库、调用模型 SDK 或绕过 Control API。
+- 检查 API Key 是否未写入响应、日志、Git 或可用于真实调用的明文文件。
+- 检查 preflight 是否仍是本地占位检查，不访问外部厂商、不读取素材、不触发 FFmpeg。
+
+## 26. Stage 19 桌面发布验收与代码签名前置准备
+
+Status: done
+
+目标：
+
+- 把候选方向“正式代码签名与干净 Windows 安装验收”确认为 Stage 19。
+- 为 Electron / electron-builder / NSIS 桌面产物增加自动化发布验收，覆盖安装器、`win-unpacked`、运行时资源、快捷方式 / 自启动脚本和桌面数据目录约束。
+- 增加 Authenticode 签名状态检查：本地开发允许 `NotSigned` 并记录为阻塞项，正式发布使用 `-RequireSigned` 阻断未签名产物。
+- 明确干净 Windows 手工验收步骤：安装、启动、登录入口、Control API 边界、migration apply 禁止、卸载、快捷方式和自启动清理。
+
+边界：
+
+- 不接真实模型 provider。
+- 不读取真实媒体文件。
+- 不触发 FFmpeg。
+- 不生成真实 MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery。
+- UI / Electron 仍只能通过 Control API / DTO / SSE 通信，不直接访问 PostgreSQL、业务文件系统、模型 SDK、Python 脚本或 FFmpeg。
+- 桌面端不执行 migrations、不定义数据库表、不负责数据库初始化。
+- 本阶段不提交代码签名证书、私钥、PFX/P12/PVK/SPC 或真实签名密钥。
+
+具体任务：
+
+1. 新增 Stage 19 PowerShell 验收脚本，能检查 desktop package 配置、安装器产物、`win-unpacked`、Web dist、Control API / Worker runtime、Python runtime、Python Skills 和最新 backend migration。
+2. 检查 Electron 主进程安全边界：AppUserModelID、contextIsolation、sandbox、nodeIntegration=false、webSecurity、导航限制、弹窗限制和 IPC sender guard。
+3. 检查 preload 只暴露受控 bridge、Control API base URL 和桌面 session token，不直接访问数据库、文件系统、Python、模型 SDK 或 FFmpeg。
+4. 检查桌面本地 Web host 的 CSP 和 `X-Content-Type-Options: nosniff`，限制脚本来源、loopback 连接、object/base/form/frame 行为。
+5. 检查 `installer.nsh` 只保留桌面快捷方式、开始菜单快捷方式和开机自启动选项，不出现许可证、激活码或付费码门槛。
+6. 增加 Authenticode 签名状态检查和正式发布 `-RequireSigned` 阻断模式。
+7. 增加签名前置配置检查：证书选择器和 timestamp URL 可检查，证书路径不得在仓库内。
+8. 将 `.pfx`、`.p12`、`.pvk`、`.spc` 和 `.key` 加入 `.gitignore`。
+9. 新增干净 Windows 安装 / 卸载 / 自启动 / 快捷方式验收清单。
+10. 同步 README、总参考、任务记录和短棒交接。
+
+验收：
+
+- `scripts\windows\Test-MiLuStudioStage19DesktopRelease.ps1 -BuildPackage` 可重新生成 Windows 安装产物并完成发布验收。
+- `apps\desktop` 的 `npm run verify:release` 可在现有产物上完成验收，并把 `NotSigned` 记录为正式发布前阻塞项。
+- `-RequireSigned` 在当前未签名产物上必须失败，避免未签名包被误判为正式可发布。
+- 桌面模式 API 安全脚本仍通过，确认无桌面 token 的 unsafe 写请求为 403、带桌面 token 后进入业务登录门禁、`/api/system/migrations/apply` 在桌面模式下为 403。
+- 验收过程不接真实 provider、不读真实媒体、不触发 FFmpeg、不生成真实媒体文件。
+
+落地状态：
+
+- 已新增 `scripts\windows\Test-MiLuStudioStage19DesktopRelease.ps1`。
+- `apps\desktop\package.json` 已新增 `verify:release` 和 `verify:release:signed`。
+- 已新增 `docs\MILUSTUDIO_STAGE19_DESKTOP_RELEASE_CHECKLIST.md`。
+- `.gitignore` 已忽略代码签名证书和私钥容器扩展名。
+- 联网自检后已补强 `apps\desktop\src\webHost.ts` 的 CSP：增加 `form-action 'self'` 和 `frame-ancestors 'none'`；Stage 19 脚本同步检查 CSP 与 `nosniff`。
+- Stage 19 重打包发现旧 `outputs\desktop` 缺少 `004_stage16_auth_licensing.sql`，已通过 `-BuildPackage` 重新生成并纳入自动验收。
+- 当前安装器和 `win-unpacked\MiLuStudio.exe` 的 Authenticode 状态仍为 `NotSigned`；这是正式发布阻塞项，不伪造签名成功。
+
+验证：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage19DesktopRelease.ps1 -BuildPackage
+
+Push-Location D:\code\MiLuStudio\apps\desktop
+D:\soft\program\nodejs\npm.ps1 run verify:release
+Pop-Location
+
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage19DesktopRelease.ps1 -SkipDesktopBuild -SkipApiSecurity -RequireSigned
+```
+
+阶段结束自检重点：
+
+- 检查桌面验收是否只读取/检查本地发布产物，不执行真实安装、真实 provider、真实媒体处理或 FFmpeg。
+- 检查签名前置配置是否没有把证书或私钥引入仓库。
+- 检查桌面端是否仍只承载 Web、启动本地服务和注入 Control API 配置，不拥有数据库 schema 或 migration apply 权限。
+- 检查未签名状态是否被明确记录为正式发布前阻塞项，而不是被当成成功签名。
+
+## 27. Stage 20 Codex 式前端工作台重构
+
+Status: done
+
+目标：
+
+- 把 Web 登录后的主入口从旧多导航后台壳重构为 Codex 式工作台。
+- 左侧展示历史项目和新项目入口。
+- 新项目空态中央默认只有一个剧本 / 要求输入框，支持直接输入和上传 txt / md 文本。
+- 生产进行中右侧显示当前进度、真实结果预览和打开入口，不再展示分支 UI。
+- 模型配置、桌面诊断和账户退出统一收束到左下角设置菜单。
+- 保留 Stage 17 分镜表编辑和单镜头备注重算能力，但入口改为打开 `storyboard_director` 结果。
+
+边界：
+
+- 不接真实模型 provider。
+- 不读取真实媒体文件。
+- 不触发 FFmpeg。
+- 不生成真实 MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery。
+- UI / Electron 仍只通过 Control API / DTO / SSE 与业务系统通信。
+- 桌面端不执行 migrations、不定义数据库表、不负责数据库初始化。
+
+具体任务：
+
+1. 新增 `apps\web\src\features\workspace\StudioWorkspacePage.tsx`，聚合历史项目、中央输入、右侧进度和设置入口。
+2. 更新 `apps\web\src\app\App.tsx`，登录成功后直接进入工作台。
+3. 重写 `apps\web\src\styles.css`，形成三栏工作台、结果预览弹层和设置弹层样式。
+4. 将 ProviderSettingsPage、DesktopDiagnosticsPanel 和账户退出收束到左下角设置菜单。
+5. 中央输入框在保存当前输入后再创建 production job，继续通过 SSE 更新进度。
+6. 结果打开面板支持结构化 JSON 预览；分镜结果保留编辑、保存和单镜头备注重算。
+7. 上传入口改为 Codex 式加号菜单，并按当前生产阶段启用或禁用文本 / 图片 / 视频入口。
+8. 清理 AuthGate 中文文案。
+9. 同步 README、阶段计划、任务记录和短棒交接。
+
+验收：
+
+- 新项目空态中央只显示一个输入框。
+- 左侧可查看历史项目并进入项目上下文。
+- 右侧首段显示当前进度，随后显示生成结果预览和打开入口。
+- 模型配置、桌面诊断和账户退出只从左下角设置菜单进入。
+- 分镜结果打开后仍通过 Control API 保存和单镜头重算。
+- 加号上传菜单按当前生产阶段限制文件类型，并为禁用类型提供说明。
+- Web build 通过。
+- `git diff --check` 通过。
+
+落地状态：
+
+- 已新增 `apps\web\src\features\workspace\StudioWorkspacePage.tsx`。
+- `apps\web\src\app\App.tsx` 已切换为认证 + 工作台入口。
+- `apps\web\src\styles.css` 已替换为新工作台样式。
+- `apps\web\src\features\auth\AuthGate.tsx` 已清理中文文案。
+- 工作台上传入口已补 Codex 式加号菜单：文本 / 图片 / 视频按当前 job stage 启用或禁用，图片和视频只作为附件元数据。
+- 本地 Vite 预览服务已启动在 `http://127.0.0.1:5174/`。
+
+验证：
+
+```powershell
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+
+git diff --check
+```
+
+阶段结束自检重点：
+
+- 检查工作台是否仍只通过 Control API client 调用项目、任务、provider settings 和分镜编辑 API。
+- 检查新上传能力是否只在故事来源阶段读入用户选择的 txt / md 剧本文本；图片和视频只记录文件名、类型和大小，不读取真实媒体文件。
+- 检查结果预览是否只消费 task output JSON，不直接读取产物文件或触发 FFmpeg。
+- 检查设置入口是否只是 UI 收束，不让 Electron 或 Web 直接访问本地 provider settings 文件。
+
+## 28. Stage 21 新工作台结构化产物编辑增强
+
+Status: done
+
+目标：
+
+- 在 Stage 20 Codex 式工作台内继续细化角色、画风、图片提示词和视频提示词编辑能力。
+- 编辑对象限定为已生成的结构化 JSON envelope，不接真实模型，不读取真实媒体，不调用 FFmpeg。
+- 保存后由 Control API / Application 层写回 generation task，并重置下游任务等待重新计算。
+- 角色与画风属于人工审核 checkpoint 产物，编辑后回到 review；图片提示词和视频提示词编辑后保持 completed 并让 job 回到 running 等待下游重算。
+- 在 UI 中展示字段级编辑表单和保存前 diff，让用户知道会改哪些结构化字段。
+
+边界：
+
+- 不接真实模型 provider。
+- 不读取真实媒体文件。
+- 不触发 FFmpeg。
+- 不生成真实 PNG / MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery。
+- UI / Electron 仍只通过 Control API / DTO / SSE 与业务系统通信。
+- 桌面端不执行 migrations、不定义数据库表、不负责数据库初始化。
+- 本阶段不新增数据库 migration，不扩展真实媒体上传链路，不把图片 / 视频附件交给后端解析。
+
+具体任务：
+
+1. 新增结构化产物编辑 DTO 与 Application service，支持 `character_bible`、`style_bible`、`image_prompt_builder` 和 `video_prompt_builder` 的白名单字段编辑。
+2. 新增 `PATCH /api/generation-tasks/{taskId}/structured-output`，只接受顶层字段路径和 JSON value。
+3. 保存时写回原 envelope 的 `data` 字段，并追加 `stage21_edit_summary`、review metadata 和 no-provider / no-media / no-FFmpeg 边界标记。
+4. 保存后重置当前任务之后的所有下游任务为 waiting，清空下游 output / timing / lock / error。
+5. Web 工作台结果面板新增角色、画风、图片提示词和视频提示词编辑表单。
+6. Web 保存前计算字段级 diff，保存后刷新任务列表和当前选中结果。
+7. 新增 Stage 21 PowerShell 集成脚本，覆盖完整 deterministic 生产链路、四类结构化产物编辑、下游重置和边界标记。
+8. 同步 README、阶段计划、任务记录和短棒交接。
+
+验收：
+
+- 后端 build 通过。
+- Web build 通过。
+- `scripts\windows\Test-MiLuStudioStage21StructuredOutputEditing.ps1` 通过。
+- 编辑角色 / 画风 / 图片提示词 / 视频提示词时，只有白名单字段可写。
+- 角色和画风编辑后进入 review / paused；图片和视频提示词编辑后为 completed / running。
+- 所有下游任务被重置为 waiting，且 outputJson 被清空。
+- 保存后的 envelope 明确记录 `model_provider=none`、`media_read=false`、`media_generated=false`、`ffmpeg_invoked=false`。
+- `git diff --check` 通过。
+
+落地状态：
+
+- 已新增 `StructuredOutputEditingDtos` 与 `StructuredOutputEditingService`。
+- 已新增 `PATCH /api/generation-tasks/{taskId}/structured-output`。
+- Web 工作台已在结果面板中提供角色、画风、图片提示词和视频提示词编辑表单、diff 预览和保存动作。
+- 新增 `scripts\windows\Test-MiLuStudioStage21StructuredOutputEditing.ps1`，覆盖四类编辑和边界检查。
+
+验证：
+
+```powershell
+. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage21-build\
+
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage21StructuredOutputEditing.ps1
+
+git diff --check
+```
+
+阶段结束自检重点：
+
+- 检查结构化产物编辑是否只写回 task output JSON，不绕过 Control API / Application / repository。
+- 检查 UI 是否没有读取真实图片 / 视频内容，没有把附件传入后端真实媒体链路。
+- 检查保存逻辑是否没有触发 provider SDK、Python skill 运行或 FFmpeg。
+- 检查 downstream reset 是否可让后续 Worker 在用户确认后重新计算，而不是静默复用旧下游产物。
+
+## 29. Stage 22 Provider Adapter 安全前置层设计与占位落地
+
+Status: done
+
+目标：
+
+- 把候选方向“provider adapter secure secret store / spend guard / sandbox 设计”正式确认为 Stage 22。
+- 在 Stage 18 provider 前配置页基础上，补齐真实 provider 接入前必须经过的安全前置层。
+- 当前只做 metadata-only / placeholder-only / sandbox-blocked 占位落地，不接真实模型，不发真实 provider 请求。
+- 让 Web 设置页和 Control API preflight 能清楚展示“可配置但不可调用”的当前状态。
+
+边界：
+
+- 不接真实模型 provider。
+- 不读取真实媒体文件。
+- 不触发 FFmpeg。
+- 不生成真实 PNG / MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery。
+- UI / Electron 仍只通过 Control API / DTO / SSE 与业务系统通信。
+- 不让 Web 或 Electron 直接访问 PostgreSQL、业务文件系统、Python 脚本、模型 SDK 或 FFmpeg。
+- 桌面端仍不执行 migrations、不定义数据库表、不负责数据库初始化。
+- 本阶段不新增数据库 migration，不实现真实 provider SDK / HTTP adapter，不保存可用于真实调用的明文 key。
+
+具体任务：
+
+1. 新增 provider safety DTO，描述 secret store、spend guard、provider sandbox 和 adapter 安全状态。
+2. 新增 `IProviderSecretStore` 抽象和本地 file implementation；当前只保存遮罩、SHA256 指纹和不可调用引用。
+3. 将 provider settings update 中的 API Key 处理迁移到 metadata-only secret store，确保响应、settings 文件和 secret store 文件都不包含明文 key。
+4. 新增 `GET /api/settings/providers/safety`，返回 Stage 22 安全前置层状态。
+5. 新增 `POST /api/settings/providers/spend-guard/check`，检查预算和重试边界，但真实 provider 调用仍固定阻断。
+6. 增强 `GET /api/settings/providers/preflight`，加入 `secret_store`、`spend_guard` 和 `provider_sandbox` 三个安全检查。
+7. Web “模型”设置页展示安全前置层和真实 provider 调用阻断状态。
+8. 新增 Stage 22 PowerShell 验证脚本，覆盖安全状态、密钥明文不泄漏、preflight、预算阻断、重试阻断和 clear key。
+9. 同步 README、建设方案、阶段计划、任务记录和短棒交接。
+
+验收：
+
+- 后端 build 通过。
+- Web build 通过。
+- `scripts\windows\Test-MiLuStudioStage22ProviderSafety.ps1` 通过。
+- `GET /api/settings/providers` 响应包含 `safety.stage=stage22_provider_safety_preflight`。
+- `provider-secrets.local.json` 只包含 metadata-only 描述，不包含明文 API Key，不标记为 callable。
+- `GET /api/settings/providers/preflight` 包含 `secret_store`、`spend_guard` 和 `provider_sandbox` 检查。
+- `POST /api/settings/providers/spend-guard/check` 在预算内仍返回 `providerCallAllowed=false`，超预算和重试溢出会被阻断。
+- Web “模型”设置页显示 Stage 22 安全前置层，不直接读写本地 provider settings 或 secret store 文件。
+- `git diff --check` 通过。
+
+落地状态：
+
+- 已新增 `backend\control-plane\src\MiLuStudio.Application\Abstractions\IProviderSecretStore.cs`。
+- 已新增 `backend\control-plane\src\MiLuStudio.Infrastructure\Settings\FileProviderSecretStore.cs`。
+- `ProviderSettingsDtos`、`ProviderSettingsService`、`ControlPlaneOptions`、`ServiceCollectionExtensions` 和 `Program.cs` 已接入 Stage 22 safety / spend guard / sandbox。
+- `apps\web\src\shared\types\production.ts` 和 `apps\web\src\shared\api\controlPlaneClient.ts` 已补 provider safety 类型与 client 方法。
+- `apps\web\src\features\settings\ProviderSettingsPage.tsx` 已展示安全前置层，`apps\web\src\styles.css` 已补对应样式。
+- 已新增 `scripts\windows\Test-MiLuStudioStage22ProviderSafety.ps1`。
+
+验证：
+
+```powershell
+. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage22-build\
+
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage22ProviderSafety.ps1
+
+git diff --check
+```
+
+阶段结束自检重点：
+
+- 检查 secret store 是否仍只是 metadata-only，不保存、返回或暴露明文 key。
+- 检查 spend guard 是否只做预算 / 重试前置判断，且真实 provider 调用仍被 Stage 22 sandbox 阻断。
+- 检查 provider sandbox 是否继续阻断 provider calls、external network、media read、FFmpeg 和真实 artifact generation。
+- 检查 Web / Electron 是否仍只通过 Control API 使用 provider settings，不直接读写本地 JSON、数据库或底层服务。
+- 检查本阶段是否未新增数据库 migration、未接真实 provider、未读取真实媒体。
+
+## 30. 每阶段联网自检模板
 
 每个大阶段结束后必须填写到 `docs\MILUSTUDIO_TASK_RECORD.md`。
 

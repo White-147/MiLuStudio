@@ -178,6 +178,27 @@ public sealed class ProjectService
         return ToDetailDto(project, storyInput?.OriginalText ?? string.Empty, latestJob);
     }
 
+    public async Task<bool> DeleteAsync(string projectId, CancellationToken cancellationToken)
+    {
+        var project = await _projects.GetAsync(projectId, cancellationToken);
+
+        if (project is null)
+        {
+            return false;
+        }
+
+        var jobs = await _jobs.ListByProjectAsync(project.Id, cancellationToken);
+        var hasActiveJob = jobs.Any(job => job.Status is ProductionJobStatus.Queued or ProductionJobStatus.Running or ProductionJobStatus.Paused);
+
+        if (project.Status is ProjectStatus.Running or ProjectStatus.Paused || hasActiveJob)
+        {
+            throw new ProjectDeleteNotAllowedException("项目正在生成或暂停审核中，请等待完成、失败后再删除。");
+        }
+
+        await _projects.DeleteAsync(project.Id, cancellationToken);
+        return true;
+    }
+
     private static ProjectSummaryDto ToSummaryDto(Project project, ProductionJob? latestJob)
     {
         return new ProjectSummaryDto(
@@ -311,4 +332,12 @@ public sealed class ProjectValidationException : Exception
     }
 
     public IReadOnlyList<string> Details { get; }
+}
+
+public sealed class ProjectDeleteNotAllowedException : Exception
+{
+    public ProjectDeleteNotAllowedException(string message)
+        : base(message)
+    {
+    }
 }

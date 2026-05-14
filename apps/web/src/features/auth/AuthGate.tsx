@@ -22,23 +22,23 @@ export function AuthGate({ initialState, onAuthorized }: AuthGateProps) {
 
   const submitAuth = async () => {
     setBusy(true);
-    setMessage(mode === 'login' ? '正在登录...' : '正在注册...');
+    setMessage(mode === 'login' ? '正在登录。' : '正在注册。');
 
     try {
       const session =
         mode === 'login'
           ? await loginAccount({
+              deviceFingerprint: device.fingerprint,
+              deviceName: device.name,
               identifier,
               password,
-              deviceFingerprint: device.fingerprint,
-              deviceName: device.name,
             })
           : await registerAccount({
-              email,
-              displayName,
-              password,
               deviceFingerprint: device.fingerprint,
               deviceName: device.name,
+              displayName,
+              email,
+              password,
             });
 
       const nextState = toAuthState(session);
@@ -127,11 +127,11 @@ export function AuthGate({ initialState, onAuthorized }: AuthGateProps) {
 
 function toAuthState(session: AuthSession): AuthState {
   return {
-    authenticated: true,
     account: session.account,
+    authenticated: true,
     device: session.device,
-    license: session.license,
     errorCode: null,
+    license: session.license,
     message: '账号已登录。',
   };
 }

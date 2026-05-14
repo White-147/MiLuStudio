@@ -140,6 +140,153 @@ export interface StoryboardEditResponse {
   message: string;
 }
 
+export interface StructuredOutputFieldEdit {
+  path: string;
+  value: unknown;
+}
+
+export interface StructuredOutputEditRequest {
+  edits: StructuredOutputFieldEdit[];
+  notes: string;
+}
+
+export interface StructuredOutputEditResponse {
+  taskId: string;
+  jobId: string;
+  projectId: string;
+  skillName: string;
+  status: string;
+  resetDownstreamTaskCount: number;
+  message: string;
+}
+
+export interface ProviderSettingsResponse {
+  mode: 'placeholder_only';
+  updatedAt: string;
+  costGuardrails: ProviderCostGuardrails;
+  adapters: ProviderAdapterSettings[];
+  preflight: ProviderSettingsPreflight;
+  safety: ProviderSafetyStatus;
+}
+
+export interface ProviderCostGuardrails {
+  projectCostCapCny: number;
+  retryLimit: number;
+}
+
+export interface ProviderAdapterSettings {
+  kind: string;
+  label: string;
+  supplier: string;
+  model: string;
+  enabled: boolean;
+  apiKeyConfigured: boolean;
+  apiKeyPreview: string;
+  secretFingerprint: string;
+  supportedSuppliers: string[];
+  capabilityFlags: string[];
+  safety: ProviderAdapterSafety;
+}
+
+export interface ProviderSettingsPreflight {
+  healthy: boolean;
+  checks: ProviderPreflightCheck[];
+  recommendations: string[];
+}
+
+export interface ProviderPreflightCheck {
+  kind: string;
+  label: string;
+  status: 'ok' | 'warning' | 'error' | 'skipped';
+  message: string;
+  details: Record<string, string>;
+}
+
+export interface ProviderSafetyStatus {
+  stage: string;
+  mode: 'placeholder_only';
+  secretStore: ProviderSecretStoreStatus;
+  spendGuard: ProviderSpendGuardStatus;
+  sandbox: ProviderSandboxStatus;
+  blockingReasons: string[];
+}
+
+export interface ProviderAdapterSafety {
+  secretReferenceId: string;
+  secretStoreMode: string;
+  rawSecretPersisted: boolean;
+  usableForProviderCalls: boolean;
+  sandboxMode: string;
+  providerCallsAllowed: boolean;
+  externalNetworkAllowed: boolean;
+  mediaReadAllowed: boolean;
+  ffmpegAllowed: boolean;
+}
+
+export interface ProviderSecretStoreStatus {
+  mode: string;
+  storageScope: string;
+  metadataStoreAvailable: boolean;
+  rawSecretPersistenceAllowed: boolean;
+  providerCallSecretsAvailable: boolean;
+  checks: string[];
+}
+
+export interface ProviderSpendGuardStatus {
+  enabled: boolean;
+  enforcementMode: string;
+  projectCostCapCny: number;
+  retryLimit: number;
+  blocksProviderCalls: boolean;
+  blocksWhenCapExceeded: boolean;
+}
+
+export interface ProviderSandboxStatus {
+  mode: string;
+  providerCallsAllowed: boolean;
+  externalNetworkAllowed: boolean;
+  mediaReadAllowed: boolean;
+  ffmpegAllowed: boolean;
+  allowedAdapterKinds: string[];
+  outputContract: string[];
+}
+
+export interface ProviderSpendGuardCheckRequest {
+  projectId: string;
+  providerKind: string;
+  currentSpendCny: number;
+  estimatedIncrementCny: number;
+  attemptNumber: number;
+}
+
+export interface ProviderSpendGuardDecision {
+  budgetAllowed: boolean;
+  providerCallAllowed: boolean;
+  decision: string;
+  reason: string;
+  projectCostCapCny: number;
+  currentSpendCny: number;
+  estimatedIncrementCny: number;
+  projectedSpendCny: number;
+  retryLimit: number;
+  attemptNumber: number;
+  appliedRules: string[];
+}
+
+export interface ProviderSettingsUpdateRequest {
+  costGuardrails: ProviderCostGuardrails;
+  adapters: ProviderAdapterUpdateRequest[];
+}
+
+export interface ProviderAdapterUpdateRequest {
+  kind: string;
+  supplier: string;
+  model: string;
+  enabled: boolean;
+  apiKey?: string | null;
+  clearApiKey: boolean;
+}
+
 export interface ProjectAssetRecord {
   id: string;
   projectId: string;
