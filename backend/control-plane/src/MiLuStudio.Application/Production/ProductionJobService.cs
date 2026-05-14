@@ -53,14 +53,9 @@ public sealed class ProductionJobService
             return null;
         }
 
-        var activeJob = await FindActiveJobAsync(projectId, cancellationToken);
-        if (activeJob is not null)
-        {
-            var activeTasks = await _jobs.ListTasksAsync(activeJob.Id, cancellationToken);
-            return ToDto(activeJob, activeTasks);
-        }
-
         var now = _clock.Now;
+        await RetireActiveJobsAsync(projectId, now, cancellationToken);
+
         project.Status = ProjectStatus.Running;
         project.UpdatedAt = now;
         await _projects.UpdateAsync(project, cancellationToken);
@@ -151,13 +146,25 @@ public sealed class ProductionJobService
         return ToDto(snapshot.Job, snapshot.Tasks);
     }
 
-    private async Task<ProductionJob?> FindActiveJobAsync(string projectId, CancellationToken cancellationToken)
+    private async Task RetireActiveJobsAsync(
+        string projectId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
     {
         var jobs = await _jobs.ListByProjectAsync(projectId, cancellationToken);
-        return jobs
+        var activeJobs = jobs
             .Where(job => job.Status is ProductionJobStatus.Running or ProductionJobStatus.Paused or ProductionJobStatus.Queued)
             .OrderByDescending(job => job.StartedAt)
-            .FirstOrDefault();
+            .ToList();
+
+        foreach (var activeJob in activeJobs)
+        {
+            activeJob.Status = ProductionJobStatus.Failed;
+            activeJob.CurrentStage = ProductionStage.FailedRetryable;
+            activeJob.FinishedAt = now;
+            activeJob.ErrorMessage = "已根据当前输入重新生成，新任务已取代该旧任务。";
+            await _jobs.UpdateAsync(activeJob, cancellationToken);
+        }
     }
 
     public async IAsyncEnumerable<ProductionJobEventDto> StreamEventsAsync(

@@ -6,8 +6,7 @@ public sealed record RegisterAccountRequest(
     string? DisplayName,
     string? Password,
     string? DeviceFingerprint,
-    string? DeviceName,
-    string? ActivationCode);
+    string? DeviceName);
 
 public sealed record LoginRequest(
     string? Identifier,

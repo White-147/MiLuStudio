@@ -25,6 +25,7 @@ builder.Services.AddScoped<AuthLicensingService>();
 builder.Services.AddScoped<ProductionJobService>();
 builder.Services.AddScoped<ProductionSkillExecutionService>();
 builder.Services.AddScoped<SkillEnvelopePersistenceService>();
+builder.Services.AddScoped<StoryboardEditingService>();
 builder.Services.AddScoped<TaskQueueService>();
 builder.Services.AddMiLuStudioInfrastructure(builder.Configuration);
 
@@ -75,7 +76,7 @@ app.Use(async (context, next) =>
     var auth = context.RequestServices.GetRequiredService<AuthLicensingService>();
     var validation = await auth.ValidateRequestAsync(
         ResolveAccessToken(context.Request),
-        requirement == AuthRequirement.AuthenticatedWithActiveLicense,
+        false,
         context.RequestAborted);
 
     if (!validation.Allowed)
@@ -84,8 +85,7 @@ app.Use(async (context, next) =>
         await context.Response.WriteAsJsonAsync(new
         {
             error = validation.Message,
-            code = validation.Code,
-            license = validation.License
+            code = validation.Code
         });
         return;
     }
@@ -100,7 +100,7 @@ app.MapGet("/health", (IConfiguration configuration) => Results.Ok(new
 {
     service = "MiLuStudio Control API",
     status = "ok",
-    mode = "stage-16-auth-licensing",
+    mode = "stage-16-auth-session",
     defaultApiBaseUrl = "http://127.0.0.1:5368",
     repositoryProvider = configuration["ControlPlane:RepositoryProvider"] ?? RepositoryProviderNames.PostgreSql
 }));
@@ -164,35 +164,6 @@ app.MapGet("/api/auth/me", async (
     HttpContext context) =>
 {
     return Results.Ok(await auth.GetStateAsync(ResolveAccessToken(context.Request), context.RequestAborted));
-});
-
-app.MapGet("/api/auth/license", async Task<IResult> (
-    AuthLicensingService auth,
-    HttpContext context) =>
-{
-    try
-    {
-        return Results.Ok(await auth.GetLicenseAsync(ResolveAccessToken(context.Request), context.RequestAborted));
-    }
-    catch (AuthCommandException error)
-    {
-        return AuthError(error);
-    }
-});
-
-app.MapPost("/api/auth/activate", async Task<IResult> (
-    ActivateLicenseRequest request,
-    AuthLicensingService auth,
-    HttpContext context) =>
-{
-    try
-    {
-        return Results.Ok(await auth.ActivateAsync(ResolveAccessToken(context.Request), request, context.RequestAborted));
-    }
-    catch (AuthCommandException error)
-    {
-        return AuthError(error);
-    }
 });
 
 app.MapPost("/api/auth/devices/bind", async Task<IResult> (
@@ -421,6 +392,49 @@ app.MapPost("/api/generation-tasks/{taskId}/output", async (
     return result is null ? Results.NotFound() : Results.Ok(result);
 });
 
+app.MapPatch("/api/generation-tasks/{taskId}/storyboard", async Task<IResult> (
+    string taskId,
+    StoryboardEditRequest request,
+    StoryboardEditingService storyboards,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await storyboards.SaveAsync(taskId, request, cancellationToken);
+        return result is null ? Results.NotFound() : Results.Ok(result);
+    }
+    catch (StoryboardEditValidationException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+    catch (JsonException error)
+    {
+        return Results.BadRequest(new { error = $"Storyboard output is not valid JSON: {error.Message}" });
+    }
+});
+
+app.MapPost("/api/generation-tasks/{taskId}/storyboard/shots/{shotId}/regenerate", async Task<IResult> (
+    string taskId,
+    string shotId,
+    StoryboardShotRegenerateRequest request,
+    StoryboardEditingService storyboards,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await storyboards.RegenerateShotAsync(taskId, shotId, request, cancellationToken);
+        return result is null ? Results.NotFound() : Results.Ok(result);
+    }
+    catch (StoryboardEditValidationException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+    catch (JsonException error)
+    {
+        return Results.BadRequest(new { error = $"Storyboard output is not valid JSON: {error.Message}" });
+    }
+});
+
 app.MapGet("/api/production-jobs/{jobId}/events", async (
     string jobId,
     ProductionJobService jobs,
@@ -505,7 +519,7 @@ static AuthRequirement GetAuthRequirement(PathString path)
         value.StartsWith("/api/production-jobs", StringComparison.OrdinalIgnoreCase) ||
         value.StartsWith("/api/generation-tasks", StringComparison.OrdinalIgnoreCase))
     {
-        return AuthRequirement.AuthenticatedWithActiveLicense;
+        return AuthRequirement.Authenticated;
     }
 
     return AuthRequirement.None;
@@ -514,5 +528,5 @@ static AuthRequirement GetAuthRequirement(PathString path)
 internal enum AuthRequirement
 {
     None,
-    AuthenticatedWithActiveLicense
+    Authenticated
 }

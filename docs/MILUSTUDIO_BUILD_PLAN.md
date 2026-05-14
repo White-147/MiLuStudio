@@ -1,6 +1,6 @@
 # MiLuStudio 建设方案与下一会话实施手册
 
-更新时间：2026-05-13
+更新时间：2026-05-14
 定位：给下一次开发会话使用的详细执行依据。  
 硬约束：MiLuStudio 是新的 Windows 原生 AI 漫剧 Agent 产品，不继续套壳旧 MiLuAssistantWeb / MiLuAssistantDesktop，也不把 ArcReel、LumenX、AIComicBuilder 等项目整体搬进来。
 
@@ -1030,10 +1030,12 @@ D:\code\MiLuStudio\
 4. 对总时长和镜头数量做校验。
 5. 在 `SkillGateway.default()` 注册 skill，并补齐 schema、examples、单元测试和 CLI smoke。
 6. 本阶段只产出可审阅 JSON 结构；不保存数据库，不接真实模型，不生成分镜图，不触发图片/视频/FFmpeg，不让 UI 直接调用 Python。
+7. 后续补丁已为 `storyboard_director` 增加 `cinematic_md_v1` 展示结构：`film_overview`、`storyboard_parts`、`rendered_markdown` 和 `validation_report`，用于对齐专业分镜 MD 审核格式，同时保留原 `shots` 供下游技能消费。
 
 延后：
 
 - 前端分镜表展示、增删改分镜、单镜头重新生成和用户编辑持久化留给 Control API / PostgreSQL adapter / UI 集成阶段。
+- 严格 120 秒、50-55 镜头、逐句对白保真和 10-14 部分长分镜模式留给后续模型/API adapter、对白校验器和长文本分镜 validator。
 - 分镜图、首帧、尾帧、视频片段和资产选择留给图片生成、视频生成和资产阶段。
 
 验收：
@@ -1307,7 +1309,7 @@ D:\code\MiLuStudio\
 7. 检查 Web 路由在桌面静态 / 本地 HTTP 环境下的可用性；必要时采用 hash route 或本地 host 的 History API fallback。
 8. 清理演示期 UI 残留：`Stage 1 mock` 文案、无处理器的 `输出目录`、`锁定`、`重生成` 等按钮必须改为禁用、隐藏或接入 Control API。
 9. 增加 checkpoint 基本人工确认语义：至少区分 approve / reject / notes，避免前端硬编码全部 approve。
-10. 防止同一项目重复启动多个 running / paused production job；应返回现有 job 或要求用户先处理旧 job。
+10. 防止同一项目重复启动多个 running / paused production job；当用户点击重新生成时，应先淘汰同项目未完成旧 job，再按当前已保存输入创建新 job。
 11. 加固 PostgreSQL 默认 provider 语义：配置缺失时不应静默回落 InMemory；如使用 InMemory，必须显式配置并在 preflight / UI 中标注。
 12. 修正过期注释和文档，例如 `001_initial_control_plane.sql` 中仍称 runtime 使用 in-memory repository 的说明。
 13. 为 `PythonProductionSkillRunner` 增加 `.tmp\skill-runs` 清理或保留策略，避免长期运行积累临时目录。
@@ -1333,7 +1335,7 @@ D:\code\MiLuStudio\
 - Control API 默认端口统一为 `http://127.0.0.1:5368`，前端优先使用桌面宿主注入的 `window.__MILUSTUDIO_CONTROL_API_BASE__`，再回退到 `VITE_CONTROL_API_BASE` 和默认端口。
 - CORS 已放行本地 loopback 源，前端支持 hash route，Stage 15 可用本地 HTTP 或静态承载继续推进。
 - UI 已清理 `Stage 1 mock` 文案和无处理器按钮；checkpoint 支持 approve / reject / notes，并新增 `generation_tasks.checkpoint_notes` migration。
-- 同一项目 active production job 会复用现有 job，避免重复 running / paused job。
+- 同一项目重新生成时会先将未完成旧 job 标记为已被新输入取代，再创建新 job；避免旧剧本输出继续串到当前输入。
 - PostgreSQL 是缺省 provider，InMemory 需要显式配置；`001_initial_control_plane.sql` 旧注释已修正。
 - `.tmp\skill-runs` 默认保留最近 30 次运行，可通过 `ControlPlane:SkillRunRetentionCount` 调整。
 - 新增 `scripts\windows\Test-MiLuStudioStage14Integration.ps1`，覆盖 API / Worker / PostgreSQL 关键恢复路径。
@@ -1392,7 +1394,7 @@ D:\code\MiLuStudio\
 - 打包图标、安装器图标、卸载器图标、header 图标、快捷方式图标和托盘图标均来自 `apps\web\public\brand\logo.png` 生成的多尺寸 `apps\desktop\build\icon.ico`。
 - Electron 已升级到 `42.0.1`；主进程限制外部导航、弹窗和 IPC 来源，`userData`、`sessionData` 和 logs 已显式指向 D 盘数据目录，避免默认落到 `C:\Users\...\AppData\Roaming`。
 - electron-builder + NSIS 已生成 `D:\code\MiLuStudio\outputs\desktop\MiLuStudio-Setup-0.1.0.exe`，配置 `oneClick=false`、`allowToChangeInstallationDirectory=true`、`runAfterFinish=true`、`shortcutName=MiLuStudio` 和自定义 `installer.nsh`。
-- `installer.nsh` 已预留安装前激活码页，以及桌面快捷方式、开始菜单快捷方式和开机自启动复选项；正式授权仍留给 Control API / Auth & Licensing adapter。
+- `installer.nsh` 当前只保留桌面快捷方式、开始菜单快捷方式和开机自启动复选项；安装前激活码页已按当前 MVP 范围撤下。
 - 当前本机生成的 NSIS 安装包 Authenticode 状态为 `NotSigned`；正式商业发布前需要补代码签名证书、签名配置和干净 Windows 安装 / 卸载验收。
 
 参考：
@@ -1441,14 +1443,24 @@ D:\code\MiLuStudio\
 
 当前落地状态：
 
-- 已完成。账号、会话、设备绑定、许可证和授权状态已由 Domain / Application / Infrastructure 分层实现。
+- 已完成。账号、会话和设备绑定已由 Domain / Application / Infrastructure 分层实现。
 - 新增 `004_stage16_auth_licensing.sql`，通过后端 migration 创建 `accounts`、`auth_sessions`、`devices` 和 `licenses`，数据库 schema 仍不属于 Electron 或安装器。
-- Control API 已新增 `/api/auth/register`、`/api/auth/login`、`/api/auth/refresh`、`/api/auth/logout`、`/api/auth/me`、`/api/auth/license`、`/api/auth/activate` 和 `/api/auth/devices/bind`。
-- 本地 deterministic Auth & Licensing adapter 已使用测试激活码 `MILU-STAGE16-TEST`，不接真实云端授权服务，不内置可逆付费码算法或私钥。
-- Web UI 已新增登录 / 注册 / 激活门面；未登录或未授权时不进入项目列表、项目详情或生产控制台。
-- 项目、生产任务和 generation task 写回类 API 已加最小授权门禁；桌面令牌只保护桌面 unsafe HTTP 方法，不替代应用内账号授权。
-- Stage 16 PowerShell 集成测试已覆盖注册、登录、会话刷新、设备绑定、设备上限阻断、许可证状态、未登录阻断、未授权阻断和登出失效。
-- Stage 14 生产链路回归脚本已补授权 bootstrap，确认授权门禁不破坏 Worker / Python deterministic skills 链路。
+- 当前 MVP 已撤下许可证 / 激活码 / 付费码体验，`licenses` 表仅作为后续商业化预留，不驱动当前 Web / Desktop。
+- Control API 当前开放 `/api/auth/register`、`/api/auth/login`、`/api/auth/refresh`、`/api/auth/logout`、`/api/auth/me` 和 `/api/auth/devices/bind`。
+- Web UI 已新增登录 / 注册门面；登录后直接进入项目列表、项目详情和生产控制台。
+- 项目、生产任务和 generation task 写回类 API 已加最小登录门禁；桌面令牌只保护桌面 unsafe HTTP 方法，不替代应用内账号登录。
+- Stage 16 PowerShell 集成测试已覆盖注册、登录、会话刷新、设备绑定、未登录阻断、登出失效和重新登录。
+- Stage 14 生产链路回归脚本已补账号 bootstrap，确认登录门禁不破坏 Worker / Python deterministic skills 链路。
+
+Stage 17 当前落地状态：
+
+- 已完成生产控制台体验收敛：中文化、checkpoint 审核解释、真实产物预览、未开始状态去 mock、重新生成消费当前输入。
+- 已完成中文测试 fixture 与《牡丹亭》人物抽取修复。
+- 已完成 `storyboard_director` 的 `cinematic_md_v1` 分镜稿结构基础对齐；下游仍消费原 `shots`，严格 120 秒 / 50-55 镜头 / 逐句对白保真留给后续模型 adapter 和 validator。
+- Stage 17 已正式确认为生产控制台可编辑能力，并已完成分镜表编辑、单镜头备注驱动本地确定性重算、保存后重置下游任务、Control API 新接口和 Web 结果卡编辑 UI。
+- 新增 `PATCH /api/generation-tasks/{taskId}/storyboard` 与 `POST /api/generation-tasks/{taskId}/storyboard/shots/{shotId}/regenerate`；两个接口只写回 `storyboard_director` JSON envelope，不接真实模型、不读真实媒体、不触发 FFmpeg、不生成真实 MP4 / WAV / SRT / ZIP。
+- 新增 `scripts\windows\Test-MiLuStudioStage17StoryboardEditing.ps1`，覆盖完整 deterministic job 完成后编辑分镜、下游任务重置、单镜头重算和 no-provider/no-media 边界。
+- Stage 18 尚未正式确认，候选方向为真实 provider adapter 前配置页、正式代码签名与干净 Windows 安装验收，或继续扩展角色 / 画风 / 提示词编辑能力。
 
 ## 13. 模型与供应商策略
 

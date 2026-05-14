@@ -42,6 +42,14 @@ class Stage7StoryboardPipelineTests(unittest.TestCase):
         self.assertEqual(sum(shot["duration_seconds"] for shot in shots), 45)
         self.assertEqual(storyboard["timing_summary"]["within_tolerance"], True)
         self.assertEqual(storyboard["checkpoint"]["required"], True)
+        self.assertEqual(storyboard["format_profile"]["name"], "cinematic_md_v1")
+        self.assertFalse(storyboard["format_profile"]["strict_md_ready"])
+        self.assertEqual(storyboard["film_overview"]["shot_count"], len(shots))
+        self.assertGreaterEqual(len(storyboard["storyboard_parts"]), 1)
+        self.assertIn("影片概览", storyboard["rendered_markdown"])
+        self.assertIn("镜头 1", storyboard["rendered_markdown"])
+        self.assertIn("时间/天气/光线", storyboard["rendered_markdown"])
+        self.assertIsInstance(storyboard["validation_report"]["checks"], list)
 
         first_shot = shots[0]
         self.assertTrue(first_shot["scene"])
@@ -51,6 +59,11 @@ class Stage7StoryboardPipelineTests(unittest.TestCase):
         self.assertTrue(first_shot["image_prompt_seed"])
         self.assertTrue(first_shot["video_prompt_seed"])
         self.assertIn("base_style", first_shot["style_prompt_block_refs"])
+
+        first_part_shot = storyboard["storyboard_parts"][0]["shots"][0]
+        self.assertEqual(first_part_shot["shot_label"], "镜头 1")
+        self.assertTrue(first_part_shot["environment_description"])
+        self.assertTrue(first_part_shot["camera_movement"])
 
     def test_storyboard_director_requires_style_bible_envelope(self) -> None:
         gateway = SkillGateway.default()
@@ -79,4 +92,3 @@ def load_story_input() -> dict[str, object]:
 
 if __name__ == "__main__":
     unittest.main()
-

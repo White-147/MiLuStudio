@@ -23,6 +23,11 @@
             "aspect_ratio",
             "storyboard_summary",
             "shots",
+            "format_profile",
+            "film_overview",
+            "storyboard_parts",
+            "rendered_markdown",
+            "validation_report",
             "timing_summary",
             "image_video_readiness",
             "review",
@@ -87,6 +92,113 @@
                 }
               }
             },
+            "format_profile": {
+              "type": "object",
+              "required": ["name", "mode", "strict_md_ready", "notes"],
+              "properties": {
+                "name": { "type": "string" },
+                "mode": { "type": "string" },
+                "strict_md_ready": { "type": "boolean" },
+                "notes": { "type": "array", "items": { "type": "string" } }
+              }
+            },
+            "film_overview": {
+              "type": "object",
+              "required": [
+                "episode_label",
+                "theme",
+                "total_duration_seconds",
+                "target_duration_seconds",
+                "shot_count",
+                "style_tone",
+                "camera_setup"
+              ],
+              "properties": {
+                "episode_label": { "type": "string" },
+                "theme": { "type": "string" },
+                "total_duration_seconds": { "type": "integer" },
+                "target_duration_seconds": { "type": "integer" },
+                "shot_count": { "type": "integer" },
+                "style_tone": { "type": "string" },
+                "camera_setup": { "type": "string" }
+              }
+            },
+            "storyboard_parts": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": [
+                  "part_id",
+                  "part_index",
+                  "title",
+                  "start_second",
+                  "end_second",
+                  "duration_seconds",
+                  "time_weather_light",
+                  "camera_setup",
+                  "cast_and_props",
+                  "absolute_blocking",
+                  "style",
+                  "shots"
+                ],
+                "properties": {
+                  "part_id": { "type": "string" },
+                  "part_index": { "type": "integer" },
+                  "title": { "type": "string" },
+                  "start_second": { "type": "integer" },
+                  "end_second": { "type": "integer" },
+                  "duration_seconds": { "type": "integer" },
+                  "time_weather_light": { "type": "string" },
+                  "camera_setup": { "type": "string" },
+                  "cast_and_props": { "type": "string" },
+                  "absolute_blocking": { "type": "string" },
+                  "style": { "type": "string" },
+                  "shots": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "shot_label",
+                        "duration_seconds",
+                        "environment_description",
+                        "time_slice",
+                        "shot_size",
+                        "camera_movement",
+                        "sound_effect",
+                        "background_music"
+                      ],
+                      "properties": {
+                        "shot_label": { "type": "string" },
+                        "local_shot_index": { "type": "integer" },
+                        "source_shot_id": { "type": "string" },
+                        "duration_seconds": { "type": "integer" },
+                        "environment_description": { "type": "string" },
+                        "time_slice": { "type": "string" },
+                        "shot_size": { "type": "string" },
+                        "camera_movement": { "type": "string" },
+                        "sound_effect": { "type": "string" },
+                        "background_music": { "type": "string" },
+                        "dialogue": { "type": "string" },
+                        "narration": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "rendered_markdown": { "type": "string" },
+            "validation_report": {
+              "type": "object",
+              "required": ["profile", "strict_md_ready", "checks", "deferred_requirements"],
+              "properties": {
+                "profile": { "type": "string" },
+                "strict_md_ready": { "type": "boolean" },
+                "checks": { "type": "array", "items": { "type": "object" } },
+                "deferred_requirements": { "type": "array", "items": { "type": "string" } }
+              }
+            },
             "timing_summary": { "type": "object" },
             "image_video_readiness": { "type": "object" },
             "review": { "type": "object" },
@@ -121,4 +233,3 @@
     }
   }
 }
-

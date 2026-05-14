@@ -1673,7 +1673,7 @@ Local verification:
 - 已收敛 loopback CORS 和 hash route，为 Stage 15 桌面静态 / 本地 HTTP 承载预留边界。
 - 已清理 `Stage 1 mock` 文案和无处理器按钮。
 - checkpoint 已支持 approve / reject / notes；新增 `generation_tasks.checkpoint_notes` 与 `003_stage14_checkpoint_notes.sql`。
-- 同一项目已有 active production job 时会返回现有 job，避免重复 running / paused job。
+- 同一项目点击重新生成时会淘汰旧未完成 job 并创建新 job，避免旧剧本输出继续串到当前输入。
 - PostgreSQL 是默认 provider；InMemory 只在显式配置 `RepositoryProvider=InMemory` 时启用。
 - `.tmp\skill-runs` 默认保留最近 30 次运行，可通过 `ControlPlane:SkillRunRetentionCount` 调整。
 - 已新增 `scripts\windows\Test-MiLuStudioStage14Integration.ps1`。
@@ -1759,7 +1759,7 @@ Local verification:
 - 打包图标、安装器图标、卸载器图标、header 图标、快捷方式图标和托盘图标均来自 `apps\web\public\brand\logo.png` 生成的多尺寸 `apps\desktop\build\icon.ico`。
 - electron-builder + NSIS 已配置 `oneClick=false`、`allowToChangeInstallationDirectory=true`、`runAfterFinish=true`、`shortcutName=MiLuStudio`、桌面快捷方式、开始菜单快捷方式、AppUserModelID 和自定义 `installer.nsh`。
 - Electron `userData` 和 logs 已显式指向 D 盘数据目录，避免默认落到 `C:\Users\...\AppData\Roaming`。
-- `apps\desktop\build\installer.nsh` 已预留安装前激活码输入页，以及桌面快捷方式、开始菜单快捷方式和开机自启动复选项；正式授权仍留给后续 Control API / Auth & Licensing adapter。
+- `apps\desktop\build\installer.nsh` 当前只保留桌面快捷方式、开始菜单快捷方式和开机自启动复选项；安装前激活码页已在后续 MVP 收敛中撤下。
 - 已生成 `D:\code\MiLuStudio\outputs\desktop\MiLuStudio-Setup-0.1.0.exe` 和 `win-unpacked`。
 
 Commands:
@@ -2050,3 +2050,332 @@ Next phase:
 
 - 由用户确认 Stage 17 的正式编号与范围。
 - 候选方向：真实 provider adapter 前的配置页 / 套餐限制 / 授权策略细化，或正式代码签名与干净 Windows 安装验收。
+
+### 2026-05-14 撤下当前许可证和激活码体验
+
+Date:
+
+- 2026-05-14
+
+Trigger:
+
+- 用户确认许可证、激活码和付费码属于后续盈利的大后期内容，当前 Web / Desktop 先取消相关内容。
+
+Action:
+
+- Web `AuthGate` 移除激活码输入、许可证激活页和注册时激活码字段；登录 / 注册成功后直接进入工作台。
+- Web sidebar 账号区不再展示许可证 plan，改为展示账号邮箱或设备名。
+- Control API 对项目、生产任务和 generation task 的门禁从“登录 + 有效许可证”降为“已登录”；未登录仍返回 401。
+- Control API 当前不再映射 `/api/auth/license` 和 `/api/auth/activate`。
+- 当前账号状态保留兼容 DTO 字段，但返回 `not_required`，表示当前 MVP 登录后即可使用。
+- `apps\desktop\build\installer.nsh` 删除安装前激活码页和安装码 registry 占位，只保留桌面快捷方式、开始菜单快捷方式和开机自启动选项。
+- `scripts\windows\Test-MiLuStudioStage16Auth.ps1` 改为账号 / 会话集成测试，不再覆盖激活码、许可证或设备付费上限。
+- `scripts\windows\Test-MiLuStudioStage14Integration.ps1` 移除测试激活码 bootstrap。
+- README、总参考、阶段计划和短棒交接同步当前 MVP 范围：商业授权、套餐、许可证、激活码和付费码后置。
+
+Boundary:
+
+- 不删除历史 migration 中的 `licenses` 表，避免破坏已应用数据库；当前 Web / Desktop 和受保护 API 不再依赖它。
+- 不接真实云端授权服务，不实现离线签名许可证，不做套餐限制，不改 Electron / UI 边界。
+
+Next:
+
+- 重新运行 .NET / Web / Desktop 构建和 Stage 14 / Stage 16 / Desktop API 安全脚本。
+
+Verification result:
+
+- .NET build：0 warning / 0 error。
+- Web build：通过。
+- Desktop TypeScript build：通过。
+- Stage 16 account/session integration：通过；最新测试账号 `stage16_3494570adbc6@example.local`。
+- Stage 14 integration：通过；最新完成 job `job_b1b07370aea34c43a2f332c12fe08bbe`。
+- Desktop API security：通过；无桌面令牌 403，带桌面令牌后进入应用登录门禁 401，桌面 migration apply 403。
+
+### 2026-05-14 生产控制台中文化与 checkpoint 审核体验补丁
+
+Date:
+
+- 2026-05-14
+
+Trigger:
+
+- 用户指出新项目生产控制台仍暴露 `Style bible`、`story_intake`、`completed`、`local`、字段名等英文内部语义，影响中文用户理解。
+- 用户指出 checkpoint 审核虽然有通过 / 拒绝按钮，但用户不清楚每一步在做什么，且点击通过或拒绝后中间进度和右侧结果区缺少明显状态变化。
+
+Action:
+
+- Web 生产控制台新增阶段展示映射，把 Control API / Worker 的内部 skill 名、英文 stage label、任务状态和字段名转成中文业务文案。
+- 进度面板新增当前审核说明：本步产出、需要检查什么、通过后进入哪里、拒绝后如何处理。
+- 拒绝 checkpoint 前要求填写修改意见，避免用户误点造成任务进入可重试失败状态。
+- 同步消息对通过 / 退回使用成功或危险色，并把后端推送消息里的英文 stage / checkpoint 文案本地化。
+- 阶段列表对待确认、已确认、已退回使用不同 chip 和背景状态。
+- 右侧结果卡突出“当前审核”产物；用户可直接看到当前要审哪张卡，技术细节折叠到“技术详情”中，默认只展示中文摘要、状态、尝试次数、产出和本地测试成本。
+- 前端类型补齐 `StageStatus.failed`，避免拒绝 checkpoint 后无法正确表示失败 / 可重试阶段。
+
+Boundary:
+
+- 未修改 Control API / Worker / Python skills 的生产边界。
+- 未接真实模型、未读取真实媒体、未触发 FFmpeg、未生成真实 MP4 / WAV / SRT / ZIP。
+- 未让 UI 或 Electron 直接访问数据库、业务文件系统、Python 脚本或 FFmpeg。
+
+Verification result:
+
+- Web build：通过，命令为 `npm run build`，工作目录 `D:\code\MiLuStudio\apps\web`。
+
+### 2026-05-14 分镜 MD 格式对齐基础补丁
+
+Date:
+
+- 2026-05-14
+
+Trigger:
+
+- 用户上传 `C:\Users\10045\Desktop\整本拆分1.3.md`，要求分镜审核阶段尽量对齐其专业分镜稿格式。
+- 经检查，当前 deterministic `storyboard_director` 只能稳定输出 30-60 秒、6-12 镜头 MVP 结构，不能直接严格实现 120 秒、50-55 镜头、逐句对白保真和 10-14 部分长分镜要求。
+
+Action:
+
+- `storyboard_director` 保留原 `shots` 字段，避免破坏 `image_prompt_builder`、`video_prompt_builder`、配音、字幕和粗剪等下游技能。
+- 新增 `format_profile.name=cinematic_md_v1`，明确当前为本地确定性分镜稿结构。
+- 新增 `film_overview`、`storyboard_parts`、`rendered_markdown` 和 `validation_report`。
+- `storyboard_parts` 按 15 秒窗口组织分部，并为每个镜头生成中文字段：环境描写、时间切片与画面细分、镜头景别、镜头运动与衔接、音效和背景音乐。
+- `schema.output.json` 和 `validators.py` 同步增加 MD 分镜结构契约校验。
+- Web 生产控制台为 `storyboard_director` 增加专用预览，不再用通用 JSON 摘要显示分镜；审核区和右侧结果卡都展示影片概览、分部和镜头字段。
+- README、总参考、阶段计划和短棒交接同步本次分镜格式基础能力和后续严格模式技术债。
+
+Boundary:
+
+- 当前仍不接真实模型，不读取真实媒体，不触发 FFmpeg，不生成真实 MP4 / WAV / SRT / ZIP。
+- 当前只做格式、schema、validator 和 UI 预览对齐；不把 120 秒、50-55 镜头、逐句对白保真强行塞进现有 30-60 秒 MVP 生产链路。
+- 严格 MD 模式需要后续 TextProvider / 模型 adapter、对白校验器、长文本分镜 validator、UI 分页/折叠和下游 50+ 镜头规模化处理。
+
+Verification result:
+
+- Python Stage 7 storyboard pipeline：通过，命令为 `C:\Users\10045\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe backend\sidecars\python-skills\tests\test_stage7_storyboard_pipeline.py`，并设置 `PYTHONPATH=D:\code\MiLuStudio\backend\sidecars\python-skills`。
+- Python Stage 14 skill contract drift：通过，命令为 `C:\Users\10045\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe backend\sidecars\python-skills\tests\test_stage14_skill_contracts.py`。
+- Python skills 全量 unittest：通过，30 tests OK，命令为 `C:\Users\10045\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s backend\sidecars\python-skills\tests -v`。
+- Web build：通过，命令为 `npm run build`，工作目录 `D:\code\MiLuStudio\apps\web`。
+
+### 2026-05-14 牡丹亭角色抽取与 checkpoint 按钮语义补丁
+
+Date:
+
+- 2026-05-14
+
+Trigger:
+
+- 用户指出《牡丹亭》输入中主角应为杜丽娘，但当前角色设定阶段把“柳枝垂”识别成主角。
+- 用户指出 checkpoint 审核态只有“通过”明显可点，暂停 / 恢复 / 拒绝 / 重试都灰掉，难以理解当前能做什么。
+
+Action:
+
+- 修正 `story_intake` 中文角色抽取：先识别明确人物句式，例如“杜丽娘是...小姐”、“侍女春香”、“自称柳梦梅”，再用动作句式兜底。
+- 收紧自然物和动作片段过滤，避免把“柳枝垂”、“花影像”、“她倚”当成角色名。
+- 为《牡丹亭》500 字 fixture 增加回归测试，断言主角为“杜丽娘”，角色包含“春香”和“柳梦梅”，且不包含误识别片段。
+- Web checkpoint 审核态按钮文案调整为“已暂停 / 通过后继续 / 通过并继续 / 退回修改 / 退回后重试”，并增加操作说明。
+- “退回修改”按钮不再因空备注直接灰掉；点击时会聚焦备注框并提示填写修改意见，填写后再提交退回。
+
+Boundary:
+
+- 当前仍为 deterministic 本地解析，不接真实模型，不读取真实媒体，不触发 FFmpeg，不生成真实 MP4 / WAV / SRT / ZIP。
+- 未实现“备注驱动重新生成”或复杂输入版本 diff；角色源头错误修复后，需要点击“重新生成”创建新 job 才会刷新已有错误输出。
+- UI 仍只通过 Control API 调 checkpoint / retry / regenerate，不直接访问 PostgreSQL、业务文件系统、Python 脚本或 FFmpeg。
+
+Verification result:
+
+- Python `story_intake` 定向测试：通过，命令为 `D:\soft\program\Python\Python313\python.exe -m unittest tests.test_story_intake`。
+- Python skills 全量 unittest：通过，30 tests OK，命令为 `D:\soft\program\Python\Python313\python.exe -m unittest discover -s tests`。
+- 手动执行《牡丹亭》fixture：`main_characters` 输出 `杜丽娘 / 春香 / 柳梦梅`，不再输出 `柳枝垂 / 花影像 / 她倚`。
+- Web build：通过，命令为 `npm run build`，工作目录 `D:\code\MiLuStudio\apps\web`。
+
+### 2026-05-14 生产任务按当前输入重新生成补丁
+
+Date:
+
+- 2026-05-14
+
+Trigger:
+
+- 用户把项目输入换成《牡丹亭》测试文本后，右侧真实结果仍显示旧的“雨夜纸鹤 / 林溪 / 纸鹤”内容。
+- 检查 PostgreSQL 后确认：项目 `story_inputs.original_text` 已是新输入，但生产控制台继续复用了旧 active job 的 `generation_tasks.output_json`。
+
+Action:
+
+- `ProductionJobService.StartAsync` 不再返回同项目已有 active job。
+- 点击开始生成或重新生成时，先把同项目 `running / paused / queued` 旧 job 标记为 `failed`，写入“已根据当前输入重新生成，新任务已取代该旧任务。”，再创建新 job。
+- Web 生产控制台启动新 job 前清空旧 job、阶段、结果卡、资产和成本状态，按钮文案改为“重新生成”。
+- Stage 14 集成脚本从“重复启动应返回同一个 job”改为“重复启动应创建新 job，并确认旧 active job 被淘汰”。
+- README、总参考、阶段计划和短棒交接同步当前重新生成语义。
+
+Boundary:
+
+- 不引入复杂输入版本号或 hash 机制；当前按用户确认的简化方案执行：每次重新生成都消费当前已保存输入。
+- 不接真实模型，不读取真实媒体，不触发 FFmpeg，不生成真实 MP4 / WAV / SRT / ZIP。
+- UI 仍只通过 Control API 启动生产任务和消费 task output，不直接访问 PostgreSQL、业务文件系统、Python 脚本或 FFmpeg。
+
+Verification result:
+
+- .NET build：通过，命令为 `D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage16-build\`。
+- Web build：通过，命令为 `npm run build`，工作目录 `D:\code\MiLuStudio\apps\web`。
+- API 直连验证：用《牡丹亭》输入启动新 job 后，`story_intake.output_json` 包含“杜丽娘”等新输入内容，且不再包含旧的“雨夜纸鹤”文本。
+- Stage 14 integration：通过，最新完成 job `job_5f2798c29f2043cb8b7aaf7b203d9806`。
+- Control API health / preflight：通过；当前 provider 为 PostgreSQL，数据库、migration、storage、Python runtime 和 Python skills root 均 healthy。
+
+### 2026-05-14 未开始状态去 mock 与中文剧本 fixture
+
+Date:
+
+- 2026-05-14
+
+Trigger:
+
+- 用户指出项目尚未开始时右侧已经出现脚本卡、角色卡、分镜卡等内容，会被误认为真实生成结果。
+- 用户要求真实结果卡应在每一步结束后逐步添加，方便核实和确认。
+- 用户确认下载一个中文公版剧本到项目内，方便后续放入输入框测试。
+
+Action:
+
+- Control API 正常连接时，生产控制台初始阶段改为流程预览，全部显示待开始 / 待生成，不再复用 `mockStages` 的已完成、待确认或生成中状态。
+- Control API 正常连接且还没有 `task.outputJson` 时，右侧只显示中性占位，说明真实结果会在 Worker 写入后逐步出现。
+- `mockResultCards` 只保留给 Control API 不可用的示例模式，不再混入正常 Control API 场景。
+- 真实结果卡按 `GenerationTaskRecord.queueIndex` 顺序展示；每个 task 写入 output 后就会逐步追加到右侧结果区，当前审核卡仍通过视觉状态高亮。
+- 下载 Project Gutenberg《牡丹亭》完整 UTF-8 文本到 `docs\test-fixtures\scripts\mudan_ting_gutenberg_23849.txt`。
+- 新增 `docs\test-fixtures\scripts\mudan_ting_stage_input_zh.txt`，作为当前输入框可直接使用的 500 字中文测试样本。
+- 新增 `docs\test-fixtures\scripts\README.md`，记录来源、URL、公版状态和 fixture 用途。
+
+Boundary:
+
+- 测试剧本只作为 fixture，不自动写入项目默认输入，不影响现有 PostgreSQL 数据。
+- 当前仍不接真实模型，不读取真实媒体，不触发 FFmpeg，不生成真实 MP4 / WAV / SRT / ZIP。
+- UI 仍只通过 Control API 消费真实 task output，不直接访问 PostgreSQL、业务文件系统、Python 脚本或 FFmpeg。
+
+Verification result:
+
+- Web build：通过，命令为 `npm run build`，工作目录 `D:\code\MiLuStudio\apps\web`。
+- diff check：通过，仅有 CRLF 提示。
+
+### 2026-05-14 checkpoint 真实产物预览补丁
+
+Date:
+
+- 2026-05-14
+
+Trigger:
+
+- 用户以画风设定阶段举例指出：界面虽然提示“需要确认”，但没有把画风设定的实际内容展示出来，用户无法判断通过或拒绝的对象。
+
+Action:
+
+- 在当前 checkpoint 审核说明区增加真实产物预览，优先展示当前正在审核的 task output。
+- 在右侧结果卡增加产物预览区，放在摘要和技术详情之间；技术字段仍折叠到“技术详情”。
+- 为 `style_bible` 增加专门预览：画风名、视觉规则、色板、灯光、场景、镜头语言、角色一致性、负面提示词和后续可复用提示词块。
+- 为其他 deterministic skills 增加通用结构化预览兜底，优先展示标题、摘要、一句话梗概、风险点、角色、分镜、字幕条目、交付资产和检查项。
+- `style_bible` 摘要从剧集标题改为画风摘要，避免右侧卡片只显示“雨夜纸鹤”这类不具备审核价值的文本。
+
+Boundary:
+
+- 当前仍为 deterministic 本地产物预览，不接真实模型，不读取真实媒体，不触发 FFmpeg，不生成真实 MP4 / WAV / SRT / ZIP。
+- UI 仍只消费 Control API 返回的 task output JSON，不直接访问 PostgreSQL、业务文件系统、Python 脚本或 FFmpeg。
+
+Verification result:
+
+- Web build：通过，命令为 `npm run build`，工作目录 `D:\code\MiLuStudio\apps\web`。
+
+### 2026-05-14 当前任务安排同步与短棒交接归档
+
+Date:
+
+- 2026-05-14
+
+Trigger:
+
+- 用户要求将当前任务安排同步到项目文档。
+- 用户指出 `docs\MILUSTUDIO_HANDOFF.md` 前置任务记录过多，要求检查当前阶段是否需要；如不需要则归档，但保留所有约束。
+
+Action:
+
+- 将原 `docs\MILUSTUDIO_HANDOFF.md` 原样归档到 `docs\archive\MILUSTUDIO_HANDOFF_ARCHIVE_2026-05-14_before_trim.md`。
+- 重写 `docs\MILUSTUDIO_HANDOFF.md`，只保留下一棒需要立即接住的内容：当前接棒、已完成摘要、最近补丁、固定约束、当前技术债、最近验证、下一步建议和下一棒提示词。
+- 保留并集中整理所有硬约束：不接真实模型、不读真实媒体、不触发 FFmpeg、不生成真实媒体文件、不引入 Linux / Docker / Redis / Celery、不让 UI 或 Electron 绕过 Control API / Worker、不让桌面端执行 migrations 或拥有数据库 schema、D 盘环境约束、README 同步约束等。
+- 同步 `README.md`、`docs\MILUSTUDIO_BUILD_PLAN.md` 和 `docs\MILUSTUDIO_PHASE_PLAN.md`：当前 Post Stage 16 体验收敛已完成，Stage 17 仍待确认，候选方向为生产控制台可编辑能力、真实 provider adapter 前配置页、正式代码签名与干净 Windows 安装验收。
+
+Boundary:
+
+- 本次只整理文档，不改生产代码，不改数据库，不运行迁移，不接真实模型，不读取真实媒体，不触发 FFmpeg。
+- 历史细节没有删除，已进入 archive；长期历史仍以 `docs\MILUSTUDIO_TASK_RECORD.md` 为事实来源。
+
+Verification result:
+
+- 已确认 `docs\archive\MILUSTUDIO_HANDOFF_ARCHIVE_2026-05-14_before_trim.md` 存在，归档原 handoff 349 行。
+- 已确认新的 `docs\MILUSTUDIO_HANDOFF.md` 缩减为 111 行当前短交接，且保留固定约束。
+- 已通过 `Get-Content -Encoding UTF8` 读取 README、总参考、阶段计划、任务记录和短棒交接。
+
+### 2026-05-14 Stage 17 生产控制台可编辑能力完成
+
+Date:
+
+- 2026-05-14
+
+Stage:
+
+- Stage 17：生产控制台可编辑能力。
+
+Trigger:
+
+- 用户要求先做候选 1，并在开始前确认 Stage 17 的正式编号与范围。
+- 正式范围收敛为：分镜表编辑、单镜头重新生成、备注驱动重试和审核后重算。
+
+Action:
+
+- 将 Stage 17 正式确认为“生产控制台可编辑能力”。
+- 新增 `StoryboardEditingService` 和 DTO，集中处理 `storyboard_director` envelope 的分镜编辑、单镜头备注重算、元数据更新和下游任务 reset。
+- 新增 Control API：`PATCH /api/generation-tasks/{taskId}/storyboard`。
+- 新增 Control API：`POST /api/generation-tasks/{taskId}/storyboard/shots/{shotId}/regenerate`。
+- Web Control API client 和 production types 已补分镜编辑 / 单镜头重算 DTO。
+- 生产控制台真实分镜结果卡已加入编辑表单：镜头时长、场景、画面动作、景别、镜头运动、声音、对白和旁白。
+- 保存分镜或单镜头重算后，job 回到分镜审核暂停态，storyboard task 回到 review，下游 task 清回 waiting 并清空 output。
+- 新增 `scripts\windows\Test-MiLuStudioStage17StoryboardEditing.ps1`，覆盖完整 deterministic job、编辑、下游重置、单镜头重算和 no-provider/no-media 元数据。
+
+Boundary:
+
+- 不接真实模型 provider。
+- 不读取真实媒体文件。
+- 不触发 FFmpeg。
+- 不生成真实 MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery。
+- UI 与 Electron 仍只能走 Control API，不直接访问 PostgreSQL、业务文件系统、Python 脚本、模型 SDK 或 FFmpeg。
+- 桌面端不执行 migrations、不定义数据库表、不负责数据库初始化。
+- 本阶段未新增数据库 migration，复用 `generation_tasks.output_json` 和 `checkpoint_notes`。
+
+Commands:
+
+```powershell
+. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
+dotnet build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore
+
+Push-Location D:\code\MiLuStudio\apps\web
+npm run build
+Pop-Location
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage17StoryboardEditing.ps1
+```
+
+Verification result:
+
+- .NET build：通过，0 warning / 0 error。
+- Web build：通过，Vite 成功输出生产包。
+- Stage 17 storyboard editing integration：通过；最新完成 job `job_e1ab06449be24902a372403244ed911f`。
+- 集成脚本确认已完成 job 的分镜可编辑、下游任务会被重置、单镜头重算会消费当前备注，并写入 `model_provider=none` / `media_generated=false`。
+
+Doc changes:
+
+- `README.md`：同步 Stage 17 完成状态、能力范围、边界和验证命令。
+- `docs\MILUSTUDIO_BUILD_PLAN.md`：将 Post Stage 16 当前安排更新为 Stage 17 落地状态，并记录新增 endpoint / 脚本。
+- `docs\MILUSTUDIO_PHASE_PLAN.md`：当前焦点改为 Post Stage 17，新增完整 Stage 17 章节。
+- `docs\MILUSTUDIO_HANDOFF.md`：更新短交接、技术债、最近验证、下一步建议和下一棒提示词。
+- `docs\MILUSTUDIO_TASK_RECORD.md`：追加本记录。
+
+Next phase:
+
+- Stage 18 尚未正式确认。
+- 候选方向：真实 provider adapter 前配置页、正式代码签名与干净 Windows 安装验收，或继续扩展生产控制台角色 / 画风 / 提示词编辑能力。

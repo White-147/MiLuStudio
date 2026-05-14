@@ -3,39 +3,12 @@
 !include WinMessages.nsh
 
 !ifndef BUILD_UNINSTALLER
-Var ActivationCodeField
-Var ActivationCodeValue
 Var DesktopShortcutCheckbox
 Var DesktopShortcutState
 Var StartMenuShortcutCheckbox
 Var StartMenuShortcutState
 Var StartAtLoginCheckbox
 Var StartAtLoginState
-Function MiLuActivationPage
-  nsDialogs::Create 1018
-  Pop $0
-  ${If} $0 == error
-    Abort
-  ${EndIf}
-
-  ${NSD_CreateLabel} 0 0 100% 32u "Enter a MiLuStudio installation code. Stage 15 keeps this as an installer gate only; in-app licensing remains a Control API responsibility."
-  Pop $1
-  ${NSD_CreateText} 0 40u 100% 12u ""
-  Pop $ActivationCodeField
-  ${NSD_SetText} $ActivationCodeField ""
-  nsDialogs::Show
-FunctionEnd
-
-Function MiLuActivationPageLeave
-  ${NSD_GetText} $ActivationCodeField $ActivationCodeValue
-  ${If} $ActivationCodeValue == "MILU-STUDIO-TRIAL"
-  ${OrIf} $ActivationCodeValue == "MILU-STUDIO-STAGE15"
-    Return
-  ${Else}
-    MessageBox MB_ICONSTOP "Invalid installation code. Use MILU-STUDIO-TRIAL for this Stage 15 MVP package."
-    Abort
-  ${EndIf}
-FunctionEnd
 
 Function MiLuStartupOptionsPage
   nsDialogs::Create 1018
@@ -65,13 +38,11 @@ FunctionEnd
 
 !macro customWelcomePage
   !insertmacro MUI_PAGE_WELCOME
-  Page custom MiLuActivationPage MiLuActivationPageLeave
   Page custom MiLuStartupOptionsPage MiLuStartupOptionsPageLeave
 !macroend
 !endif
 
 !macro customInstall
-  WriteRegStr HKCU "Software\MiLuStudio" "InstallGate" "installer-code-placeholder"
   ${If} $DesktopShortcutState != ${BST_CHECKED}
     Delete "$newDesktopLink"
   ${EndIf}

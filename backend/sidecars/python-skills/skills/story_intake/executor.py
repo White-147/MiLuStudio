@@ -6,10 +6,26 @@ from typing import Any
 from .validators import validate_input, validate_output
 
 SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[。！？!?；;])\s*")
-CHINESE_NAME_PATTERN = re.compile(r"(?:^|[，。！？；\s])([\u4e00-\u9fff]{2,3})(?=在|从|向|把|被|捡|发现|进入|来到)")
+ACTION_NAME_PATTERN = re.compile(r"(?:^|[，。！？；\s])([\u4e00-\u9fff]{2,4})(?=在|从|向|把|被|捡|发现|进入|来到)")
+EXPLICIT_NAME_PATTERNS = (
+    re.compile(
+        r"(?:^|[，。！？；\s])([\u4e00-\u9fff]{2,4})(?=是[^，。！？；]{0,18}"
+        r"(?:小姐|姑娘|女子|少女|少年|书生|公子|侍女|丫鬟|太守|画师|学生|老师|主角|主人公))"
+    ),
+    re.compile(
+        r"(?:侍女|丫鬟|书生|小姐|姑娘|公子|少年|少女|画师|学生|老师)([\u4e00-\u9fff]{2,3})"
+        r"(?=悄悄|忽然|却|也|和|与|，|。|、|说|道|走|来|去|把|将|在|从|的|$)"
+    ),
+    re.compile(r"(?:自称|名叫|叫作|叫做|名为|名字叫|唤作)([\u4e00-\u9fff]{2,4})"),
+)
 NON_CHARACTER_TERMS = (
     "旧巷",
     "巷口",
+    "园中",
+    "小池",
+    "水面",
+    "柳枝",
+    "花影",
     "纸鹤",
     "不断",
     "飞向",
@@ -17,7 +33,10 @@ NON_CHARACTER_TERMS = (
     "胶片",
     "午夜",
     "门后",
+    "她倚",
 )
+NON_NAME_PREFIXES = ("她", "他", "它", "这", "那", "的", "了", "从", "在", "向", "把", "被", "对", "和", "与")
+NON_NAME_SUFFIXES = ("里", "前", "后", "中", "口", "边", "旁", "上", "下", "内", "外", "时", "处", "间", "像", "垂", "开", "写", "吹", "倚", "悄")
 KINSHIP_NAMES = ("哥哥", "姐姐", "妹妹", "弟弟", "父亲", "母亲")
 
 
@@ -86,7 +105,7 @@ def infer_genres(story_text: str) -> list[str]:
         ("都市", ("城市", "旧巷", "便利店", "照相馆", "雨夜", "街")),
         ("奇幻", ("发光", "壁画", "梦", "纸鹤", "魔法", "异界")),
         ("科幻", ("星", "飞船", "机器人", "宇宙", "星港", "未来")),
-        ("古风", ("长安", "画师", "古", "宫", "剑", "仙")),
+        ("古风", ("长安", "画师", "古", "宫", "剑", "仙", "太守", "侍女", "书生", "小姐", "牡丹")),
         ("喜剧", ("误会", "搞笑", "轻喜剧", "笑", "荒唐")),
     ]
     genres = [genre for genre, keywords in candidates if any(keyword in story_text for keyword in keywords)]
@@ -116,16 +135,18 @@ def infer_tone_keywords(story_text: str, style_preset: str) -> list[str]:
 
 
 def infer_characters(story_text: str) -> list[dict[str, str]]:
-    names = []
+    names: list[str] = []
 
-    for match in CHINESE_NAME_PATTERN.finditer(story_text):
-        name = match.group(1)
-        if is_likely_character_name(name) and name not in names:
-            names.append(name)
+    for pattern in EXPLICIT_NAME_PATTERNS:
+        for match in pattern.finditer(story_text):
+            add_unique_character_name(names, match.group(1))
+
+    for match in ACTION_NAME_PATTERN.finditer(story_text):
+        add_unique_character_name(names, match.group(1))
 
     for name in KINSHIP_NAMES:
-        if name in story_text and name not in names:
-            names.append(name)
+        if name in story_text:
+            add_unique_character_name(names, name)
 
     if not names:
         names.append("主角")
@@ -144,8 +165,32 @@ def infer_characters(story_text: str) -> list[dict[str, str]]:
     return characters
 
 
+def add_unique_character_name(names: list[str], value: str) -> None:
+    name = normalize_name(value)
+    if not is_likely_character_name(name):
+        return
+
+    for existing in names:
+        if existing == name or (len(existing) > len(name) and existing.endswith(name)):
+            return
+
+    for index, existing in enumerate(names):
+        if len(name) > len(existing) and name.endswith(existing):
+            names[index] = name
+            return
+
+    names.append(name)
+
+
+def normalize_name(value: str) -> str:
+    return value.strip("“”\"'：:，,。！？；;、 \n\t")
+
+
 def is_likely_character_name(name: str) -> bool:
-    if len(name) < 2 or name.endswith(("里", "前", "后", "中", "口")):
+    if len(name) < 2 or len(name) > 4:
+        return False
+
+    if name.startswith(NON_NAME_PREFIXES) or name.endswith(NON_NAME_SUFFIXES):
         return False
 
     return not any(term in name for term in NON_CHARACTER_TERMS)

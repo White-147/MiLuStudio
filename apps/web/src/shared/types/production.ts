@@ -2,7 +2,7 @@ export type ProjectMode = 'fast' | 'director';
 
 export type ProjectStatus = 'draft' | 'running' | 'paused' | 'completed' | 'failed';
 
-export type StageStatus = 'done' | 'running' | 'waiting' | 'review' | 'blocked';
+export type StageStatus = 'done' | 'running' | 'waiting' | 'review' | 'blocked' | 'failed';
 
 export type ProductionJobStatus = 'queued' | 'running' | 'paused' | 'completed' | 'failed';
 
@@ -110,6 +110,36 @@ export interface GenerationTaskRecord {
   errorMessage: string | null;
 }
 
+export interface StoryboardShotEdit {
+  shotId: string;
+  durationSeconds: number;
+  scene: string;
+  visualAction: string;
+  shotSize: string;
+  cameraMovement: string;
+  soundNote: string;
+  dialogue: string;
+  narration: string;
+}
+
+export interface StoryboardEditRequest {
+  shots: StoryboardShotEdit[];
+  notes: string;
+}
+
+export interface StoryboardShotRegenerateRequest {
+  notes: string;
+}
+
+export interface StoryboardEditResponse {
+  taskId: string;
+  jobId: string;
+  projectId: string;
+  status: string;
+  resetDownstreamTaskCount: number;
+  message: string;
+}
+
 export interface ProjectAssetRecord {
   id: string;
   projectId: string;
@@ -154,7 +184,7 @@ export interface AuthDevice {
 }
 
 export interface LicenseStatus {
-  status: 'missing' | 'active' | 'expired' | 'revoked';
+  status: 'missing' | 'active' | 'expired' | 'revoked' | 'not_required';
   isActive: boolean;
   plan: string;
   licenseType: string;
@@ -188,18 +218,11 @@ export interface RegisterAccountRequest {
   password: string;
   deviceFingerprint: string;
   deviceName: string;
-  activationCode?: string;
 }
 
 export interface LoginRequest {
   identifier: string;
   password: string;
-  deviceFingerprint: string;
-  deviceName: string;
-}
-
-export interface ActivateLicenseRequest {
-  activationCode: string;
   deviceFingerprint: string;
   deviceName: string;
 }

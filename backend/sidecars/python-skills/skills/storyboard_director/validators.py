@@ -90,6 +90,11 @@ def validate_output(data: dict[str, Any]) -> dict[str, Any]:
         "aspect_ratio",
         "storyboard_summary",
         "shots",
+        "format_profile",
+        "film_overview",
+        "storyboard_parts",
+        "rendered_markdown",
+        "validation_report",
         "timing_summary",
         "image_video_readiness",
         "review",
@@ -141,6 +146,66 @@ def validate_output(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(timing_summary, dict) or timing_summary.get("within_tolerance") is not True:
         errors.append("timing_summary.within_tolerance must be true.")
 
+    film_overview = data.get("film_overview")
+    if not isinstance(film_overview, dict):
+        errors.append("film_overview must be an object.")
+    else:
+        for field in ["episode_label", "theme", "total_duration_seconds", "shot_count", "style_tone", "camera_setup"]:
+            if field not in film_overview:
+                errors.append(f"film_overview.{field} is required.")
+
+    storyboard_parts = data.get("storyboard_parts")
+    if not isinstance(storyboard_parts, list) or not storyboard_parts:
+        errors.append("storyboard_parts must be a non-empty array.")
+    else:
+        for part_index, part in enumerate(storyboard_parts):
+            if not isinstance(part, dict):
+                errors.append(f"storyboard_parts[{part_index}] must be an object.")
+                continue
+
+            for field in [
+                "title",
+                "duration_seconds",
+                "time_weather_light",
+                "camera_setup",
+                "cast_and_props",
+                "absolute_blocking",
+                "style",
+                "shots",
+            ]:
+                if field not in part:
+                    errors.append(f"storyboard_parts[{part_index}].{field} is required.")
+
+            formatted_shots = part.get("shots")
+            if not isinstance(formatted_shots, list) or not formatted_shots:
+                errors.append(f"storyboard_parts[{part_index}].shots must be a non-empty array.")
+                continue
+
+            for shot_index, shot in enumerate(formatted_shots):
+                if not isinstance(shot, dict):
+                    errors.append(f"storyboard_parts[{part_index}].shots[{shot_index}] must be an object.")
+                    continue
+                for field in [
+                    "shot_label",
+                    "duration_seconds",
+                    "environment_description",
+                    "time_slice",
+                    "shot_size",
+                    "camera_movement",
+                    "sound_effect",
+                    "background_music",
+                ]:
+                    if field not in shot:
+                        errors.append(f"storyboard_parts[{part_index}].shots[{shot_index}].{field} is required.")
+
+    rendered_markdown = data.get("rendered_markdown")
+    if not isinstance(rendered_markdown, str) or "影片概览" not in rendered_markdown or "镜头 1" not in rendered_markdown:
+        errors.append("rendered_markdown must include the storyboard overview and shot headings.")
+
+    validation_report = data.get("validation_report")
+    if not isinstance(validation_report, dict) or not isinstance(validation_report.get("checks"), list):
+        errors.append("validation_report.checks must be an array.")
+
     checkpoint = data.get("checkpoint")
     if not isinstance(checkpoint, dict) or checkpoint.get("required") is not True:
         errors.append("storyboard_director checkpoint.required must be true.")
@@ -149,4 +214,3 @@ def validate_output(data: dict[str, Any]) -> dict[str, Any]:
         raise SkillValidationError("storyboard_director output validation failed.", errors)
 
     return data
-

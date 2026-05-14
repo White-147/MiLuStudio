@@ -1,13 +1,10 @@
 # MiLuStudio 短棒交接
 
-更新时间：2026-05-13
+更新时间：2026-05-14  
 工作目录：`D:\code\MiLuStudio`
 
-本文件只保留下一棒需要立刻接住的上下文。
-
-长规规划看 `docs\MILUSTUDIO_BUILD_PLAN.md`。
-总任务阶段安排看 `docs\MILUSTUDIO_PHASE_PLAN.md`。
-修改记录和自检记录看 `docs\MILUSTUDIO_TASK_RECORD.md`。
+本文件只保留下一棒需要立刻接住的上下文。历史交接明细已归档到 `docs\archive\MILUSTUDIO_HANDOFF_ARCHIVE_2026-05-14_before_trim.md`。  
+长期规划看 `docs\MILUSTUDIO_BUILD_PLAN.md`。阶段安排看 `docs\MILUSTUDIO_PHASE_PLAN.md`。修改记录和自检记录看 `docs\MILUSTUDIO_TASK_RECORD.md`。
 
 ## 每棒先读
 
@@ -23,317 +20,102 @@ Get-Content .\docs\MILUSTUDIO_HANDOFF.md -Encoding UTF8
 ## 当前接棒
 
 ```text
-Phase: Post Stage 16
-Status: pending user confirmation
-Owner: next session
-Goal: 由用户确认 Stage 17 的正式编号与范围。
+Phase: Post Stage 17
+Status: pending Stage 18 confirmation
+Owner: current / next session
+Goal: Stage 17 已完成生产控制台可编辑能力；下一棒先确认 Stage 18 的正式编号与范围。
 ```
 
-## 已完成
+## 已完成摘要
 
-- Stage 0：独立 Git 仓库、根文档、产品规格和参考清单已就位。
-- Stage 1：`apps\web` Vite + React + TypeScript 前端壳已就位，使用项目内 `/brand/logo.png`，`npm run build` 通过。
-- Stage 2：`.NET Control API` solution 已就位，已有项目 API、production job API、pause、resume、retry 和 SSE mock；PostgreSQL 当前只落 SQL migration，运行期仍是 in-memory repository。
-- Stage 3：已有 production 状态机、checkpoint、retry 和 mock SSE 闭环；前端通过 Control API DTO / SSE 展示任务状态。
-- Stage 4：已有 `backend\sidecars\python-skills` Runtime、统一 CLI、`SkillGateway` 和 `story_intake`。
-- Stage 5：已有 `story_intake -> plot_adaptation -> episode_writer` envelope 链路。
-- Stage 6：已有 `episode_writer -> character_bible -> style_bible` envelope 链路。
-- Stage 7：已有 `episode_writer + character_bible + style_bible -> storyboard_director` envelope 链路。
-- Stage 8：已有 `storyboard_director + character_bible + style_bible -> image_prompt_builder -> image_generation` envelope 链路。
-- Stage 9：已有 `storyboard_director + image_prompt_builder + image_generation -> video_prompt_builder -> video_generation` envelope 链路。
-- Stage 10：已有 `episode_writer + storyboard_director -> voice_casting -> subtitle_generator`，以及 `storyboard_director + video_generation + voice_casting + subtitle_generator -> auto_editor` envelope 链路。
-- Stage 11：已有 `character_bible + style_bible + storyboard_director + video_generation + voice_casting + subtitle_generator + auto_editor -> quality_checker` envelope 链路。
-- Stage 12：已有 PostgreSQL / EF Core DbContext adapter、RepositoryProvider 配置切换、API preflight、migration status / apply、Worker durable claiming 和 skill envelope 数据库写回边界。
-- Stage 13：真实 `milu` 数据库、Worker 调 Python deterministic skills、API 数据库事实来源和前端真实结果展示已完成。
-- Stage 14：打包前补丁与 Stage 13 收敛已完成；真实用户输入保存链路、端口 / CORS / API base URL、checkpoint approve / reject / notes、active job 去重、PostgreSQL 默认 provider、skill run 保留策略、集成脚本和 Python skill 契约漂移检查已落地。
-- Stage 15：Electron + electron-builder + NSIS 桌面打包已完成；`apps\desktop`、本地服务进程管理、Control API base URL / 桌面会话令牌注入、桌面诊断面板、品牌图标、NSIS assisted installer、自定义激活码页、随包 .NET / Python runtime 和桌面验证脚本已落地。
-- Stage 16：账号注册、登录、会话刷新、退出、设备绑定、许可证状态和测试激活码授权已完成；正式授权边界集中在 Control API / Auth & Licensing adapter。
+- Stage 0-1：独立仓库、根文档、产品规格、参考清单和 React / Vite Web 壳已就位。
+- Stage 2-4：.NET Control API、生产任务状态机、SSE、Python Skills Runtime、统一 CLI 和 `SkillGateway` 已就位。
+- Stage 5-11：`story_intake -> plot_adaptation -> episode_writer -> character_bible -> style_bible -> storyboard_director -> image / video / voice / subtitle / auto_editor -> quality_checker` deterministic envelope 链路已就位。
+- Stage 12-14：PostgreSQL / EF Core provider、migration、Worker durable claiming、真实 task output 写回、真实用户输入保存、checkpoint approve / reject / notes、重新生成淘汰旧 job、skill run 保留策略和集成脚本已完成。
+- Stage 15：Electron + electron-builder + NSIS 桌面打包已完成，桌面端只承载 Web UI、启动本地 Control API / Worker、注入 API base URL 和桌面令牌，不拥有数据库 schema 或 migration。
+- Stage 16：本地 deterministic 账号注册、登录、会话刷新、退出和设备绑定已完成；许可证、激活码、付费码和商业授权体验已撤下，作为后续大后期内容。
+- Stage 17：生产控制台分镜编辑、单镜头备注驱动本地重算、下游任务 reset 和审核后重算边界已完成。
 
-## Stage 12 落地内容
+## 当前最近补丁
 
-- 新增 `backend\control-plane\src\MiLuStudio.Infrastructure\Persistence\PostgreSql\MiLuStudioDbContext.cs`。
-- 新增 `PostgreSqlControlPlaneRepository`，覆盖 projects、production jobs、generation tasks、assets 和 cost ledger。
-- 新增 `ControlPlane:RepositoryProvider=InMemory` / `PostgreSQL` 切换；Stage 13 决策为默认切到 PostgreSQL，InMemory 仅保留为快速 smoke 备选。
-- 新增 `/api/system/preflight`、`/api/system/migrations` 和 `/api/system/migrations/apply`。
-- 新增 `backend\control-plane\db\migrations\002_stage12_postgresql_claiming.sql`。
-- Worker 现在通过 repository 领取任务；PostgreSQL provider 使用 `FOR UPDATE SKIP LOCKED`，并可接管 `locked_until` 过期的 running task。
-- 新增 `POST /api/generation-tasks/{taskId}/output`，把 Stage 5-11 skill envelope 写入 `generation_tasks.output_json`，同时建立 `assets` 和可选 `cost_ledger` 记录。
-- 新增 `GET /api/projects/{projectId}/assets` 和 `GET /api/projects/{projectId}/cost-ledger`。
-- 新增 `docs\POSTGRESQL_STAGE12_SETUP.md`，说明本地连接配置、preflight、migration、Worker claiming 和 Electron 禁止边界。
-
-## Stage 13 落地内容
-
-- 默认 `RepositoryProvider` 已切到 `PostgreSQL`，API / Worker 版本库连接串为 `Host=127.0.0.1;Port=5432;Database=milu;Username=root;Password=root`。
-- 已新增 `scripts\windows\Initialize-MiLuStudioPostgreSql.ps1`，幂等创建 `milu`；本机 `root/root` 无 `CREATEDB` 权限时使用 `postgres/root` bootstrap 建库并把 owner 设为 `root`。
-- 已通过 Control API `/api/system/migrations/apply` 应用 `001_initial_control_plane` 和 `002_stage12_postgresql_claiming`。
-- 已新增 `IProductionSkillRunner` / `PythonProductionSkillRunner`，Worker 通过 Python CLI / `SkillGateway` 调 deterministic skills。
-- 已新增 `export_packager` deterministic skill，只输出 MP4 / SRT / JSON / ZIP 占位交付结构，不生成真实文件。
-- 已把 `plot_adaptation`、`image_prompt_builder`、`video_prompt_builder`、`export_packager` 纳入完整 queue，Stage 5-13 可端到端写回 PostgreSQL。
-- 已将 `SystemClock` 改为 UTC，满足 Npgsql 写入 `timestamptz` 的要求；展示层仍转本地时间。
-- 已收敛 PostgreSQL repository 的 job/task 写入顺序和 EF Core ChangeTracker 清理，避免外键顺序与长链路跟踪冲突。
-- API SSE 已改为读取数据库快照，不再由 API mock 自动推进生产状态。
-- 前端已通过 Control API 读取 job、tasks、assets、cost ledger，并用真实 `outputJson` envelope 构建结果卡和导出区。
-
-## Stage 14 落地内容
-
-- Web UI 编辑区已改为真实项目草稿：故事文本、标题、模式、目标时长、画幅和风格通过 Control API 写入 PostgreSQL，启动生产前会先保存。
-- 后端项目更新链路已扩展到 `story_inputs.original_text`、word count 和项目描述；故事文本保持 500 到 2000 字校验。
-- Control API 默认端口统一为 `http://127.0.0.1:5368`；前端 API base URL 解析顺序为桌面宿主注入 `window.__MILUSTUDIO_CONTROL_API_BASE__`、`VITE_CONTROL_API_BASE`、默认端口。
-- CORS 已允许 loopback 本地源；前端路由支持 hash route，便于 Stage 15 桌面静态或本地 HTTP 承载。
-- 已清理 `Stage 1 mock` 文案和没有处理器的 `输出目录`、`锁定`、`重生成` 按钮。
-- checkpoint 已支持 approve / reject / notes，notes 持久化到 `generation_tasks.checkpoint_notes`；新增 `003_stage14_checkpoint_notes.sql`。
-- 同一项目若已有 active production job，会返回现有 job，避免重复 running / paused job。
-- PostgreSQL 是默认 provider，InMemory 只在显式配置 `RepositoryProvider=InMemory` 时启用；`001_initial_control_plane.sql` 旧注释已修正。
-- `.tmp\skill-runs` 默认保留最近 30 次运行，可用 `ControlPlane:SkillRunRetentionCount` 调整。
-- 新增 `scripts\windows\Test-MiLuStudioStage14Integration.ps1`，覆盖 migration、项目创建 / 更新、Worker 消费最新故事、API / Worker 重启恢复、lease 过期接管、checkpoint approve / reject notes 和 retry。
-- 新增 `backend\sidecars\python-skills\tests\test_stage14_skill_contracts.py`，检查 registry、`skill.yaml`、schema、executor 和 validator 契约漂移。
-
-## Stage 15 落地内容
-
-- 新增 `apps\desktop`，使用 Electron 承载现有 Web UI 构建产物，并通过本地 HTTP host 提供静态资源、hash route fallback 和 CSP。
-- 桌面宿主随机绑定本地端口，启动发布后的 Control API 和 Windows Worker；Python deterministic skills 和随包 `python-runtime` 作为 Worker sidecar runtime 路径注入后端配置。
-- preload 只向 Web UI 注入 `window.__MILUSTUDIO_CONTROL_API_BASE__`、`window.__MILUSTUDIO_DESKTOP_TOKEN__` 和受控桌面 IPC，不暴露数据库、业务文件系统、Python 脚本或 FFmpeg。
-- Web UI 新增桌面诊断面板，展示 Control API health / preflight、PostgreSQL、storage、Python runtime、Python skills root、Worker 和 Web host 状态。
-- 新增 `scripts\windows\Prepare-MiLuStudioDesktopRuntime.ps1`，复制 Web dist、self-contained API / Worker 发布产物、SQL migrations、Python deterministic skills 和 Python runtime 到 `apps\desktop\runtime`。
-- 新增 `scripts\windows\Test-MiLuStudioDesktop.ps1`，覆盖 runtime 准备、桌面 TypeScript build、Electron smoke 和桌面 API 安全验证；`scripts\windows\Test-MiLuStudioDesktopApiSecurity.ps1` 可单独验证桌面令牌和 migration apply 禁止语义。
-- 打包图标、安装器图标、卸载器图标、header 图标、快捷方式图标和托盘图标均来自 `apps\web\public\brand\logo.png` 生成的多尺寸 `apps\desktop\build\icon.ico`。
-- electron-builder + NSIS 已配置 `oneClick=false`、`allowToChangeInstallationDirectory=true`、`runAfterFinish=true`、`shortcutName=MiLuStudio`、桌面快捷方式、开始菜单快捷方式、AppUserModelID 和自定义 `installer.nsh`。
-- Electron 已升级到 `42.0.1`，主进程限制外部导航、弹窗和 IPC 来源；Electron `userData`、`sessionData` 和 logs 已显式指向 D 盘数据目录，避免默认落到 `C:\Users\...\AppData\Roaming`。
-- `apps\desktop\build\installer.nsh` 已预留安装前激活码输入页，以及桌面快捷方式、开始菜单快捷方式和开机自启动复选项；正式授权仍留给后续 Control API / Auth & Licensing adapter。
-- 已生成 `D:\code\MiLuStudio\outputs\desktop\MiLuStudio-Setup-0.1.0.exe` 和 `win-unpacked`；打包资源包含 `resources\web`、`resources\control-plane`、`resources\python-skills`、`resources\python-runtime` 和 `resources\build\icon.ico`。
-- Control API 桌面模式使用 exact desktop origin + `X-MiLuStudio-Desktop-Token` 保护 unsafe HTTP methods，并拒绝 `/api/system/migrations/apply`。
-
-## Stage 16 落地内容
-
-- 新增 `Account`、`AuthSession`、`DeviceBinding`、`LicenseGrant` 领域实体和账号 / 许可证枚举。
-- 新增 `AuthLicensingService`、`IAuthRepository`、`IAuthTokenService`、`IPasswordHasher`、`IAuthLicensingAdapter`，授权语义集中在 Control API / Application / Infrastructure。
-- 新增 `backend\control-plane\db\migrations\004_stage16_auth_licensing.sql`，创建 `accounts`、`auth_sessions`、`devices` 和 `licenses`；Electron 不执行、不拥有 schema。
-- PostgreSQL provider 新增 `PostgreSqlAuthRepository`；InMemory provider 新增 `InMemoryAuthRepository`。
-- 新增 deterministic `DeterministicAuthLicensingAdapter`，默认本地测试激活码为 `MILU-STAGE16-TEST`，不接真实云端授权服务。
-- Control API 新增 `/api/auth/register`、`/api/auth/login`、`/api/auth/refresh`、`/api/auth/logout`、`/api/auth/me`、`/api/auth/license`、`/api/auth/activate` 和 `/api/auth/devices/bind`。
-- 项目、生产任务和 generation task 类 API 已加最小授权门禁；未登录返回 401，未授权或设备超额返回 403 和清晰错误 DTO。
-- Web UI 新增 `apps\web\src\features\auth\AuthGate.tsx`，未登录或未授权时只显示登录 / 注册 / 激活入口。
-- Web Control API client 保存 access / refresh token 到 localStorage，并只把 Bearer token 发给 Control API；SSE 使用同一 access token query。
-- Electron / preload 仍只注入 Control API base URL 和桌面会话令牌，不保存账号密码，不判断许可证。
-- 新增 `scripts\windows\Test-MiLuStudioStage16Auth.ps1`。
-- `scripts\windows\Test-MiLuStudioStage14Integration.ps1` 已补授权 bootstrap；`Test-MiLuStudioDesktopApiSecurity.ps1` 已确认桌面令牌和应用授权分层。
-
-## Stage 10 落地内容
-
-- 新增 `backend\sidecars\python-skills\skills\voice_casting`。
-- 新增 `backend\sidecars\python-skills\skills\subtitle_generator`。
-- 新增 `backend\sidecars\python-skills\skills\auto_editor`。
-- `SkillGateway.default()` 已注册 `voice_casting`、`subtitle_generator` 和 `auto_editor`。
-- `voice_casting` 输出 `voice_profiles`、`voice_tasks`、逻辑音频 asset intent、零成本估算和 `checkpoint.required=true`。
-- `subtitle_generator` 输出 `subtitle_cues`、SRT-ready 文本结构、逻辑字幕 asset intent 和 review warnings。
-- `auto_editor` 输出 video / audio / subtitle timeline tracks、rough edit `render_plan`、逻辑 MP4 output intent 和 review warnings。
-- Stage 10 输出只暴露逻辑 `milu://mock-assets/...` URI / output intent；不写 WAV / SRT / MP4 文件、不写数据库、不调用真实 TTS / BGM / SFX provider、不触发 FFmpeg。
-- 新增 `backend\sidecars\python-skills\tests\test_stage10_audio_subtitle_edit_pipeline.py`，覆盖完整 Stage 4-10 envelope 链路。
-
-## Stage 11 落地内容
-
-- 新增 `backend\sidecars\python-skills\skills\quality_checker`。
-- `SkillGateway.default()` 已注册 `quality_checker`。
-- `quality_checker` 输出质量问题报告、严重级别、可自动重试项、人工确认项、质量 manifest 和 `checkpoint.required=true`。
-- Stage 11 只检查 envelope 元数据和 deterministic 结构；不读取真实媒体文件、不接视觉 / 音频检测模型、不触发 FFmpeg、不写数据库、不生成真实 MP4。
-- 新增 `backend\sidecars\python-skills\tests\test_stage11_quality_checker_pipeline.py`，覆盖 Stage 5-11 完整 envelope 链路、字幕过长可重试报告和失败 envelope。
-
-## 验证已通过
-
-```powershell
-. .\scripts\windows\Set-MiLuStudioEnv.ps1
-Push-Location backend\sidecars\python-skills
-& $env:MILUSTUDIO_PYTHON -m compileall -q milu_studio_skills skills tests
-& $env:MILUSTUDIO_PYTHON -m unittest discover -s tests -v
-Pop-Location
-```
-
-```powershell
-. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
-D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\control-plane-build\
-Push-Location D:\code\MiLuStudio\apps\web
-D:\soft\program\nodejs\npm.ps1 run build
-Pop-Location
-```
-
-注意：默认 Debug 输出目录构建曾因正在运行的 `MiLuStudio.Api (7832)` 锁定 DLL 失败；改用上面的临时 D 盘输出目录验证通过，临时目录已清理。
-
-Stage 12 后端验证：
-
-```powershell
-. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
-D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\control-plane-stage12-build\
-```
-
-```powershell
-# InMemory API smoke 已验证：
-# /health
-# /api/system/preflight
-# POST /api/projects
-# POST /api/projects/{projectId}/production-jobs
-# GET /api/production-jobs/{jobId}/tasks
-# POST /api/generation-tasks/{taskId}/output
-# GET /api/projects/{projectId}/assets
-```
-
-Stage 13 PostgreSQL / Worker / 前端验证：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Initialize-MiLuStudioPostgreSql.ps1
-
-. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
-D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage13-build\
-
-# Control API on http://127.0.0.1:5368
-# POST /api/system/migrations/apply -> applied / up_to_date
-# GET /api/system/preflight -> healthy=true
-# Full smoke -> job_ba4b02d1cd534e948fe0fda74aaead3c completed / 100
-# generation_tasks: 15 rows, 15 completed, 15 output_json present
-# cost_ledger: 15 rows
-
-cd D:\code\MiLuStudio\apps\web
-npm run build
-```
-
-Stage 14 打包前补丁验证：
-
-```powershell
-. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
-D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage14-build\
-
-Push-Location D:\code\MiLuStudio\backend\sidecars\python-skills
-& $env:MILUSTUDIO_PYTHON -m compileall -q milu_studio_skills skills tests
-& $env:MILUSTUDIO_PYTHON -m unittest discover -s tests -v
-Pop-Location
-
-Push-Location D:\code\MiLuStudio\apps\web
-D:\soft\program\nodejs\npm.ps1 run build
-Pop-Location
-
-D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage14Integration.ps1
-```
-
-集成脚本最近一次通过结果：
-
-- `Stage 14 integration passed. Completed job: job_ce56423f476d4f1888115f42a2f4b3e0`
-- 脚本结束后已确认 `5368` 无残留监听。
-
-Stage 15 桌面打包验证：
-
-```powershell
-. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
-Push-Location D:\code\MiLuStudio\apps\desktop
-D:\soft\program\nodejs\npm.ps1 run build
-D:\soft\program\nodejs\npm.ps1 run smoke
-D:\soft\program\nodejs\npm.ps1 run pack:dir
-D:\soft\program\nodejs\npm.ps1 run dist:win
-Pop-Location
-
-D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioDesktop.ps1 -SkipInstall
-D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioDesktopApiSecurity.ps1 -SkipPrepareRuntime
-& D:\code\MiLuStudio\outputs\desktop\win-unpacked\MiLuStudio.exe --smoke-test
-```
-
-验证结果：
-
-- desktop TypeScript build：通过。
-- Web `npm run build`：通过。
-- Control Plane `.sln` build：0 warning / 0 error；首次 Debug build 被旧 `MiLuStudio.Api (7832)` 锁定，确认命令行属于本仓库后结束进程并重跑通过。
-- Electron smoke：Control API / Worker / Web host 均 running，preflight healthy=true，PostgreSQL reachable，migrations up_to_date，Python runtime 和 Python skills root 均 ok。
-- 桌面 API 安全脚本：无令牌写请求 403、带令牌写请求进入业务校验、桌面模式 migration apply 403。
-- `pack:dir` / `dist:win`：生成 `D:\code\MiLuStudio\outputs\desktop\win-unpacked`、`D:\code\MiLuStudio\outputs\desktop\MiLuStudio-Setup-0.1.0.exe` 和 `.blockmap`，并包含 self-contained .NET runtime 与 `resources\python-runtime\python.exe`。
-- packaged smoke：`win-unpacked\MiLuStudio.exe --smoke-test` exit code 0，结束后无 `MiLuStudio.Api.exe` / `MiLuStudio.Worker.exe` 残留。
-- packaged Electron `userData` / `sessionData` 已落到 `D:\code\MiLuStudio\outputs\desktop\win-unpacked\data\.tmp\electron-*`。
-- Authenticode 检查：`MiLuStudio-Setup-0.1.0.exe` 当前为 `NotSigned`，正式发布前必须补签名。
-
-Stage 16 账号授权验证：
-
-```powershell
-. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
-D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage16-build\
-
-Push-Location D:\code\MiLuStudio\apps\web
-D:\soft\program\nodejs\npm.ps1 run build
-Pop-Location
-
-powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage16Auth.ps1
-powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage14Integration.ps1
-powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioDesktopApiSecurity.ps1
-
-Push-Location D:\code\MiLuStudio\apps\desktop
-D:\soft\program\nodejs\npm.ps1 run build
-Pop-Location
-```
-
-验证结果：
-
-- .NET build：0 warning / 0 error。
-- Web build：通过。
-- Stage 16 auth integration：通过；覆盖未登录 401、未激活 403、测试激活、refresh、设备绑定、设备上限阻断、logout 和重新登录。
-- Stage 14 integration：通过；最近完成 job `job_f7ef2ea3c6e143449ffdce01c8383fc5`。
-- Desktop API security：通过；无桌面令牌 403，带桌面令牌后进入应用授权门禁 401，桌面 migration apply 403。
-- Desktop TypeScript build：通过。
-
-CLI examples:
-
-```powershell
-Push-Location backend\sidecars\python-skills
-& $env:MILUSTUDIO_PYTHON -m milu_studio_skills run --skill voice_casting --input skills\voice_casting\examples\input.json --output skills\voice_casting\examples\output.json --pretty
-& $env:MILUSTUDIO_PYTHON -m milu_studio_skills run --skill subtitle_generator --input skills\subtitle_generator\examples\input.json --output skills\subtitle_generator\examples\output.json --pretty
-& $env:MILUSTUDIO_PYTHON -m milu_studio_skills run --skill auto_editor --input skills\auto_editor\examples\input.json --output skills\auto_editor\examples\output.json --pretty
-& $env:MILUSTUDIO_PYTHON -m milu_studio_skills run --skill quality_checker --input skills\quality_checker\examples\input.json --output skills\quality_checker\examples\output.json --pretty
-Pop-Location
-```
+- 生产控制台已中文化：内部 skill 名、英文 stage label、任务状态和字段名默认不再直接暴露给普通用户。
+- checkpoint 审核 UI 已补“本步产出 / 检查什么 / 通过后 / 拒绝后”，退回修改会引导先填写备注。
+- 当前审核区和右侧结果卡都会显示真实产物预览；技术字段折叠到“技术详情”。
+- Control API 正常连接且项目尚未开始时，不再显示 mock 阶段状态或 mock 结果卡；真实结果卡只在 task output 写入后按队列顺序逐步追加。
+- 点击开始生成或重新生成会先保存当前输入，再创建新 job，并把同项目未完成旧 job 标记为被取代，避免旧剧本结果污染新输入。
+- `story_intake` 已补中文人物句式优先抽取和自然物过滤；《牡丹亭》fixture 会输出 `杜丽娘 / 春香 / 柳梦梅`，不再把 `柳枝垂 / 花影像 / 她倚` 当角色。
+- 中文测试剧本 fixture 位于 `docs\test-fixtures\scripts`，包含 Project Gutenberg《牡丹亭》完整文本和 500 字测试输入样本。
+- `storyboard_director` 已新增 `cinematic_md_v1` 分镜稿结构和专用 UI 预览：`film_overview`、`storyboard_parts`、`rendered_markdown`、`validation_report`；下游仍继续消费原 `shots`。
+- 真实分镜结果卡已支持编辑镜头时长、场景、画面动作、景别、镜头运动、声音、对白和旁白；保存走 `PATCH /api/generation-tasks/{taskId}/storyboard`。
+- 单镜头重算走 `POST /api/generation-tasks/{taskId}/storyboard/shots/{shotId}/regenerate`，必须填写备注；当前只做 deterministic envelope 重写，不接真实模型或媒体。
+- 保存或重算后，storyboard task 回到 review，job 回到分镜审核暂停态，分镜后的下游 task 清回 waiting / null，等待审核通过后由 Worker 重新消费。
 
 ## 固定约束
 
-- 不要接真实模型 provider。
-- 不要引入 Linux / Docker / Redis / Celery 作为生产依赖。
-- 不要让 UI 直接访问数据库、文件系统、模型 SDK、Python 脚本或 FFmpeg。
-- 继续通过 Control API / Worker / Python Skills Runtime 边界推进。
-- 每次修改完成后必须检查根 `README.md` 是否需要同步更新。
-- 根 `README.md` 必须使用中文、PowerShell 友好，并采用类似 `D:\code\BookRecommendation\README.md` 的面试展示导向结构。
-- Stage 12 已完成 PostgreSQL 持久化与后端收敛的后端边界；数据库、migration、repository adapter、Worker durable claiming 不和桌面端绑定。
-- Stage 13 已完成真实配置与端到端收敛：默认 PostgreSQL、`milu` 数据库、Worker 调 Python deterministic skills、前端真实结果展示。
-- Stage 14 已完成打包前补丁与 Stage 13 收敛。
-- Stage 15 已完成桌面打包，唯一方案为 `Electron + electron-builder + NSIS assisted installer + 自定义 installer.nsh`。
-- Electron 只做桌面宿主、安装器和本地进程管理；现有 Web UI 和 Control API 必须继续保持可独立迭代。
-- 数据库不和桌面端绑定：Electron 不直接访问 PostgreSQL，不执行 migrations，不定义数据库表，不负责数据库初始化。
-- Stage 16 已完成本地 deterministic 账号系统；应用打开先显示登录 / 注册 / 激活入口，授权后才进入工作台。
-- 安装器可加付费码 / 激活码输入页作为安装门槛，但正式授权已由 Control API / Auth & Licensing adapter 在应用内校验。
-- 任务栏固定不做静默强制 pin；必须通过正确 AppUserModelID、图标、快捷方式和用户引导，让用户自行固定。
-- Stage 13 起默认开发配置已切到 PostgreSQL，使用本机 PostgreSQL 18 的 `root/root` 和业务库 `milu`；InMemory 只作为快速 smoke / 特殊轻量场景保留。
+- 不接真实模型 provider。
+- 不读取真实媒体文件。
+- 不触发 FFmpeg。
+- 不生成真实 PNG / MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery 作为生产依赖。
+- 不让 UI 或 Electron 直接访问 PostgreSQL、业务文件系统、模型 SDK、Python 脚本或 FFmpeg。
+- UI / Electron 只能通过 Control API / DTO / SSE 与业务系统通信。
+- Worker 只能通过 Control API / repository / Python Skills Runtime 边界推进，不让前端绕过 Worker。
+- Electron 只做桌面宿主、安装器和本地进程管理；不执行 migrations，不定义数据库表，不负责数据库初始化。
+- Stage 13 起默认开发配置使用 PostgreSQL，连接本机 PostgreSQL 18 的 `root/root` 和业务库 `milu`；InMemory 只作为显式快速 smoke / 特殊轻量场景保留。
+- 当前 Web / Desktop 已撤下许可证、付费码和激活码体验；商业授权、套餐、云端授权和离线签名许可证后置。
+- 任务栏固定不做静默强制 pin；只能通过正确 AppUserModelID、图标、快捷方式和用户引导，让用户自行固定。
 - 所有依赖、配置、缓存、运行数据、日志、上传素材和生成结果必须限制在 `D:\code\MiLuStudio` 或明确的 D 盘工具目录。
 - 继续使用 `scripts\windows\Set-MiLuStudioEnv.ps1` 约束 D 盘环境。
 - 本机 PATH 前面可能有 C 盘 WindowsApps `python.exe`；运行 Python 必须显式使用 `D:\soft\program\Python\Python313\python.exe`、`$env:MILUSTUDIO_PYTHON` 或项目内 D 盘 venv。
+- 每次修改完成后必须检查根 `README.md` 是否需要同步更新。
+- 根 `README.md` 必须使用中文、PowerShell 友好，并采用面试展示导向结构。
 
-## 技术债
+## 当前技术债
 
-- 真实 PostgreSQL migration / API / Worker 共享状态 smoke、Stage 14 自动化集成脚本和 Stage 15 桌面宿主 smoke / NSIS 打包验证已完成。
-- InMemory provider 仍是进程内开发 smoke，不跨 API / Worker 进程共享状态；跨进程共享必须使用 PostgreSQL provider。
-- `storage_intent` 只是 Stage 8 mock asset 的未来 adapter 目标描述，不代表真实文件已生成。
-- 真实图片 provider、文件写入、资产持久化、前端选图和重试均未实现。
-- `video_generation` 当前只输出 mock clip records，不代表真实 MP4 已生成。
-- 真实视频 provider、视频文件写入、资产持久化、前端视频预览、单镜头重试和 FFmpeg 均未实现。
-- `voice_casting` 当前只输出配音任务和逻辑音频 intent，不代表真实 WAV 已生成。
-- `subtitle_generator` 当前只输出 SRT-ready 文本结构，不代表真实 `.srt` 文件已落盘。
-- `auto_editor` 当前只输出粗剪 timeline / render plan，不代表 FFmpeg 已执行或 MP4 已生成。
-- `quality_checker` 当前只输出结构化质量报告和 retry hint，不代表已读取真实媒体、完成黑屏 / 卡顿 / 水印 / 音量检测或保存项目资产。
-- `export_packager` 当前只输出导出包占位结构，不代表真实 MP4 / SRT / JSON / ZIP 文件已落盘。
-- 真实 TTS provider、音色试听、BGM/SFX、音量标准化、字幕文件落盘、FFmpeg render adapter、最终 MP4 和下载区真实文件下载均未实现。
-- Stage 16 当前只使用本地 deterministic Auth & Licensing adapter 和测试激活码 `MILU-STAGE16-TEST`；真实云端授权服务、离线签名许可证和套餐计费策略仍未接入。
-- 安装器激活码输入页仍只是 Stage 15 占位门槛；应用内授权状态才是正式功能边界。
-- electron-builder / NSIS 安装器已生成本机安装包，且已随包携带 .NET / Python runtime；仍需后续在干净 Windows 用户环境做人工安装 / 卸载 / 自启动 / 快捷方式验收，并补正式 Authenticode 代码签名。
+- 真实 Text / Image / Video / Audio / Edit provider adapter 均未实现。
+- 严格 120 秒、50-55 镜头、逐句对白保真、10-14 部分长分镜模式仍未实现，需要后续 TextProvider / 模型 adapter、对白校验器、长文本分镜 validator 和 UI 分页/折叠。
+- 前端分镜表已支持编辑现有镜头和单镜头备注重算；增删镜头、批量 diff、角色 / 画风 / 提示词编辑仍未实现。
+- 真实图片文件写入、资产持久化、前端选图和重试未实现。
+- 真实视频文件写入、前端视频预览、单镜头重试和 FFmpeg render adapter 未实现。
+- 真实 TTS、音色试听、BGM / SFX、音量标准化、字幕文件落盘和最终 MP4 下载区未实现。
+- `quality_checker` 当前只检查 deterministic 结构，不读取真实媒体，不做黑屏、卡顿、水印、音量或字幕烧录检测。
+- `export_packager` 当前只输出导出包占位结构，不代表真实文件已落盘。
+- electron-builder / NSIS 已能生成本机安装包，但正式发布前仍需干净 Windows 安装 / 卸载 / 自启动 / 快捷方式验收和 Authenticode 代码签名。
+
+## 最近验证
+
+```powershell
+$env:PYTHONPATH='D:\code\MiLuStudio\backend\sidecars\python-skills'
+C:\Users\10045\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe -m unittest discover -s backend\sidecars\python-skills\tests -v
+
+Push-Location D:\code\MiLuStudio\apps\web
+npm run build
+Pop-Location
+
+. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
+dotnet build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage17StoryboardEditing.ps1
+```
+
+最近结果：
+
+- Python skills 全量 unittest：30 tests OK。
+- Stage 14 skill contract drift：通过。
+- Web build：通过。
+- .NET build：通过。
+- Stage 17 storyboard editing integration：通过；最新完成 job `job_e1ab06449be24902a372403244ed911f`。
+- 当前本机仍有 Web `127.0.0.1:5173` 在监听；Stage 17 验收脚本结束时已清理它启动的 Control API / Worker 进程。
 
 ## 下一步建议
 
-1. 先由用户确认 Stage 17 的正式编号与范围。
-2. 建议候选方向：真实 provider adapter 前的配置页 / 套餐限制 / 授权策略细化，或正式代码签名与干净 Windows 安装验收。
-3. 继续保持 Electron / Web UI 只通过 Control API 展示授权状态，不接触 PostgreSQL、业务文件系统、Python 脚本或 FFmpeg。
-4. 后续发布前仍需补正式代码签名、安装器品牌视觉细化和干净 Windows 安装验收。
+1. 先由用户确认 Stage 18 的正式编号与范围。
+2. 候选方向一：真实 provider adapter 前配置页，包含供应商、密钥、能力开关、成本边界和 preflight，但仍不接真实模型。
+3. 候选方向二：正式代码签名与干净 Windows 安装 / 卸载 / 自启动 / 快捷方式验收。
+4. 候选方向三：继续扩展生产控制台编辑能力，包含角色、画风、图片提示词、视频提示词、增删镜头和批量 diff。
+5. 暂不把商业授权、激活码、套餐计费放回当前 MVP 主线。
 
 ## 下一棒提示词
 
 ```text
-读取 D:\code\MiLuStudio\README.md、D:\code\MiLuStudio\docs\MILUSTUDIO_BUILD_PLAN.md、D:\code\MiLuStudio\docs\MILUSTUDIO_PHASE_PLAN.md、D:\code\MiLuStudio\docs\MILUSTUDIO_TASK_RECORD.md 和 D:\code\MiLuStudio\docs\MILUSTUDIO_HANDOFF.md。Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6、Stage 7、Stage 8、Stage 9、Stage 10、Stage 11、Stage 12、Stage 13、Stage 14、Stage 15 和 Stage 16 已完成。请先确认下一阶段正式编号与范围；建议候选方向为真实 provider adapter 前的配置页 / 套餐限制 / 授权策略细化，或正式代码签名与干净 Windows 安装验收。后续阶段仍不得接真实模型、不得读取真实媒体文件、不得触发 FFmpeg、不得生成真实 MP4/WAV/SRT/ZIP，不引入 Linux/Docker/Redis/Celery 作为生产依赖，不让 UI 或 Electron 绕过 Control API / Worker 边界，不让桌面端执行 migrations、定义数据库表或负责数据库初始化。
+读取 D:\code\MiLuStudio\README.md、D:\code\MiLuStudio\docs\MILUSTUDIO_BUILD_PLAN.md、D:\code\MiLuStudio\docs\MILUSTUDIO_PHASE_PLAN.md、D:\code\MiLuStudio\docs\MILUSTUDIO_TASK_RECORD.md 和 D:\code\MiLuStudio\docs\MILUSTUDIO_HANDOFF.md。Stage 0 到 Stage 17 已完成；当前 Web / Desktop 已撤下许可证、激活码和付费码体验；生产控制台已完成中文化、真实产物预览、重新生成消费当前输入、未开始状态去 mock、《牡丹亭》fixture、storyboard_director 的 cinematic_md_v1 分镜稿结构，以及 Stage 17 分镜表编辑、单镜头备注驱动本地重算、下游任务 reset 和审核后重算边界。请先确认 Stage 18 的正式编号与范围。建议候选方向：真实 provider adapter 前配置页、正式代码签名与干净 Windows 安装验收、继续扩展生产控制台角色/画风/提示词编辑能力。后续仍不得接真实模型、不得读取真实媒体文件、不得触发 FFmpeg、不得生成真实 MP4/WAV/SRT/ZIP，不引入 Linux/Docker/Redis/Celery，不让 UI 或 Electron 绕过 Control API / Worker 边界，不让桌面端执行 migrations、定义数据库表或负责数据库初始化。
 ```

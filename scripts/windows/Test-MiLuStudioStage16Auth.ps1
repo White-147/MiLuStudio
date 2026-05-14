@@ -161,37 +161,13 @@ try {
         deviceFingerprint = $deviceFingerprint
         deviceName = $deviceName
     }
-    if (-not $registered.accessToken -or $registered.license.isActive) {
-        throw "Registered account should have a session and should still require license activation."
+    if (-not $registered.accessToken -or -not $registered.license.isActive) {
+        throw "Registered account should have a session and current MVP account access should be enabled."
     }
 
     $authHeader = New-AuthHeader -Token $registered.accessToken
-    $licenseBeforeActivation = Invoke-Api -Method Get -Path "/api/auth/license" -Headers $authHeader
-    if ($licenseBeforeActivation.status -ne "missing") {
-        throw "New account should report a missing license before activation."
-    }
-
-    $licensedProjectsBeforeActivation = Invoke-HttpStatus -Method Get -Path "/api/projects" -Headers $authHeader
-    Assert-Status -Actual $licensedProjectsBeforeActivation -Expected 403 -Label "Unlicensed projects request"
-
-    $invalidActivation = Invoke-HttpStatus -Method Post -Path "/api/auth/activate" -Headers $authHeader -Body @{
-        activationCode = "BAD-STAGE16-CODE"
-        deviceFingerprint = $deviceFingerprint
-        deviceName = $deviceName
-    }
-    Assert-Status -Actual $invalidActivation -Expected 403 -Label "Invalid activation code"
-
-    $activated = Invoke-Api -Method Post -Path "/api/auth/activate" -Headers $authHeader -Body @{
-        activationCode = "MILU-STAGE16-TEST"
-        deviceFingerprint = $deviceFingerprint
-        deviceName = $deviceName
-    }
-    if (-not $activated.license.isActive) {
-        throw "License activation did not produce an active license."
-    }
-
-    $projectsAfterActivation = Invoke-HttpStatus -Method Get -Path "/api/projects" -Headers $authHeader
-    Assert-Status -Actual $projectsAfterActivation -Expected 200 -Label "Licensed projects request"
+    $projectsAfterRegistration = Invoke-HttpStatus -Method Get -Path "/api/projects" -Headers $authHeader
+    Assert-Status -Actual $projectsAfterRegistration -Expected 200 -Label "Authenticated projects request"
 
     $refreshed = Invoke-Api -Method Post -Path "/api/auth/refresh" -Body @{
         refreshToken = $registered.refreshToken
@@ -215,7 +191,7 @@ try {
         deviceFingerprint = "$deviceFingerprint-third"
         deviceName = "Stage16 Third Device"
     }
-    Assert-Status -Actual $thirdDevice -Expected 403 -Label "Device limit request"
+    Assert-Status -Actual $thirdDevice -Expected 200 -Label "Additional device binding request"
 
     Invoke-Api -Method Post -Path "/api/auth/logout" -Headers $refreshHeader -Body @{
         refreshToken = $refreshed.refreshToken
@@ -230,14 +206,14 @@ try {
         deviceName = $deviceName
     }
     if (-not $loggedIn.license.isActive) {
-        throw "Login should restore active license state for the account."
+        throw "Login should restore account access for the current MVP."
     }
 
     $loginHeader = New-AuthHeader -Token $loggedIn.accessToken
-    $licensedProjectsAfterLogin = Invoke-HttpStatus -Method Get -Path "/api/projects" -Headers $loginHeader
-    Assert-Status -Actual $licensedProjectsAfterLogin -Expected 200 -Label "Licensed projects request after login"
+    $projectsAfterLogin = Invoke-HttpStatus -Method Get -Path "/api/projects" -Headers $loginHeader
+    Assert-Status -Actual $projectsAfterLogin -Expected 200 -Label "Authenticated projects request after login"
 
-    Write-Host "Stage 16 auth/licensing integration passed for account $email."
+    Write-Host "Stage 16 account/session integration passed for account $email."
 }
 finally {
     foreach ($process in $startedProcesses) {

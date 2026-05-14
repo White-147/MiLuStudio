@@ -8,7 +8,7 @@ public sealed class AuthLicensingService
 {
     private const int SessionLifetimeDays = 14;
     private const int MinimumPasswordLength = 8;
-    private const string MissingLicensePlan = "unlicensed";
+    private const string AccessPlan = "account";
 
     private readonly IAuthLicensingAdapter _licensingAdapter;
     private readonly IAuthRepository _repository;
@@ -63,11 +63,6 @@ public sealed class AuthLicensingService
         await _repository.AddAccountAsync(account, cancellationToken);
         var device = await BindDeviceInternalAsync(account, request.DeviceFingerprint, request.DeviceName, null, now, cancellationToken);
 
-        if (!string.IsNullOrWhiteSpace(request.ActivationCode))
-        {
-            await ActivateInternalAsync(account, device, request.ActivationCode, now, cancellationToken);
-        }
-
         return await CreateSessionAsync(account, device, now, cancellationToken);
     }
 
@@ -96,12 +91,11 @@ public sealed class AuthLicensingService
         var now = _clock.Now;
         account.LastLoginAt = now;
         await _repository.UpdateAccountAsync(account, cancellationToken);
-        var activeLicense = await _repository.GetActiveLicenseAsync(account.Id, now, cancellationToken);
         var device = await BindDeviceInternalAsync(
             account,
             request.DeviceFingerprint,
             request.DeviceName,
-            activeLicense?.MaxDevices,
+            null,
             now,
             cancellationToken);
 
@@ -124,13 +118,12 @@ public sealed class AuthLicensingService
 
         var account = await _repository.GetAccountAsync(session.AccountId, cancellationToken)
             ?? throw AuthCommandException.Unauthorized("account_missing", "账号不存在，请重新登录。");
-        var activeLicense = await _repository.GetActiveLicenseAsync(account.Id, now, cancellationToken);
         var device = await _repository.GetDeviceAsync(session.DeviceId, cancellationToken)
             ?? await BindDeviceInternalAsync(
                 account,
                 request.DeviceFingerprint,
                 request.DeviceName,
-                activeLicense?.MaxDevices,
+                null,
                 now,
                 cancellationToken);
 
@@ -168,14 +161,14 @@ public sealed class AuthLicensingService
                 "请先登录或注册账号。");
         }
 
-        var license = await GetLicenseStatusAsync(principal.Account.Id, cancellationToken);
+        var access = AccountAccessEnabled();
         return new AuthStateDto(
             true,
             ToAccountDto(principal.AccountEntity),
             ToDeviceDto(principal.DeviceEntity),
-            license,
-            license.IsActive ? null : "license_required",
-            license.IsActive ? "账号已登录且许可证有效。" : license.Message);
+            access,
+            null,
+            "账号已登录。");
     }
 
     public async Task<LicenseStatusDto> GetLicenseAsync(string? accessToken, CancellationToken cancellationToken)
@@ -226,14 +219,12 @@ public sealed class AuthLicensingService
         var principal = await ValidateAccessTokenInternalAsync(accessToken, cancellationToken)
             ?? throw AuthCommandException.Unauthorized("not_authenticated", "请先登录或注册账号。");
 
-        var now = _clock.Now;
-        var activeLicense = await _repository.GetActiveLicenseAsync(principal.Account.Id, now, cancellationToken);
         await BindDeviceInternalAsync(
             principal.AccountEntity,
             request.DeviceFingerprint,
             request.DeviceName,
-            activeLicense?.MaxDevices,
-            now,
+            null,
+            _clock.Now,
             cancellationToken);
         return await GetStateAsync(accessToken, cancellationToken);
     }
@@ -255,19 +246,7 @@ public sealed class AuthLicensingService
                 MissingLicense("请先登录或注册账号。"));
         }
 
-        var license = await GetLicenseStatusAsync(principal.Account.Id, cancellationToken);
-        if (requireActiveLicense && !license.IsActive)
-        {
-            return new AuthValidationResult(
-                false,
-                403,
-                "license_required",
-                license.Message,
-                ToPrincipal(principal),
-                license);
-        }
-
-        return new AuthValidationResult(true, 200, "ok", "authorized", ToPrincipal(principal), license);
+        return new AuthValidationResult(true, 200, "ok", "authorized", ToPrincipal(principal), AccountAccessEnabled());
     }
 
     private async Task<AuthSessionDto> CreateSessionAsync(
@@ -291,7 +270,7 @@ public sealed class AuthLicensingService
         };
 
         await _repository.AddSessionAsync(session, cancellationToken);
-        return await ToSessionDtoAsync(accessToken, refreshToken, session, account, device, cancellationToken);
+        return ToSessionDto(accessToken, refreshToken, session, account, device);
     }
 
     private async Task<AuthSessionDto> RotateSessionAsync(
@@ -310,16 +289,15 @@ public sealed class AuthLicensingService
         session.ExpiresAt = now.AddDays(SessionLifetimeDays);
         await _repository.UpdateSessionAsync(session, cancellationToken);
 
-        return await ToSessionDtoAsync(accessToken, refreshToken, session, account, device, cancellationToken);
+        return ToSessionDto(accessToken, refreshToken, session, account, device);
     }
 
-    private async Task<AuthSessionDto> ToSessionDtoAsync(
+    private static AuthSessionDto ToSessionDto(
         string accessToken,
         string refreshToken,
         AuthSession session,
         Account account,
-        DeviceBinding device,
-        CancellationToken cancellationToken)
+        DeviceBinding device)
     {
         return new AuthSessionDto(
             accessToken,
@@ -327,7 +305,7 @@ public sealed class AuthLicensingService
             session.ExpiresAt,
             ToAccountDto(account),
             ToDeviceDto(device),
-            await GetLicenseStatusAsync(account.Id, cancellationToken));
+            AccountAccessEnabled());
     }
 
     private async Task<PrincipalEntities?> ValidateAccessTokenInternalAsync(
@@ -548,7 +526,12 @@ public sealed class AuthLicensingService
 
     private static LicenseStatusDto MissingLicense(string message)
     {
-        return new LicenseStatusDto("missing", false, MissingLicensePlan, "none", null, null, 0, message);
+        return new LicenseStatusDto("missing", false, AccessPlan, "none", null, null, 0, message);
+    }
+
+    private static LicenseStatusDto AccountAccessEnabled()
+    {
+        return new LicenseStatusDto("not_required", true, AccessPlan, "not_required", null, null, 0, "当前版本登录后即可使用。");
     }
 
     private static LicenseStatusDto ToLicenseDto(

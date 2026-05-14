@@ -199,12 +199,11 @@ try {
         email = "stage14_$authSuffix@example.local"
         displayName = "Stage 14 Integration"
         password = "Stage14-Test-Password!"
-        activationCode = "MILU-STAGE16-TEST"
         deviceFingerprint = "stage14-device-$authSuffix"
         deviceName = "Stage 14 PowerShell Device"
     }
     if (-not $authSession.license.isActive) {
-        throw "Stage 14 integration auth bootstrap did not activate the deterministic test license."
+        throw "Stage 14 integration auth bootstrap did not enable current MVP account access."
     }
     $script:AuthHeaders = @{ Authorization = "Bearer $($authSession.accessToken)" }
 
@@ -232,10 +231,15 @@ try {
     }
 
     $firstJob = Invoke-Api -Method Post -Path "/api/projects/$($updated.id)/production-jobs" -Body @{ requestedBy = "stage14-integration" }
-    $duplicateJob = Invoke-Api -Method Post -Path "/api/projects/$($updated.id)/production-jobs" -Body @{ requestedBy = "stage14-integration" }
-    if ($firstJob.id -ne $duplicateJob.id) {
-        throw "Duplicate active job was created for the same project."
+    $regeneratedJob = Invoke-Api -Method Post -Path "/api/projects/$($updated.id)/production-jobs" -Body @{ requestedBy = "stage14-integration" }
+    if ($firstJob.id -eq $regeneratedJob.id) {
+        throw "Regenerating did not create a fresh job for the current project input."
     }
+    $retiredJob = Invoke-Api -Method Get -Path "/api/production-jobs/$($firstJob.id)"
+    if ($retiredJob.status -ne "failed" -or [string]::IsNullOrWhiteSpace($retiredJob.errorMessage)) {
+        throw "Previous active job was not retired before regenerating."
+    }
+    $firstJob = $regeneratedJob
 
     Invoke-PsqlCommand -Sql "update generation_tasks set status='running', locked_by='stage14-stale-worker', locked_until=now() - interval '1 second' where job_id='$($firstJob.id)' and queue_index=0;"
     $worker = Start-Worker

@@ -108,7 +108,7 @@ export function App() {
             <img alt="" className="brand-logo large" src="/brand/logo.png" />
             <div>
               <p className="eyebrow">MiLuStudio</p>
-              <h1>正在检查授权</h1>
+              <h1>正在检查账号</h1>
             </div>
           </div>
         </section>
@@ -116,7 +116,7 @@ export function App() {
     );
   }
 
-  if (!authState?.authenticated || !authState.license.isActive) {
+  if (!authState?.authenticated) {
     return <AuthGate initialState={authState} onAuthorized={setAuthState} />;
   }
 
@@ -149,7 +149,7 @@ export function App() {
         <div className="account-strip">
           <div>
             <strong>{authState.account?.displayName}</strong>
-            <span>{authState.license.plan}</span>
+            <span>{authState.account?.email ?? authState.device?.deviceName ?? '本机账号'}</span>
           </div>
           <button aria-label="退出登录" className="icon-button" onClick={() => void signOut()} type="button">
             <LogOut size={16} />

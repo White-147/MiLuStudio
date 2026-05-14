@@ -1,5 +1,4 @@
 import type {
-  ActivateLicenseRequest,
   AuthSession,
   AuthState,
   CostLedgerRecord,
@@ -12,6 +11,9 @@ import type {
   ProjectUpdateRequest,
   ProjectSummary,
   RegisterAccountRequest,
+  StoryboardEditRequest,
+  StoryboardEditResponse,
+  StoryboardShotRegenerateRequest,
 } from '../types/production';
 
 declare global {
@@ -120,14 +122,6 @@ export async function refreshAuthSession(
   return session;
 }
 
-export async function activateLicense(payload: ActivateLicenseRequest, signal?: AbortSignal): Promise<AuthState> {
-  return request<AuthState>('/api/auth/activate', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    signal,
-  });
-}
-
 export async function logout(signal?: AbortSignal): Promise<void> {
   try {
     await request<{ status: string }>('/api/auth/logout', {
@@ -225,6 +219,34 @@ export async function rejectProductionCheckpoint(
   signal?: AbortSignal,
 ): Promise<ProductionJob> {
   return productionJobCommand(jobId, 'checkpoint', { approved: false, notes }, signal);
+}
+
+export async function updateStoryboardTask(
+  taskId: string,
+  payload: StoryboardEditRequest,
+  signal?: AbortSignal,
+): Promise<StoryboardEditResponse> {
+  return request<StoryboardEditResponse>(`/api/generation-tasks/${encodeURIComponent(taskId)}/storyboard`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
+export async function regenerateStoryboardShot(
+  taskId: string,
+  shotId: string,
+  payload: StoryboardShotRegenerateRequest,
+  signal?: AbortSignal,
+): Promise<StoryboardEditResponse> {
+  return request<StoryboardEditResponse>(
+    `/api/generation-tasks/${encodeURIComponent(taskId)}/storyboard/shots/${encodeURIComponent(shotId)}/regenerate`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      signal,
+    },
+  );
 }
 
 export function watchProductionJob(

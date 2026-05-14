@@ -36,10 +36,37 @@ class StoryIntakeTests(unittest.TestCase):
         self.assertTrue(result["error"]["message"])
         self.assertGreaterEqual(len(result["error"]["details"]), 1)
 
+    def test_mudan_ting_fixture_extracts_real_characters(self) -> None:
+        payload = {
+            "project_id": "mudan-ting-fixture",
+            "story_text": load_mudan_ting_fixture(),
+            "language": "zh-CN",
+            "target_duration_seconds": 45,
+            "aspect_ratio": "9:16",
+            "style_preset": "轻写实国漫",
+            "mode": "director",
+        }
+
+        data = run(payload)
+        names = [character["name"] for character in data["main_characters"]]
+
+        self.assertGreaterEqual(len(names), 3)
+        self.assertEqual(names[0], "杜丽娘")
+        self.assertIn("春香", names)
+        self.assertIn("柳梦梅", names)
+        self.assertNotIn("柳枝垂", names)
+        self.assertNotIn("花影像", names)
+        self.assertNotIn("她倚", names)
+
 
 def load_example_input() -> dict[str, object]:
     path = Path(__file__).resolve().parents[1] / "skills" / "story_intake" / "examples" / "input.json"
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_mudan_ting_fixture() -> str:
+    path = Path(__file__).resolve().parents[4] / "docs" / "test-fixtures" / "scripts" / "mudan_ting_stage_input_zh.txt"
+    return path.read_text(encoding="utf-8")
 
 
 if __name__ == "__main__":
