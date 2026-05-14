@@ -3068,3 +3068,250 @@ Next phase:
 
 - Stage 23 尚未正式确认。
 - 建议候选方向：工作台高级编辑（提示词批量操作、镜头增删、更细粒度 diff 和重算策略）；provider adapter 真实接入前 dry-run / audit contract；拿到正式证书后的 signed release 回归。
+
+### 2026-05-14 Stage 23A Provider 中转配置与 FFmpeg Runtime 基础推进
+
+Date:
+
+- 2026-05-14
+
+Stage:
+
+- Stage 23A：OpenAI-compatible 中转 provider 配置、连接测试、FFmpeg 项目内 runtime 安装和工作台入口修正。
+
+Trigger:
+
+- 用户确认可以添加 `baseUrl + apiKey` 中转站模式、允许真实外网连接测试、允许 DPAPI 本地安全存储、允许下载 FFmpeg 到 D 盘项目 runtime，并解除真实上传 / 技术解析 / FFmpeg 后续推进限制。
+
+Action:
+
+- Provider settings DTO / state 新增 `baseUrl`。
+- Provider catalog 新增 `openai_compatible` 供应商。
+- `FileProviderSecretStore` 从 metadata-only 升级为 Windows CurrentUser DPAPI vault：API 响应仍只暴露遮罩和指纹，连接测试可在后端读取解密后的本地 key。
+- 新增 `IProviderConnectivityTester` 和 `OpenAiCompatibleProviderConnectivityTester`，只请求 `/models` 与 `/v1/models`，不发送生成 payload。
+- Control API 新增 `POST /api/settings/providers/{kind}/connection-test`。
+- Web 模型设置页新增 Base URL 输入和“测试连通”按钮；保存时同步 `baseUrl`。
+- 修正 Web 网络错误提示，避免裸露浏览器原始 `Failed to fetch`。
+- 工作台左上“模型”入口已隐藏，左下设置菜单内 provider 入口改为“模型”。
+- 新增 `scripts\windows\Install-MiLuStudioFfmpeg.ps1`，优先使用 `https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip`，BtbN GitHub `/latest/` 作为 fallback。
+- 已执行 FFmpeg 安装，当前本机 `D:\code\MiLuStudio\runtime\ffmpeg\bin` 下已有 `ffmpeg.exe` 与 `ffprobe.exe`，runtime 目录仍由 `.gitignore` 排除。
+
+Boundary:
+
+- 真实模型“生成调用”仍未接入；本阶段只允许 provider 连接测试。
+- 连接测试会真实访问外网 / 中转站，但不发送故事、图片、视频、音频或正式生成请求。
+- FFmpeg 二进制不提交 Git；只提交稳定下载 / 安装脚本。
+- UI / Electron 不直接访问 key、文件系统、FFmpeg、Python 或数据库，仍只通过 Control API / DTO / SSE。
+- 未引入 Linux / Docker / Redis / Celery。
+- 未新增数据库表或 migrations；桌面端仍不执行 migrations、不定义表、不负责数据库初始化。
+
+Local verification:
+
+```powershell
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage23-build\
+
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Install-MiLuStudioFfmpeg.ps1
+```
+
+Verification result:
+
+- .NET build：通过，0 warning / 0 error。
+- Web build：通过。
+- 临时 InMemory Control API smoke：通过；`POST /api/settings/providers/text/connection-test` 返回预期 `http_404`，证明 endpoint、DPAPI 保存读取和 OpenAI-compatible `/models` 探测链路可用，且 `generationPayloadSent=false`。
+- FFmpeg install：通过；`gyan.dev` release essentials 下载成功，SHA256 sidecar 校验通过，安装到项目 runtime。
+
+Remaining work:
+
+- 真实上传后端链路、技术解析、OCR、缩略图、抽帧、转码、最终媒体文件输出仍待实现。
+- `.doc` / OCR / PDF 等高级解析依赖和降级提示仍待分阶段补齐。
+- 大文件文本切片、图片 / 视频压缩上传、分片上传与模型上下文上限策略仍待设计落地。
+- 右侧流程“待确认 / 已确认 / 回退 / 二级确认 / 下游重置”仍待完整实现；本棒只处理了模型入口合并。
+
+### 2026-05-14 Stage 23A 真实上传解析与审核回退补齐
+
+Date:
+
+- 2026-05-14
+
+Stage:
+
+- Stage 23A：真实上传、技术解析、工作台附件上传链路和审核回退。
+
+Action:
+
+- Control API 新增 `POST /api/projects/{projectId}/assets/upload`，通过 multipart/form-data 接收文件。
+- Application 层新增 `ProjectAssetUploadService`、`IProjectAssetFileStore`、`IAssetTechnicalAnalyzer`，保持上传编排、文件存储和技术解析职责分离。
+- Infrastructure 层新增 `LocalProjectAssetFileStore`，将上传文件保存到 D 盘项目 `uploads` 根内，计算 SHA256，并保护路径不逃逸项目目录。
+- Infrastructure 层新增 `FfmpegAssetTechnicalAnalyzer`：
+  - 文本 / Markdown / JSON / SRT / ASS / VTT / CSV / XML / YAML / RTF 直接读取正文。
+  - DOCX 通过 ZIP + XML 提取正文。
+  - DOC / PDF 当前保存并返回 metadata-only，标记后续 Office/PDF/OCR 解析器待补。
+  - 图片 / 视频通过 `runtime\ffmpeg\bin` 下的 `ffprobe.exe` / `ffmpeg.exe` 做技术探测、缩略图和最多 8 张视频抽帧。
+- `ControlPlaneOptions` 新增 `UploadsRoot`、`FfmpegBinPath`、`AssetParseTimeoutSeconds`、`AssetTranscodeTimeoutSeconds` 和 `AssetVideoFrameLimit`。
+- Web 工作台附件卡改为保留真实 `File` 对象，提交时上传解析；输入框文案改为制作要求，不再在浏览器本地读取文本内容作为最终来源。
+- 文本上传上限 50MB，图片 50MB，视频 1GB；后续模型真实上限前仍需补文本切片、上传分片和压缩策略。
+- 右侧固定流程新增状态文本：当前 / 下一步显示“未开始 / 进行中 / 待确认 / 已确认”；最近一个已确认审核步骤 hover 显示“回退”。
+- 新增 `POST /api/production-jobs/{jobId}/rollback` 与前端二级确认弹窗；回退后目标步骤回到 review / paused，下游 task 清空 output / 状态并回到 waiting。
+
+Boundary:
+
+- 真实模型生成 provider 仍未接入；provider 只允许连接测试。
+- UI / Electron 不直接读取上传文件、不执行 FFmpeg、不访问业务文件系统；真实上传和 FFmpeg 只在 Control API 后端 adapter 边界内执行。
+- 当前不会生成最终真实 MP4 / WAV / SRT / ZIP；缩略图和抽帧只作为上传解析派生文件。
+- 未新增数据库 migration；复用现有 `assets` 表。
+- 未引入 Linux / Docker / Redis / Celery。
+
+Local verification:
+
+```powershell
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore -p:OutputPath=D:\code\MiLuStudio\.tmp\stage23-build\
+
+Push-Location D:\code\MiLuStudio\apps\web
+npm run build
+Pop-Location
+
+git diff --check
+```
+
+Verification result:
+
+- .NET build：通过，0 warning / 0 error。
+- Web build：通过。
+- `git diff --check`：通过，仅有 CRLF 换行提示。
+- 临时 InMemory Control API upload smoke：通过；上传 txt 返回 `story_text`、SHA256、解析正文长度，未发送 generation payload。
+
+Remaining work:
+
+- OCR、PDF / DOC 深度解析、文本切片、上传分片、图片 / 视频压缩和更完整媒体抽帧仍待 Stage 23B。
+- 真实 provider 生成 adapter、dry-run 审计、预算流水和失败隔离仍待设计落地。
+- Playwright / Electron 截图级交互验收未执行。
+
+### 2026-05-14 Stage 23B 编号与稳定范围确认
+
+Date:
+
+- 2026-05-14
+
+Stage:
+
+- Stage 23B：文档 / 媒体深度解析与上传策略加固。
+
+Trigger:
+
+- 用户确认按稳定路线继续推进，并要求把后续安排写入相关文档，避免每次开工前都在候选方向里重新确认。
+
+Action:
+
+- 将 Stage 23B 正式编号和范围写入 `docs\MILUSTUDIO_PHASE_PLAN.md` 当前焦点。
+- 在 `docs\MILUSTUDIO_PHASE_PLAN.md` 新增 Stage 23B 章节，明确目标、边界、具体任务、验收和后置阶段。
+- 在 `docs\MILUSTUDIO_BUILD_PLAN.md` 记录 Stage 23B 正式安排和后续阶段顺序。
+- 更新根 `README.md` 的当前阶段、当前边界和下一阶段说明。
+- 更新 `docs\MILUSTUDIO_HANDOFF.md`，下一棒不再需要先确认 Stage 23B，直接推进 OCR、PDF / DOC 深度解析、文本切片、上传分片、图片 / 视频压缩和更完整媒体抽帧。
+
+Scope:
+
+- Stage 23B 优先补上传后处理地基：OCR、PDF / DOC 深度解析、文本切片、上传分片、图片 / 视频压缩和更完整媒体抽帧。
+- 解析器或运行时不可用时必须返回结构化降级 metadata，不让上传失败成裸异常。
+- 默认复用现有 `assets` 表和 `metadata_json` 记录解析 metadata、切片 manifest、派生文件和降级原因。
+
+Deferred:
+
+- Stage 23C：provider adapter 真实接入前 dry-run / audit contract、审计日志、预算流水、超时和失败隔离。
+- Stage 24：工作台高级编辑，包括提示词批量操作、镜头增删、更细粒度 diff 和重算策略。
+- 发布回归阶段：拿到正式 Authenticode 证书后再做 `verify:release:signed` 和干净 Windows 虚拟机安装 / 卸载回归。
+
+Boundary:
+
+- 本次只修改文档，不改生产代码。
+- 仍不接真实模型生成 provider。
+- 仍不发送故事、图片、视频或音频到外部生成接口。
+- 仍不生成最终真实 MP4 / WAV / SRT / ZIP。
+- 不引入 Linux / Docker / Redis / Celery。
+- UI / Electron 仍不得直接读取媒体、执行 FFmpeg、访问文件系统、数据库、Python 脚本或模型 SDK。
+- 桌面端仍不执行 migrations、不定义数据库表、不负责数据库初始化。
+
+Verification:
+
+- 已用 UTF-8 读取 README、建设方案、阶段计划、任务记录和短棒交接的 Stage 23A / Stage 23B 相关段落。
+- `git diff --check -- README.md docs/MILUSTUDIO_BUILD_PLAN.md docs/MILUSTUDIO_PHASE_PLAN.md docs/MILUSTUDIO_TASK_RECORD.md docs/MILUSTUDIO_HANDOFF.md`：通过，仅有既有 LF / CRLF 提示。
+
+Next phase:
+
+- 直接实现 Stage 23B。
+- 首先盘点 Stage 23A 的 asset upload / analyzer 边界，再补稳定 metadata schema、PDF / DOC / OCR 降级路径和文本切片 manifest。
+
+### 2026-05-14 Stage 23B 上传解析 Metadata 与切片第一轮落地
+
+Date:
+
+- 2026-05-14
+
+Stage:
+
+- Stage 23B：文档 / 媒体深度解析与上传策略加固。
+
+Trigger:
+
+- 用户要求按稳定路线直接推进 Stage 23B，并允许把后续安排写入文档，减少每次接棒前的重复确认。
+
+Action:
+
+- 继续沿用 Stage 23A 的上传分层：`ProjectAssetUploadService` 只负责编排、分类、大小限制和 assets 登记；`LocalProjectAssetFileStore` 负责保存文件和 SHA256；`FfmpegAssetTechnicalAnalyzer` 负责后端解析、FFmpeg 和派生文件。
+- `ProjectAssetUploadService` metadata stage 升级为 `stage23b_document_media_analysis`，新增 `analysisSchemaVersion=stage23b_asset_analysis_v1`。
+- 资产 metadata 新增 `upload.chunkingPolicy`，记录 Stage 23B 可恢复分片上传契约、8MB 推荐分片、后端合并边界和 UI / Electron 不直接访问文件系统的约束；本次未新增分片 endpoint。
+- `FfmpegAssetTechnicalAnalyzer` 重写为 Stage 23B analyzer：
+  - 文本、DOCX、PDF 嵌入文本解析结果生成 `text`、`contentBlocks` 和 `chunkManifest`。
+  - DOCX ZIP entry 兼容 Windows `word\document.xml` 与标准 `word/document.xml` 两种路径。
+  - PDF 增加轻量嵌入文本探测，支持简单 `Tj` / `TJ` literal string 和 hex string；扫描版、复杂编码或压缩流返回 `ocr_required` 降级。
+  - DOC 返回 `parser_unavailable`、后端 converter runtime 建议路径和 unavailable chunk manifest，不引入 UI / Electron Office 自动化。
+  - OCR 当前落地为 Tesseract-compatible 后端 runtime 能力检测 metadata，缺少运行时时记录 `runtime_not_configured`，真实 OCR 调用留作后续小步。
+  - 图片通过项目内 FFmpeg 生成 `thumbnail.jpg` 与 `preview_1280.jpg`。
+  - 视频按时长均匀抽帧，记录 target / actual frame count，并尝试生成短 `review_proxy_720p.mp4`；仍不生成最终成片。
+  - ffprobe JSON 被压缩成 `probeSummary`，派生文件写入 `derivativeDetails`。
+- 新增 `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1`，启动临时 InMemory Control API，覆盖 txt / DOCX / PDF / DOC / PNG / MP4 上传解析、chunk manifest、结构化降级、媒体派生 metadata 和 no-provider 边界。
+
+Boundary:
+
+- 未接真实 Text / Image / Video / Audio / Edit 生成 provider。
+- 未发送生成 payload；metadata 中继续记录 `generationPayloadSent=false` 和 `modelProviderUsed=false`。
+- 未新增数据库 migration，继续复用现有 `assets.metadata_json`。
+- 未引入 Linux / Docker / Redis / Celery。
+- UI / Electron 未改动，仍只能通过 Control API 上传和消费 DTO，不直接读取文件、执行 FFmpeg 或访问业务文件系统。
+- 本次生成的图片 preview、视频抽帧和 review proxy 均为上传解析派生文件，不是最终 MP4 / WAV / SRT / ZIP 导出。
+
+Verification:
+
+```powershell
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore
+
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1
+
+git diff --check
+```
+
+Verification result:
+
+- .NET build：通过，0 warning / 0 error。
+- Web build：通过；本次未改 Web，但已跑 `tsc -b && vite build` 回归。
+- Stage 23B asset parsing：通过；脚本完成 txt / DOCX / PDF / DOC / PNG / MP4 上传，验证 chunk manifest、PDF embedded text、DOC parser_unavailable、图片 / 视频后端派生 metadata、no-provider 边界和 assets 登记。
+- `git diff --check`：通过，仅有既有 LF/CRLF 替换提示。
+
+Remaining work:
+
+- 真实 OCR runtime 调用仍待补；当前只记录 runtime 能力检测和结构化降级。
+- 可恢复上传分片 endpoint、分片合并状态机、断点续传和错误恢复仍待补；当前只记录契约与大小策略。
+- PDF / DOC 深度解析仍可继续增强：复杂 PDF 流、扫描页 OCR、legacy DOC converter runtime 和页码 / 段落级来源信息。
+- chunk manifest 尚未接入后续生产链路消费和 UI 展示。
+- Playwright / Electron 截图级回归未执行；本次未改 Web。
+
+Next phase:
+
+- 继续 Stage 23B，小步补真实 OCR runtime 调用或可恢复分片上传 endpoint，二者优先选风险更低、验证闭环更短的一项。

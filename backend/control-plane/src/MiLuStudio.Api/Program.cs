@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Http.Features;
 using MiLuStudio.Application.Abstractions;
+using MiLuStudio.Application.Assets;
 using MiLuStudio.Application.Auth;
 using MiLuStudio.Application.Production;
 using MiLuStudio.Application.Projects;
@@ -9,6 +11,18 @@ using MiLuStudio.Infrastructure.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 var allowedDesktopOrigin = builder.Configuration["ControlPlane:AllowedDesktopOrigin"];
+
+const long MaxUploadBodyBytes = 1100L * 1024 * 1024;
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = MaxUploadBodyBytes;
+});
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = MaxUploadBodyBytes;
+    options.ValueLengthLimit = 16 * 1024;
+    options.MultipartHeadersLengthLimit = 64 * 1024;
+});
 
 builder.Services.AddCors(options =>
 {
@@ -22,6 +36,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddScoped<ProjectService>();
+builder.Services.AddScoped<ProjectAssetUploadService>();
 builder.Services.AddScoped<AuthLicensingService>();
 builder.Services.AddScoped<ProductionJobService>();
 builder.Services.AddScoped<ProductionSkillExecutionService>();
@@ -248,6 +263,22 @@ app.MapPost("/api/settings/providers/spend-guard/check", async Task<IResult> (
     }
 });
 
+app.MapPost("/api/settings/providers/{kind}/connection-test", async Task<IResult> (
+    string kind,
+    ProviderConnectionTestRequest request,
+    ProviderSettingsService providers,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await providers.TestConnectionAsync(kind, request, cancellationToken));
+    }
+    catch (ProviderSettingsValidationException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+});
+
 app.MapPatch("/api/settings/providers", async Task<IResult> (
     ProviderSettingsUpdateRequest request,
     ProviderSettingsService providers,
@@ -301,6 +332,49 @@ app.MapGet("/api/projects/{projectId}/assets", async (
 {
     var results = await assets.ListAssetsByProjectAsync(projectId, cancellationToken);
     return Results.Ok(results);
+});
+
+app.MapPost("/api/projects/{projectId}/assets/upload", async Task<IResult> (
+    string projectId,
+    HttpRequest request,
+    ProjectAssetUploadService uploads,
+    CancellationToken cancellationToken) =>
+{
+    if (!request.HasFormContentType)
+    {
+        return Results.BadRequest(new { error = "请使用 multipart/form-data 上传文件。" });
+    }
+
+    try
+    {
+        var form = await request.ReadFormAsync(cancellationToken);
+        var file = form.Files.GetFile("file") ?? form.Files.FirstOrDefault();
+        if (file is null)
+        {
+            return Results.BadRequest(new { error = "上传请求缺少 file 字段。" });
+        }
+
+        await using var stream = file.OpenReadStream();
+        var uploaded = await uploads.UploadAsync(
+            projectId,
+            new ProjectAssetUploadRequest(
+                form["intent"].FirstOrDefault(),
+                file.FileName,
+                file.ContentType,
+                file.Length,
+                stream),
+            cancellationToken);
+
+        return uploaded is null ? Results.NotFound() : Results.Created($"/api/projects/{projectId}/assets/{uploaded.Id}", uploaded);
+    }
+    catch (ProjectAssetUploadException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+    catch (InvalidDataException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
 });
 
 app.MapGet("/api/projects/{projectId}/cost-ledger", async (
@@ -444,6 +518,23 @@ app.MapPost("/api/production-jobs/{jobId}/checkpoint", async Task<IResult> (
     try
     {
         var job = await jobs.CheckpointAsync(jobId, request, cancellationToken);
+        return job is null ? Results.NotFound() : Results.Ok(job);
+    }
+    catch (ProductionCommandValidationException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+});
+
+app.MapPost("/api/production-jobs/{jobId}/rollback", async Task<IResult> (
+    string jobId,
+    ProductionRollbackRequest request,
+    ProductionJobService jobs,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var job = await jobs.RollbackAsync(jobId, request, cancellationToken);
         return job is null ? Results.NotFound() : Results.Ok(job);
     }
     catch (ProductionCommandValidationException error)

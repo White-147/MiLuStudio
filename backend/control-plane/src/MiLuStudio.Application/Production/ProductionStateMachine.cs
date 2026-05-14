@@ -167,6 +167,65 @@ internal sealed class ProductionStateMachine
         return true;
     }
 
+    internal bool RollbackToReview(
+        ProductionJob job,
+        IReadOnlyList<GenerationTask> tasks,
+        string skillName,
+        DateTimeOffset now,
+        string? notes)
+    {
+        var stage = ProductionStageCatalog.FindBySkill(skillName);
+        if (stage is null || !stage.NeedsReview)
+        {
+            job.ErrorMessage = "只能回退到需要用户审核的生产步骤。";
+            return false;
+        }
+
+        var targetTask = _taskQueue.FindTask(tasks, stage);
+        if (targetTask is null)
+        {
+            job.Status = ProductionJobStatus.Failed;
+            job.CurrentStage = ProductionStage.FailedFatal;
+            job.ErrorMessage = "回退步骤对应 task 不存在。";
+            return false;
+        }
+
+        if (targetTask.Status != GenerationTaskStatus.Completed)
+        {
+            job.ErrorMessage = "当前步骤尚未确认完成，不能执行已确认回退。";
+            return false;
+        }
+
+        targetTask.Status = GenerationTaskStatus.Review;
+        targetTask.FinishedAt = null;
+        targetTask.LockedBy = null;
+        targetTask.LockedUntil = null;
+        targetTask.LastHeartbeatAt = null;
+        targetTask.CheckpointNotes = NormalizeNotes(notes) ?? $"用户在 {now.ToLocalTime():yyyy-MM-dd HH:mm} 回退到待审核。";
+        targetTask.ErrorMessage = null;
+
+        foreach (var downstream in tasks.Where(task => task.QueueIndex > targetTask.QueueIndex))
+        {
+            downstream.Status = GenerationTaskStatus.Waiting;
+            downstream.OutputJson = null;
+            downstream.CostActual = null;
+            downstream.StartedAt = null;
+            downstream.FinishedAt = null;
+            downstream.LockedBy = null;
+            downstream.LockedUntil = null;
+            downstream.LastHeartbeatAt = null;
+            downstream.CheckpointNotes = null;
+            downstream.ErrorMessage = null;
+        }
+
+        job.CurrentStage = stage.Stage;
+        job.Status = ProductionJobStatus.Paused;
+        job.ProgressPercent = ProductionStageCatalog.ProgressFor(stage.Stage);
+        job.FinishedAt = null;
+        job.ErrorMessage = null;
+        return true;
+    }
+
     private static string? NormalizeNotes(string? notes)
     {
         return string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();

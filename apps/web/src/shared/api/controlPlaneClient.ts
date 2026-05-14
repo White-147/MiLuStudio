@@ -5,6 +5,8 @@ import type {
   GenerationTaskRecord,
   LoginRequest,
   ProviderSafetyStatus,
+  ProviderConnectionTestRequest,
+  ProviderConnectionTestResponse,
   ProviderSpendGuardCheckRequest,
   ProviderSpendGuardDecision,
   ProviderSettingsPreflight,
@@ -12,6 +14,8 @@ import type {
   ProviderSettingsUpdateRequest,
   ProductionJob,
   ProductionJobEvent,
+  ProjectAssetUploadIntent,
+  ProjectAssetUploadResponse,
   ProjectAssetRecord,
   ProjectDetail,
   ProjectUpdateRequest,
@@ -216,6 +220,23 @@ export async function listProjectAssets(projectId: string, signal?: AbortSignal)
   return request<ProjectAssetRecord[]>(`/api/projects/${encodeURIComponent(projectId)}/assets`, { signal });
 }
 
+export async function uploadProjectAsset(
+  projectId: string,
+  file: File,
+  intent: ProjectAssetUploadIntent,
+  signal?: AbortSignal,
+): Promise<ProjectAssetUploadResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('intent', intent);
+
+  return request<ProjectAssetUploadResponse>(`/api/projects/${encodeURIComponent(projectId)}/assets/upload`, {
+    method: 'POST',
+    body: form,
+    signal,
+  });
+}
+
 export async function listProjectCosts(projectId: string, signal?: AbortSignal): Promise<CostLedgerRecord[]> {
   return request<CostLedgerRecord[]>(`/api/projects/${encodeURIComponent(projectId)}/cost-ledger`, { signal });
 }
@@ -234,6 +255,15 @@ export async function rejectProductionCheckpoint(
   signal?: AbortSignal,
 ): Promise<ProductionJob> {
   return productionJobCommand(jobId, 'checkpoint', { approved: false, notes }, signal);
+}
+
+export async function rollbackProductionJob(
+  jobId: string,
+  skillName: string,
+  notes: string,
+  signal?: AbortSignal,
+): Promise<ProductionJob> {
+  return productionJobCommand(jobId, 'rollback', { skillName, notes }, signal);
 }
 
 export async function updateStoryboardTask(
@@ -299,6 +329,21 @@ export async function getProviderSafety(signal?: AbortSignal): Promise<ProviderS
   return request<ProviderSafetyStatus>('/api/settings/providers/safety', { signal });
 }
 
+export async function testProviderConnection(
+  providerKind: string,
+  payload: ProviderConnectionTestRequest,
+  signal?: AbortSignal,
+): Promise<ProviderConnectionTestResponse> {
+  return request<ProviderConnectionTestResponse>(
+    `/api/settings/providers/${encodeURIComponent(providerKind)}/connection-test`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      signal,
+    },
+  );
+}
+
 export async function checkProviderSpendGuard(
   payload: ProviderSpendGuardCheckRequest,
   signal?: AbortSignal,
@@ -342,7 +387,7 @@ export function watchProductionJob(
 
 async function productionJobCommand(
   jobId: string,
-  command: 'pause' | 'resume' | 'retry' | 'checkpoint',
+  command: 'pause' | 'resume' | 'retry' | 'checkpoint' | 'rollback',
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<ProductionJob> {
@@ -363,7 +408,7 @@ async function request<T>(
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...init,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isFormDataBody(init.body) ? {} : { 'Content-Type': 'application/json' }),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         ...(injectedDesktopToken ? { 'X-MiLuStudio-Desktop-Token': injectedDesktopToken } : {}),
         ...init.headers,
@@ -393,9 +438,13 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
 
-function formatNetworkError(error: unknown): string {
-  const detail = error instanceof Error && error.message ? ` 原始错误：${error.message}` : '';
-  return `Control API 未连接（${apiBaseUrl}）。请确认本地服务已启动并可访问。${detail}`;
+function isFormDataBody(body: BodyInit | null | undefined): body is FormData {
+  return typeof FormData !== 'undefined' && body instanceof FormData;
+}
+
+function formatNetworkError(error: any): string {
+  const readableDetail = error instanceof Error && error.message ? ` 原始错误：${error.message}` : '';
+  return `Control API 未连接（${apiBaseUrl}）。请确认本地服务已启动并可访问。${readableDetail}`;
 }
 
 function parseErrorMessage(status: number, detail: string): string {

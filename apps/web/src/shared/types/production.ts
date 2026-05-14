@@ -161,7 +161,7 @@ export interface StructuredOutputEditResponse {
 }
 
 export interface ProviderSettingsResponse {
-  mode: 'placeholder_only';
+  mode: string;
   updatedAt: string;
   costGuardrails: ProviderCostGuardrails;
   adapters: ProviderAdapterSettings[];
@@ -179,6 +179,7 @@ export interface ProviderAdapterSettings {
   label: string;
   supplier: string;
   model: string;
+  baseUrl: string;
   enabled: boolean;
   apiKeyConfigured: boolean;
   apiKeyPreview: string;
@@ -204,7 +205,7 @@ export interface ProviderPreflightCheck {
 
 export interface ProviderSafetyStatus {
   stage: string;
-  mode: 'placeholder_only';
+  mode: string;
   secretStore: ProviderSecretStoreStatus;
   spendGuard: ProviderSpendGuardStatus;
   sandbox: ProviderSandboxStatus;
@@ -282,9 +283,31 @@ export interface ProviderAdapterUpdateRequest {
   kind: string;
   supplier: string;
   model: string;
+  baseUrl?: string | null;
   enabled: boolean;
   apiKey?: string | null;
   clearApiKey: boolean;
+}
+
+export interface ProviderConnectionTestRequest {
+  supplier?: string | null;
+  model?: string | null;
+  baseUrl?: string | null;
+  apiKey?: string | null;
+}
+
+export interface ProviderConnectionTestResponse {
+  ok: boolean;
+  status: string;
+  message: string;
+  providerKind: string;
+  supplier: string;
+  model: string;
+  baseUrl: string;
+  httpStatusCode: number | null;
+  durationMs: number;
+  checkedEndpoints: string[];
+  details: Record<string, string>;
 }
 
 export interface ProjectAssetRecord {
@@ -297,6 +320,14 @@ export interface ProjectAssetRecord {
   sha256: string | null;
   metadataJson: string | null;
   createdAt: string;
+}
+
+export type ProjectAssetUploadIntent = 'storyText' | 'imageReference' | 'videoReference' | 'storyboardReference' | 'reference';
+
+export interface ProjectAssetUploadResponse extends ProjectAssetRecord {
+  originalFileName: string;
+  extractedText: string | null;
+  message: string;
 }
 
 export interface CostLedgerRecord {

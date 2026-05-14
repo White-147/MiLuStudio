@@ -13,6 +13,7 @@ public sealed record ProviderAdapterSettingsDto(
     string Label,
     string Supplier,
     string Model,
+    string BaseUrl,
     bool Enabled,
     bool ApiKeyConfigured,
     string ApiKeyPreview,
@@ -101,6 +102,25 @@ public sealed record ProviderSpendGuardDecisionDto(
     int AttemptNumber,
     IReadOnlyList<string> AppliedRules);
 
+public sealed record ProviderConnectionTestRequest(
+    string? Supplier,
+    string? Model,
+    string? BaseUrl,
+    string? ApiKey);
+
+public sealed record ProviderConnectionTestResponse(
+    bool Ok,
+    string Status,
+    string Message,
+    string ProviderKind,
+    string Supplier,
+    string Model,
+    string BaseUrl,
+    int? HttpStatusCode,
+    long DurationMs,
+    IReadOnlyList<string> CheckedEndpoints,
+    IReadOnlyDictionary<string, string> Details);
+
 public sealed record ProviderSettingsUpdateRequest(
     ProviderCostGuardrailsDto CostGuardrails,
     IReadOnlyList<ProviderAdapterUpdateRequest> Adapters);
@@ -109,6 +129,7 @@ public sealed record ProviderAdapterUpdateRequest(
     string Kind,
     string Supplier,
     string Model,
+    string? BaseUrl,
     bool Enabled,
     string? ApiKey,
     bool ClearApiKey);
@@ -126,6 +147,7 @@ public sealed record ProviderAdapterState(
     string Kind,
     string Supplier,
     string Model,
+    string BaseUrl,
     bool Enabled,
     bool ApiKeyConfigured,
     string ApiKeyPreview,

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   getProviderSettings,
   getProviderSettingsPreflight,
+  testProviderConnection,
   updateProviderSettings,
 } from '../../shared/api/controlPlaneClient';
 import type {
@@ -28,6 +29,13 @@ const supplierLabels: Record<string, string> = {
   elevenlabs: 'ElevenLabs',
   minimax: 'MiniMax',
   azure: 'Azure',
+  openai_compatible: 'OpenAI 兼容中转',
+};
+
+type ConnectionTestState = {
+  busy: boolean;
+  ok: boolean | null;
+  message: string;
 };
 
 export function ProviderSettingsPage() {
@@ -39,6 +47,7 @@ export function ProviderSettingsPage() {
   });
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
   const [clearApiKeys, setClearApiKeys] = useState<Record<string, boolean>>({});
+  const [connectionTests, setConnectionTests] = useState<Record<string, ConnectionTestState>>({});
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [message, setMessage] = useState('正在读取本地 provider 配置');
 
@@ -87,6 +96,7 @@ export function ProviderSettingsPage() {
           kind: adapter.kind,
           supplier: adapter.supplier,
           model: adapter.model,
+          baseUrl: adapter.baseUrl,
           enabled: adapter.enabled,
           apiKey: apiKeyInputs[adapter.kind]?.trim() || null,
           clearApiKey: Boolean(clearApiKeys[adapter.kind]),
@@ -107,6 +117,7 @@ export function ProviderSettingsPage() {
     setDraftCost(nextSettings.costGuardrails);
     setApiKeyInputs({});
     setClearApiKeys({});
+    setConnectionTests({});
   };
 
   const updateAdapter = <K extends keyof ProviderAdapterSettings>(
@@ -136,11 +147,44 @@ export function ProviderSettingsPage() {
     );
   };
 
+  const testConnection = async (adapter: ProviderAdapterSettings) => {
+    setConnectionTests((current) => ({
+      ...current,
+      [adapter.kind]: { busy: true, ok: null, message: '正在测试连接...' },
+    }));
+
+    try {
+      const result = await testProviderConnection(adapter.kind, {
+        supplier: adapter.supplier,
+        model: adapter.model,
+        baseUrl: adapter.baseUrl,
+        apiKey: apiKeyInputs[adapter.kind]?.trim() || null,
+      });
+      setConnectionTests((current) => ({
+        ...current,
+        [adapter.kind]: {
+          busy: false,
+          ok: result.ok,
+          message: result.ok ? `连接成功，耗时 ${result.durationMs}ms` : result.message,
+        },
+      }));
+    } catch (error) {
+      setConnectionTests((current) => ({
+        ...current,
+        [adapter.kind]: {
+          busy: false,
+          ok: false,
+          message: error instanceof Error ? error.message : '连接测试失败',
+        },
+      }));
+    }
+  };
+
   return (
     <section className="provider-settings-view">
       <div className="provider-settings-heading">
         <div>
-          <p className="eyebrow">Stage 22</p>
+          <p className="eyebrow">Stage 23</p>
           <h1>Provider 前配置</h1>
         </div>
         <div className="provider-settings-actions">
@@ -237,6 +281,14 @@ export function ProviderSettingsPage() {
                   />
                 </label>
                 <label className="wide-field">
+                  <span>Base URL</span>
+                  <input
+                    onChange={(event) => updateAdapter(adapter.kind, 'baseUrl', event.target.value)}
+                    placeholder="https://relay.example.com/v1"
+                    value={adapter.baseUrl}
+                  />
+                </label>
+                <label className="wide-field">
                   <span>API Key</span>
                   <input
                     autoComplete="off"
@@ -259,6 +311,15 @@ export function ProviderSettingsPage() {
                 <small>{adapter.safety.secretStoreMode}</small>
                 <button
                   className="ghost-button"
+                  disabled={connectionTests[adapter.kind]?.busy || (!adapter.apiKeyConfigured && !apiKeyInputs[adapter.kind])}
+                  onClick={() => void testConnection(adapter)}
+                  type="button"
+                >
+                  <RefreshCcw size={15} />
+                  <span>{connectionTests[adapter.kind]?.busy ? '测试中' : '测试连通'}</span>
+                </button>
+                <button
+                  className="ghost-button"
                   disabled={!adapter.apiKeyConfigured && !apiKeyInputs[adapter.kind]}
                   onClick={() => clearApiKey(adapter.kind)}
                   type="button"
@@ -267,6 +328,11 @@ export function ProviderSettingsPage() {
                   <span>清除</span>
                 </button>
               </div>
+              {connectionTests[adapter.kind]?.message && (
+                <p className={connectionTests[adapter.kind]?.ok ? 'provider-test-message ok' : 'provider-test-message'}>
+                  {connectionTests[adapter.kind]?.message}
+                </p>
+              )}
             </article>
           ))}
         </div>

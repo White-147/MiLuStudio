@@ -4,6 +4,8 @@ public sealed record StartProductionJobRequest(string? RequestedBy);
 
 public sealed record ProductionCheckpointRequest(bool? Approved, string? Notes);
 
+public sealed record ProductionRollbackRequest(string? SkillName, string? Notes);
+
 public sealed class ProductionCommandValidationException : Exception
 {
     public ProductionCommandValidationException(string message)

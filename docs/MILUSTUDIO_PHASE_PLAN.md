@@ -95,9 +95,9 @@ Environment check:
 ## 6. 当前焦点
 
 ```text
-Current phase: Post Stage 22
-Status: done
-Goal: Stage 22 已正式确认为 Provider Adapter 安全前置层设计与占位落地并完成；下一步建议在不接真实 provider 的前提下进入工作台高级编辑、provider dry-run 审计契约或 signed release 回归。
+Current phase: Stage 23B
+Status: in_progress
+Goal: Stage 23B 已正式确认为文档 / 媒体深度解析与上传策略加固：补 OCR、PDF / DOC 深度解析、文本切片、上传分片、图片 / 视频压缩和更完整媒体抽帧；真实模型生成 provider 仍未接入。
 Next handoff owner: current / next session
 ```
 
@@ -109,7 +109,8 @@ Stage 16 已完成，且已按当前 MVP 范围撤下许可证 / 激活码体验
 - 受保护项目和生产任务 API 当前只保留最小登录门禁；未登录返回 401。
 - 桌面安装器已撤下安装前激活码页，只保留快捷方式和开机自启动等 Windows 集成选项。
 - 桌面端继续只承载 Web UI 并管理本地服务，不直接访问 PostgreSQL、业务文件系统、Python 脚本或 FFmpeg。
-- 本阶段未接真实模型，未读取真实媒体文件，未触发 FFmpeg，未生成真实 MP4 / WAV / SRT / ZIP。
+- Stage 23A 已允许后端通过 Control API 上传文件、读取上传资产并调用项目内 FFmpeg 做技术解析；UI / Electron 仍不得直接读文件或执行 FFmpeg。
+- 当前仍未接真实模型生成 provider，未生成最终真实 MP4 / WAV / SRT / ZIP。
 
 Post Stage 16 已完成的体验收敛：
 
@@ -144,11 +145,19 @@ Stage 22 已确认并完成：
 
 1. Provider Adapter 安全前置层设计与占位落地：metadata-only secret store、spend guard、provider sandbox、安全状态 endpoint、preflight 增强和 Web 安全状态展示。
 
-Stage 23 候选方向：
+Stage 23A 已推进并作为 Stage 23B 基础：
 
-1. 继续扩展工作台高级编辑：提示词批量操作、镜头增删、更细粒度 diff 和重算策略。
-2. provider adapter 真实接入前设计评审：只做接口契约、审计日志和 dry-run，不发送真实请求。
-3. 发布验收补强：拿到正式证书后跑 `verify:release:signed` 和干净 Windows 虚拟机安装 / 卸载回归。
+1. OpenAI-compatible provider 配置：Base URL + API Key、DPAPI 本地加密 secret、连接测试 endpoint 和 Web 测试按钮。
+2. 项目内 FFmpeg runtime 安装脚本：稳定多源下载、SHA256 sidecar 校验和 D 盘 runtime 目录。
+3. 真实上传与技术解析：Control API 上传 endpoint、assets 登记、文本 / DOCX 解析、图片 / 视频 ffprobe、缩略图和抽帧。
+4. 工作台审核回退：最近已确认审核步骤 hover 回退、二次确认弹窗、回退到待审核并清空下游任务输出。
+
+Stage 23B 已正式确认：
+
+1. 正式编号：Stage 23B。
+2. 正式范围：文档 / 媒体深度解析与上传策略加固。
+3. 优先内容：OCR、PDF / DOC 深度解析、文本切片提交、上传分片、图片 / 视频压缩和更完整媒体抽帧。
+4. 后置安排：Stage 23C 做 provider dry-run / audit contract；Stage 24 做工作台高级编辑；正式证书到位后再做 signed release 回归。
 
 ## 7. Stage 0 项目初始化
 
@@ -1528,7 +1537,71 @@ git diff --check
 - 检查 Web / Electron 是否仍只通过 Control API 使用 provider settings，不直接读写本地 JSON、数据库或底层服务。
 - 检查本阶段是否未新增数据库 migration、未接真实 provider、未读取真实媒体。
 
-## 30. 每阶段联网自检模板
+## 30. Stage 23B 文档 / 媒体深度解析与上传策略加固
+
+Status: in_progress
+
+目标：
+
+- 把 Stage 23A 的真实上传链路从“基础技术解析”加固到“可被后续生产链路稳定消费”。
+- 补齐 PDF / DOC / OCR 的深度解析或稳定降级路径，避免用户上传文档后只得到 metadata-only 黑盒结果。
+- 为长文本建立切片 manifest，优先写入 `assets.metadata_json`，不急于新增数据库表。
+- 为大文件上传、图片 / 视频压缩和更完整抽帧建立后端策略，继续让 UI / Electron 只走 Control API。
+- 保持真实模型生成 provider 阻断，只处理本地上传、解析、派生文件和元数据。
+
+边界：
+
+- 不接真实 Text / Image / Video / Audio / Edit 生成 provider。
+- 不发送故事、图片、视频或音频到外部生成接口。
+- 不生成最终真实 MP4 / WAV / SRT / ZIP。
+- 不让 UI / Electron 直接读取媒体、执行 FFmpeg、访问文件系统、数据库、Python 脚本或模型 SDK。
+- OCR、PDF / DOC 解析、压缩、抽帧和分片策略只能落在 Control API / Application service / Infrastructure adapter / Python Skills Runtime 边界内。
+- 不引入 Linux / Docker / Redis / Celery。
+- 默认复用现有 `assets` 表和 `metadata_json`；只有证明 metadata 承载不了稳定查询或审计需求时，才考虑后续 migration。
+
+具体任务：
+
+1. 盘点 Stage 23A 的 `ProjectAssetUploadService`、`IProjectAssetFileStore`、`IAssetTechnicalAnalyzer` 和 `FfmpegAssetTechnicalAnalyzer`，保持上传编排、文件存储和技术解析职责分离。
+2. 定义稳定的 asset analysis metadata：解析器版本、原始文件信息、正文摘要、content blocks、chunk manifest、派生文件、警告、降级原因和边界标记。
+3. 补 PDF 解析优先路径；如果本地解析器不可用，返回明确的 `parser_unavailable` / `ocr_required` 降级信息，不阻塞上传。
+4. 补 DOC 解析策略；优先使用 Windows / D 盘可控运行时或稳定降级，不把 Office 自动化藏进 UI / Electron。
+5. 补 OCR 策略；优先作为后端 adapter 能力检测和可选运行时，缺少 OCR runtime 时保存待处理状态和用户可理解的 metadata。
+6. 为文本 / DOCX / PDF / OCR 结果生成文本切片 manifest，记录切片索引、字符范围、估算 token、来源页码或段落、摘要和是否可作为故事正文候选。
+7. 定义上传分片策略和最小 API 契约；第一步以稳定策略、大小限制、错误恢复和后端合并边界为主，不要求 UI 直接访问文件系统。
+8. 定义图片 / 视频压缩策略：原文件保留、派生文件命名、最大边长 / 码率 / 时长 guard、失败降级和成本 / 耗时 metadata。
+9. 增强视频抽帧策略：支持按时长采样、关键帧 / 均匀抽帧、最大帧数上限和派生文件 metadata。
+10. 新增 Stage 23B 验证脚本，覆盖文本、DOCX、PDF / DOC 降级、图片 metadata、视频抽帧、边界标记和 no-provider / no-UI-FFmpeg 约束。
+11. 同步 README、建设方案、任务记录和短棒交接。
+
+当前落地：
+
+- 已盘点并继续沿用 `ProjectAssetUploadService` / `IProjectAssetFileStore` / `IAssetTechnicalAnalyzer` / `FfmpegAssetTechnicalAnalyzer` 分层边界。
+- `ProjectAssetUploadService` 已把 metadata stage 升级为 `stage23b_document_media_analysis` / `stage23b_asset_analysis_v1`，并记录上传分片策略契约、后端合并边界和 no-provider 标记。
+- `FfmpegAssetTechnicalAnalyzer` 已补文本 / DOCX / PDF 的 `contentBlocks` 与 `chunkManifest`；DOCX entry 路径已兼容 Windows ZIP 反斜杠。
+- PDF 已提供轻量嵌入文本探测；不可抽取文本时返回 `ocr_required`、warnings 和 unavailable chunk manifest，不让上传失败成裸异常。
+- DOC 已返回 `parser_unavailable`、后端 converter runtime 建议路径和结构化降级，不在 UI / Electron 中隐藏 Office 自动化。
+- OCR 当前先作为后端 runtime 能力检测 metadata：检查 D 盘 Tesseract-compatible 路径，缺少运行时时记录 `runtime_not_configured`；真实 OCR 调用仍是 Stage 23B 后续小步推进。
+- 图片已通过后端 FFmpeg adapter 生成 `thumbnail.jpg` 和 `preview_1280.jpg`；视频已记录均匀抽帧 metadata，并尝试生成短 `review_proxy_720p.mp4`，均不生成最终成片。
+- 新增 `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1`，临时 InMemory Control API 验证 txt / DOCX / PDF / DOC / PNG / MP4 上传、chunk manifest、媒体派生 metadata 和 no-provider 边界。
+
+验收：
+
+- .NET build 通过。
+- Web build 通过；如未改 Web，也需说明已检查无需同步。
+- Stage 23B 上传 / 解析验证脚本通过。
+- `git diff --check` 通过。
+- 上传 PDF / DOC / OCR 不可用场景不会失败成裸异常，而是返回结构化降级 metadata。
+- 文本切片 manifest 可在 `assets.metadata_json` 中被后续链路稳定消费。
+- 图片 / 视频压缩和抽帧派生文件只由后端 adapter 产生，UI / Electron 不直接执行 FFmpeg。
+- 所有新运行时、缓存、上传文件和派生文件仍在 `D:\code\MiLuStudio` 或明确 D 盘工具目录内。
+
+后置：
+
+- Stage 23C：provider adapter 真实接入前 dry-run / audit contract、审计日志、预算流水、超时和失败隔离。
+- Stage 24：工作台高级编辑，包括提示词批量操作、镜头增删、更细粒度 diff 和重算策略。
+- 发布回归阶段：拿到正式证书后做 `verify:release:signed` 和干净 Windows 虚拟机安装 / 卸载回归。
+
+## 31. 每阶段联网自检模板
 
 每个大阶段结束后必须填写到 `docs\MILUSTUDIO_TASK_RECORD.md`。
 

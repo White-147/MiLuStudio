@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MiLuStudio.Application.Abstractions;
+using MiLuStudio.Infrastructure.Assets;
 using MiLuStudio.Infrastructure.Auth;
 using MiLuStudio.Infrastructure.Configuration;
 using MiLuStudio.Infrastructure.Persistence.InMemory;
@@ -25,6 +26,11 @@ public static class ServiceCollectionExtensions
             configured.RepositoryProvider = options.RepositoryProvider;
             configured.MigrationsPath = options.MigrationsPath;
             configured.StorageRoot = options.StorageRoot;
+            configured.UploadsRoot = options.UploadsRoot;
+            configured.FfmpegBinPath = options.FfmpegBinPath;
+            configured.AssetParseTimeoutSeconds = options.AssetParseTimeoutSeconds;
+            configured.AssetTranscodeTimeoutSeconds = options.AssetTranscodeTimeoutSeconds;
+            configured.AssetVideoFrameLimit = options.AssetVideoFrameLimit;
             configured.ProviderSettingsPath = options.ProviderSettingsPath;
             configured.ProviderSecretStorePath = options.ProviderSecretStorePath;
             configured.WorkerId = options.WorkerId;
@@ -43,6 +49,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAuthLicensingAdapter, DeterministicAuthLicensingAdapter>();
         services.AddSingleton<IProviderSettingsRepository, FileProviderSettingsRepository>();
         services.AddSingleton<IProviderSecretStore, FileProviderSecretStore>();
+        services.AddSingleton<IProviderConnectivityTester, OpenAiCompatibleProviderConnectivityTester>();
+        services.AddSingleton<IProjectAssetFileStore, LocalProjectAssetFileStore>();
+        services.AddSingleton<IAssetTechnicalAnalyzer, FfmpegAssetTechnicalAnalyzer>();
         services.AddScoped<IProductionSkillRunner, PythonProductionSkillRunner>();
 
         if (string.Equals(options.RepositoryProvider, RepositoryProviderNames.PostgreSql, StringComparison.OrdinalIgnoreCase))
@@ -93,6 +102,17 @@ public static class ServiceCollectionExtensions
             RepositoryProvider = section["RepositoryProvider"] ?? RepositoryProviderNames.PostgreSql,
             MigrationsPath = section["MigrationsPath"] ?? "backend/control-plane/db/migrations",
             StorageRoot = section["StorageRoot"] ?? "D:\\code\\MiLuStudio\\storage",
+            UploadsRoot = section["UploadsRoot"] ?? "D:\\code\\MiLuStudio\\uploads",
+            FfmpegBinPath = section["FfmpegBinPath"] ?? "D:\\code\\MiLuStudio\\runtime\\ffmpeg\\bin",
+            AssetParseTimeoutSeconds = int.TryParse(section["AssetParseTimeoutSeconds"], out var assetParseTimeoutSeconds)
+                ? Math.Clamp(assetParseTimeoutSeconds, 5, 300)
+                : 60,
+            AssetTranscodeTimeoutSeconds = int.TryParse(section["AssetTranscodeTimeoutSeconds"], out var assetTranscodeTimeoutSeconds)
+                ? Math.Clamp(assetTranscodeTimeoutSeconds, 30, 600)
+                : 180,
+            AssetVideoFrameLimit = int.TryParse(section["AssetVideoFrameLimit"], out var assetVideoFrameLimit)
+                ? Math.Clamp(assetVideoFrameLimit, 1, 8)
+                : 8,
             ProviderSettingsPath = section["ProviderSettingsPath"] ?? string.Empty,
             ProviderSecretStorePath = section["ProviderSecretStorePath"] ?? string.Empty,
             WorkerId = section["WorkerId"] ?? Environment.MachineName,

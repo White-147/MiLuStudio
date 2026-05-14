@@ -4,23 +4,27 @@ using MiLuStudio.Application.Abstractions;
 
 public sealed class ProviderSettingsService
 {
-    private const string PlaceholderMode = "placeholder_only";
-    private const string Stage22SafetyStage = "stage22_provider_safety_preflight";
-    private const string SandboxMode = "stage22_no_provider_calls";
-    private const string SpendGuardMode = "hard_preflight_placeholder_block";
+    private const string ProviderConfigMode = "stage23_openai_compatible_config";
+    private const string Stage23SafetyStage = "stage23_provider_connection_preflight";
+    private const string SandboxMode = "stage23_connection_test_only";
+    private const string SpendGuardMode = "connection_test_allowed_generation_blocked";
+    private static readonly TimeSpan ConnectivityTimeout = TimeSpan.FromSeconds(12);
 
     private readonly IClock _clock;
+    private readonly IProviderConnectivityTester _connectivityTester;
     private readonly IProviderSecretStore _secrets;
     private readonly IProviderSettingsRepository _settings;
 
     public ProviderSettingsService(
         IClock clock,
         IProviderSettingsRepository settings,
-        IProviderSecretStore secrets)
+        IProviderSecretStore secrets,
+        IProviderConnectivityTester connectivityTester)
     {
         _clock = clock;
         _settings = settings;
         _secrets = secrets;
+        _connectivityTester = connectivityTester;
     }
 
     public async Task<ProviderSettingsResponse> GetAsync(CancellationToken cancellationToken)
@@ -65,6 +69,65 @@ public sealed class ProviderSettingsService
         return await BuildSafetyStatusAsync(state, cancellationToken);
     }
 
+    public async Task<ProviderConnectionTestResponse> TestConnectionAsync(
+        string kind,
+        ProviderConnectionTestRequest request,
+        CancellationToken cancellationToken)
+    {
+        var normalizedKind = NormalizeKind(kind);
+        var item = ProviderAdapterCatalog.Get(normalizedKind);
+        var state = await LoadStateAsync(cancellationToken);
+        var adapter = state.Adapters.First(entry =>
+            string.Equals(entry.Kind, normalizedKind, StringComparison.OrdinalIgnoreCase));
+        var supplier = NormalizeSupplier(item, request.Supplier ?? adapter.Supplier);
+        if (string.Equals(supplier, ProviderAdapterCatalog.NoneSupplier, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ProviderSettingsValidationException("Select a provider supplier before testing connectivity.");
+        }
+
+        var model = NormalizeText(request.Model ?? adapter.Model);
+        var baseUrl = NormalizeBaseUrl(request.BaseUrl ?? adapter.BaseUrl);
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            throw new ProviderSettingsValidationException("Base URL is required before testing connectivity.");
+        }
+
+        var apiKey = NormalizeText(request.ApiKey ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            apiKey = NormalizeText(await _secrets.GetSecretAsync(normalizedKind, cancellationToken) ?? string.Empty);
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new ProviderConnectionTestResponse(
+                Ok: false,
+                "missing_api_key",
+                "API key is not configured. Enter a key or save one before testing connectivity.",
+                normalizedKind,
+                supplier,
+                model,
+                baseUrl,
+                HttpStatusCode: null,
+                DurationMs: 0,
+                Array.Empty<string>(),
+                new Dictionary<string, string>
+                {
+                    ["secretStore"] = "no_provider_call_secret_available"
+                });
+        }
+
+        return await _connectivityTester.TestAsync(
+            new ProviderConnectionTestContext(
+                normalizedKind,
+                supplier,
+                model,
+                baseUrl,
+                apiKey,
+                ConnectivityTimeout),
+            cancellationToken);
+    }
+
     public async Task<ProviderSpendGuardDecisionDto> CheckSpendGuardAsync(
         ProviderSpendGuardCheckRequest request,
         CancellationToken cancellationToken)
@@ -78,7 +141,8 @@ public sealed class ProviderSettingsService
         var attemptNumber = Math.Max(1, request.AttemptNumber);
         var appliedRules = new List<string>
         {
-            "stage22_provider_calls_blocked",
+            "stage23_generation_provider_calls_blocked",
+            "connection_tests_allowed",
             "project_cost_cap_enforced",
             "retry_limit_enforced"
         };
@@ -118,8 +182,8 @@ public sealed class ProviderSettingsService
         return new ProviderSpendGuardDecisionDto(
             BudgetAllowed: true,
             ProviderCallAllowed: false,
-            "budget_passed_provider_blocked",
-            $"{normalizedKind} is within the configured spend guard, but Stage 22 keeps real provider calls sandbox-blocked.",
+            "budget_passed_generation_provider_blocked",
+            $"{normalizedKind} is within the configured spend guard, but Stage 23 only allows provider connection tests.",
             state.CostGuardrails.ProjectCostCapCny,
             currentSpend,
             increment,
@@ -150,6 +214,7 @@ public sealed class ProviderSettingsService
                 Kind = item.Kind,
                 Supplier = NormalizeSupplier(item, adapter.Supplier),
                 Model = NormalizeText(adapter.Model),
+                BaseUrl = NormalizeBaseUrl(adapter.BaseUrl),
                 ApiKeyPreview = NormalizeText(adapter.ApiKeyPreview),
                 SecretFingerprint = NormalizeText(adapter.SecretFingerprint)
             };
@@ -170,7 +235,7 @@ public sealed class ProviderSettingsService
     {
         var safety = await BuildSafetyStatusAsync(state, cancellationToken);
         return new ProviderSettingsResponse(
-            PlaceholderMode,
+            ProviderConfigMode,
             state.UpdatedAt,
             new ProviderCostGuardrailsDto(
                 state.CostGuardrails.ProjectCostCapCny,
@@ -190,6 +255,7 @@ public sealed class ProviderSettingsService
             catalogItem.Label,
             state.Supplier,
             state.Model,
+            state.BaseUrl,
             state.Enabled,
             state.ApiKeyConfigured,
             state.ApiKeyPreview,
@@ -199,8 +265,8 @@ public sealed class ProviderSettingsService
             new ProviderAdapterSafetyDto(
                 CreateSecretReferenceId(state.Kind, state.SecretFingerprint),
                 safety.SecretStore.Mode,
-                RawSecretPersisted: false,
-                UsableForProviderCalls: false,
+                RawSecretPersisted: safety.SecretStore.RawSecretPersistenceAllowed,
+                UsableForProviderCalls: safety.SecretStore.ProviderCallSecretsAvailable,
                 safety.Sandbox.Mode,
                 safety.Sandbox.ProviderCallsAllowed,
                 safety.Sandbox.ExternalNetworkAllowed,
@@ -218,7 +284,7 @@ public sealed class ProviderSettingsService
                 "secret_store",
                 "Secure Secret Store",
                 safety.SecretStore.MetadataStoreAvailable ? "ok" : "error",
-                "Stage 22 stores provider secret metadata only; raw key material is not persisted or available for calls.",
+                "Stage 23 stores provider keys with local Windows user encryption so connection tests can use them without exposing raw key material.",
                 new Dictionary<string, string>
                 {
                     ["mode"] = safety.SecretStore.Mode,
@@ -240,7 +306,7 @@ public sealed class ProviderSettingsService
                 "provider_sandbox",
                 "Provider Sandbox",
                 "ok",
-                "Stage 22 sandbox blocks provider calls, external network, media reads, FFmpeg, and real artifact generation.",
+                "Stage 23 allows provider connection tests only. Real generation calls, media reads, FFmpeg, and real artifact generation remain separately gated.",
                 new Dictionary<string, string>
                 {
                     ["mode"] = safety.Sandbox.Mode,
@@ -258,11 +324,12 @@ public sealed class ProviderSettingsService
             {
                 ["supplier"] = adapter.Supplier,
                 ["model"] = adapter.Model,
-                ["adapterMode"] = PlaceholderMode,
+                ["baseUrl"] = adapter.BaseUrl,
+                ["adapterMode"] = ProviderConfigMode,
                 ["secretStore"] = safety.SecretStore.Mode,
                 ["sandbox"] = safety.Sandbox.Mode,
-                ["externalNetwork"] = "disabled",
-                ["providerCalls"] = "blocked",
+                ["externalNetwork"] = "connection_test_only",
+                ["providerCalls"] = "generation_blocked",
                 ["mediaGenerated"] = "false",
                 ["mediaRead"] = "false",
                 ["ffmpegInvoked"] = "false"
@@ -289,6 +356,11 @@ public sealed class ProviderSettingsService
                 missing.Add("model");
             }
 
+            if (string.IsNullOrWhiteSpace(adapter.BaseUrl))
+            {
+                missing.Add("baseUrl");
+            }
+
             if (!adapter.ApiKeyConfigured)
             {
                 missing.Add("apiKey");
@@ -310,7 +382,7 @@ public sealed class ProviderSettingsService
                 adapter.Kind,
                 catalogItem.Label,
                 "ok",
-                "Local safety metadata is complete. Real provider calls remain sandbox-blocked.",
+                "Local provider configuration is complete for connection testing. Real generation calls remain disabled.",
                 details);
         }));
 
@@ -318,9 +390,9 @@ public sealed class ProviderSettingsService
             !string.Equals(check.Status, "error", StringComparison.OrdinalIgnoreCase));
         var recommendations = new List<string>
         {
-            "Stage 22 keeps all provider adapters in placeholder mode with sandbox-blocked execution.",
-            "No external model request, media read, FFmpeg run, or real artifact generation is performed.",
-            "Future real provider wiring must pass through the secret store, spend guard, and sandbox checks first."
+            "Stage 23 allows lightweight OpenAI-compatible connection tests only.",
+            "No story, image, video, audio, subtitle, package, or final artifact generation is sent to a real provider.",
+            "Future real provider generation must pass through the secret store, spend guard, sandbox checks, and audit logging first."
         };
 
         if (!healthy)
@@ -339,29 +411,28 @@ public sealed class ProviderSettingsService
         var sandbox = new ProviderSandboxStatusDto(
             SandboxMode,
             ProviderCallsAllowed: false,
-            ExternalNetworkAllowed: false,
+            ExternalNetworkAllowed: true,
             MediaReadAllowed: false,
             FfmpegAllowed: false,
             ProviderAdapterCatalog.Items.Select(item => item.Kind).ToArray(),
-            ["json_envelope_only", "no_real_png", "no_real_mp4", "no_real_wav", "no_real_srt", "no_real_zip"]);
+            ["connection_test_json_only", "no_generation_payloads", "no_real_png", "no_real_mp4", "no_real_wav", "no_real_srt", "no_real_zip"]);
         var spendGuard = new ProviderSpendGuardStatusDto(
             Enabled: true,
             SpendGuardMode,
             state.CostGuardrails.ProjectCostCapCny,
             state.CostGuardrails.RetryLimit,
-            BlocksProviderCalls: true,
+            BlocksProviderCalls: false,
             BlocksWhenCapExceeded: true);
 
         return new ProviderSafetyStatusDto(
-            Stage22SafetyStage,
-            PlaceholderMode,
+            Stage23SafetyStage,
+            ProviderConfigMode,
             secretStore,
             spendGuard,
             sandbox,
             [
-                "real_provider_calls_disabled",
-                "external_network_disabled",
-                "raw_secret_persistence_disabled",
+                "real_generation_provider_calls_disabled",
+                "external_network_limited_to_connection_test",
                 "media_file_reads_disabled",
                 "ffmpeg_disabled",
                 "real_artifact_generation_disabled"
@@ -379,6 +450,7 @@ public sealed class ProviderSettingsService
             item.Kind,
             ProviderAdapterCatalog.NoneSupplier,
             item.DefaultModel,
+            item.DefaultBaseUrl,
             false,
             false,
             string.Empty,
@@ -398,7 +470,8 @@ public sealed class ProviderSettingsService
             {
                 Kind = item.Kind,
                 Supplier = NormalizeSupplier(item, baseline.Supplier),
-                Model = NormalizeText(baseline.Model)
+                Model = NormalizeText(baseline.Model),
+                BaseUrl = NormalizeBaseUrl(baseline.BaseUrl)
             };
         }
 
@@ -429,6 +502,7 @@ public sealed class ProviderSettingsService
             item.Kind,
             NormalizeSupplier(item, requested.Supplier),
             NormalizeText(requested.Model),
+            NormalizeBaseUrl(requested.BaseUrl),
             requested.Enabled,
             apiKeyConfigured,
             apiKeyPreview,
@@ -490,7 +564,31 @@ public sealed class ProviderSettingsService
         return decimal.Round(value, 2);
     }
 
-    private static string NormalizeText(string value) => (value ?? string.Empty).Trim();
+    private static string NormalizeText(string? value) => (value ?? string.Empty).Trim();
+
+    private static string NormalizeBaseUrl(string? value)
+    {
+        var normalized = NormalizeText(value).TrimEnd('/');
+        if (normalized.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        if (normalized.Length > 512)
+        {
+            throw new ProviderSettingsValidationException("Base URL must be 512 characters or fewer.");
+        }
+
+        if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            !string.IsNullOrEmpty(uri.Query) ||
+            !string.IsNullOrEmpty(uri.Fragment))
+        {
+            throw new ProviderSettingsValidationException("Base URL must be an absolute http(s) URL without query or fragment.");
+        }
+
+        return normalized;
+    }
 
     private static string CreateSecretReferenceId(string kind, string fingerprint)
     {
@@ -507,6 +605,7 @@ internal sealed record ProviderAdapterCatalogItem(
     string Kind,
     string Label,
     string DefaultModel,
+    string DefaultBaseUrl,
     IReadOnlyList<string> SupportedSuppliers,
     IReadOnlyList<string> CapabilityFlags);
 
@@ -520,31 +619,36 @@ internal static class ProviderAdapterCatalog
             "text",
             "文本生成",
             "text-placeholder-v1",
-            [NoneSupplier, "openai", "qwen", "volcano", "anthropic"],
+            string.Empty,
+            [NoneSupplier, "openai_compatible", "openai", "qwen", "volcano", "anthropic"],
             ["story", "script", "storyboard", "rewrite"]),
         new(
             "image",
             "图像生成",
             "image-placeholder-v1",
-            [NoneSupplier, "openai", "qwen", "volcano", "stability"],
+            string.Empty,
+            [NoneSupplier, "openai_compatible", "openai", "qwen", "volcano", "stability"],
             ["character", "keyframe", "style-reference"]),
         new(
             "video",
             "视频生成",
             "video-placeholder-v1",
-            [NoneSupplier, "runway", "pika", "volcano", "kling"],
+            string.Empty,
+            [NoneSupplier, "openai_compatible", "runway", "pika", "volcano", "kling"],
             ["shot-render", "motion", "upscale"]),
         new(
             "audio",
             "音频生成",
             "audio-placeholder-v1",
-            [NoneSupplier, "elevenlabs", "minimax", "azure", "volcano"],
+            string.Empty,
+            [NoneSupplier, "openai_compatible", "elevenlabs", "minimax", "azure", "volcano"],
             ["voice", "music", "sound-effect"]),
         new(
             "edit",
             "编辑与质检",
             "edit-placeholder-v1",
-            [NoneSupplier, "openai", "qwen", "volcano"],
+            string.Empty,
+            [NoneSupplier, "openai_compatible", "openai", "qwen", "volcano"],
             ["qc", "rewrite", "caption", "repair"])
     ];
 

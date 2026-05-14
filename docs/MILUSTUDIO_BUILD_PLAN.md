@@ -1508,6 +1508,37 @@ Stage 22 当前落地状态：
 - 新增 `scripts\windows\Test-MiLuStudioStage22ProviderSafety.ps1`，覆盖密钥明文不泄漏、安全状态、preflight、预算阻断、重试阻断和 clear key。
 - 本阶段不新增数据库 migration，不接真实 provider，不读取真实媒体，不触发 FFmpeg，不生成真实 PNG / MP4 / WAV / SRT / ZIP。
 
+Stage 23A 当前落地状态：
+
+- Stage 23A 已正式推进 OpenAI-compatible provider 配置、连接测试、项目内 FFmpeg runtime、真实上传 / 技术解析和审核回退。
+- Provider settings 已新增 `baseUrl`、OpenAI-compatible 中转供应商、DPAPI 本地加密 secret material 和 `POST /api/settings/providers/{kind}/connection-test`；连接测试只探测 `/models`，不发送真实生成 payload。
+- Web 左上“模型”入口已撤下；左下设置菜单中的“设置”入口改为“模型”，并展示 Base URL、API Key 和“测试连通”。
+- 新增 `scripts\windows\Install-MiLuStudioFfmpeg.ps1`，优先使用 `gyan.dev` release essentials 稳定链接，BtbN GitHub `/latest/` 作为 fallback，安装到 `D:\code\MiLuStudio\runtime\ffmpeg`。
+- 新增 `POST /api/projects/{projectId}/assets/upload`，通过 Control API 接收 multipart 上传，保存到项目 `uploads` 目录，计算 SHA256，登记现有 `assets` 表，不新增 migration。
+- 文本 / Markdown / JSON / SRT / ASS / VTT / CSV / XML / YAML / RTF 可直接解析正文；DOCX 通过 ZIP + XML 提取正文；DOC / PDF 已可保存并标记后续 Office/PDF/OCR 解析器待补。
+- 图片和视频通过后端 Infrastructure adapter 调用项目内 FFmpeg 做 ffprobe、缩略图和最多 8 张抽帧；UI / Electron 仍不得直接读取文件或执行 FFmpeg。
+- 新增 `POST /api/production-jobs/{jobId}/rollback`；最近一个已确认审核步骤可二次确认后回到待审核，并清空下游 task output / 运行状态。
+- 本阶段仍不接真实模型生成 provider，不生成最终真实 MP4 / WAV / SRT / ZIP，不引入 Linux / Docker / Redis / Celery，不让 UI 或 Electron 绕过 Control API / Worker 边界。
+
+Stage 23B 正式安排：
+
+- Stage 23B 已正式确认为“文档 / 媒体深度解析与上传策略加固”，不再作为候选方向反复确认。
+- 优先补 OCR、PDF / DOC 深度解析、文本切片、上传分片、图片 / 视频压缩策略和更完整媒体抽帧。
+- Stage 23B 继续复用 Stage 23A 的 Control API / Application service / Infrastructure adapter 边界，默认把解析 metadata、切片 manifest、派生文件和降级原因写入现有资产索引。
+- 若 OCR、PDF 或 DOC 解析运行时暂不可用，必须返回结构化降级 metadata，而不是让上传失败成裸异常。
+- Stage 23B 不接真实模型生成 provider，不发送生成 payload，不生成最终 MP4 / WAV / SRT / ZIP，不引入 Linux / Docker / Redis / Celery。
+- 后续顺序固定为：Stage 23C 做 provider dry-run / audit contract；Stage 24 做工作台高级编辑；正式证书到位后再做 signed release 回归。
+
+Stage 23B 第一轮落地状态：
+
+- Asset metadata schema 升级为 `stage23b_asset_analysis_v1`，统一记录上传策略、no-provider 边界、技术解析结果、派生文件和大小限制。
+- 文本 / DOCX / PDF 嵌入文本解析结果会生成 `contentBlocks` 和 `chunkManifest`；切片策略为固定字符窗口 + overlap，先写入现有 `assets.metadata_json`。
+- PDF 已有轻量嵌入文本探测路径；扫描版、压缩复杂流和复杂编码 PDF 仍通过 `ocr_required` / warnings 结构化降级。
+- DOC 仍不在 UI / Electron 里调用 Office 自动化，当前返回 `parser_unavailable`、后端 runtime 建议路径和 unavailable chunk manifest。
+- OCR 当前先落地为后端 runtime 能力检测 metadata；缺少 `runtime\tesseract` 或 D 盘工具时不阻塞上传，真实 OCR 调用后续继续补。
+- 图片 / 视频压缩策略已在后端 FFmpeg adapter 内落地为派生文件 metadata：图片生成 `preview_1280.jpg`，视频生成均匀抽帧和短 `review_proxy_720p.mp4`，原文件保留。
+- 新增 `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1`，覆盖 txt / DOCX / PDF / DOC / PNG / MP4 上传、chunk manifest、结构化降级、媒体派生 metadata 和 no-provider 边界。
+
 ## 13. 模型与供应商策略
 
 ### 13.1 Provider 分类
@@ -1562,8 +1593,8 @@ Stage 18 已先落地“provider adapter 前配置页”：
 - 路由为 `/settings/providers`。
 - 后端 endpoint 为 `/api/settings/providers`、`/api/settings/providers/preflight`、`/api/settings/providers/safety` 和 `/api/settings/providers/spend-guard/check`。
 - 当前保存的是本地占位配置和 metadata-only secret 描述，不保存明文 API Key，不触发任何真实 provider 请求。
-- `TextProvider`、`ImageProvider`、`VideoProvider`、`AudioProvider` 和 `EditProvider` 的真实 SDK / HTTP adapter 仍未实现。
-- Stage 22 已把 secret store、spend guard 和 provider sandbox 作为真实 provider 接入前的硬前置层；当前仍处于 placeholder-only / sandbox-blocked 状态。
+- `TextProvider`、`ImageProvider`、`VideoProvider`、`AudioProvider` 和 `EditProvider` 的真实生成 SDK / HTTP adapter 仍未实现。
+- Stage 23A 已把 secret store 升级到 Windows DPAPI 本地加密，并允许 OpenAI-compatible 连接测试；spend guard 和 provider sandbox 仍阻断真实生成调用。
 
 不要暴露：
 
@@ -1588,8 +1619,8 @@ Stage 18 已先落地“provider adapter 前配置页”：
 
 安全要求：
 
-- API Key 只存在本机；Stage 22 当前只保存遮罩、指纹和不可调用引用，真实 secret material 仍不落库、不进响应、不交给 provider。
-- 不把用户故事、图片、音频上传到自有服务器。
+- API Key 只存在本机；Stage 23A 当前保存遮罩、指纹和 Windows DPAPI 本地加密 secret material，明文不落响应、不进 Git。
+- 上传素材只进入本机项目 `uploads` / assets 索引；UI / Electron 不直接读取媒体文件，外部模型生成调用仍未接入。
 - 不提交 `.env`、真实素材、输出视频、服务账号。
 - 所有本地生成数据放入 `storage/` 或用户数据目录。
 - Git 默认忽略 `storage/`、`outputs/`、`logs/`、`.env*`、`*.mp4`、`*.wav` 等。

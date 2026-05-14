@@ -10,6 +10,16 @@ public sealed class ControlPlaneOptions
 
     public string StorageRoot { get; set; } = "D:\\code\\MiLuStudio\\storage";
 
+    public string UploadsRoot { get; set; } = "D:\\code\\MiLuStudio\\uploads";
+
+    public string FfmpegBinPath { get; set; } = "D:\\code\\MiLuStudio\\runtime\\ffmpeg\\bin";
+
+    public int AssetParseTimeoutSeconds { get; set; } = 60;
+
+    public int AssetTranscodeTimeoutSeconds { get; set; } = 180;
+
+    public int AssetVideoFrameLimit { get; set; } = 8;
+
     public string ProviderSettingsPath { get; set; } = string.Empty;
 
     public string ProviderSecretStorePath { get; set; } = string.Empty;

@@ -1030,12 +1030,13 @@ textarea {
 
 .fixed-flow-item {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   gap: 8px;
-  align-items: start;
+  align-items: center;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.35;
+  min-height: 24px;
 }
 
 .fixed-flow-item.done {
@@ -1069,6 +1070,69 @@ textarea {
 
 .fixed-flow-item.review .fixed-flow-icon {
   color: var(--warning);
+}
+
+.flow-status-label,
+.flow-status-button {
+  justify-self: end;
+  min-width: 54px;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.flow-status-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--faint);
+  background: color-mix(in oklch, var(--panel-soft) 78%, transparent);
+}
+
+.flow-status-label.active,
+.flow-status-button.review {
+  color: var(--warning);
+  background: color-mix(in oklch, var(--warning) 14%, transparent);
+}
+
+.flow-status-label.done,
+.flow-status-button.confirmed {
+  color: var(--success);
+  background: color-mix(in oklch, var(--success) 13%, transparent);
+}
+
+.flow-status-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.flow-status-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.flow-status-button .hover-label {
+  display: none;
+}
+
+.flow-status-button.confirmed:not(:disabled):hover {
+  color: var(--danger);
+  border-color: color-mix(in oklch, var(--danger) 40%, transparent);
+  background: color-mix(in oklch, var(--danger) 12%, transparent);
+}
+
+.flow-status-button.confirmed:not(:disabled):hover .normal-label {
+  display: none;
+}
+
+.flow-status-button.confirmed:not(:disabled):hover .hover-label {
+  display: inline;
 }
 
 .checkpoint-review-panel {
@@ -1790,6 +1854,21 @@ textarea {
   min-width: 0;
   color: var(--muted);
   font-size: 0.72rem;
+}
+
+.provider-test-message {
+  margin: 10px 0 0;
+  color: #f3b35c;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.provider-test-message.ok {
+  color: #74c69d;
+}
+
+.provider-menu-entry span:not(.provider-menu-label) {
+  display: none;
 }
 
 .provider-safety-row {

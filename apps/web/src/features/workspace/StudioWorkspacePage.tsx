@@ -38,10 +38,12 @@ import {
   listProjects,
   regenerateStoryboardShot,
   rejectProductionCheckpoint,
+  rollbackProductionJob,
   startProductionJob,
   updateStructuredOutputTask,
   updateProject,
   updateStoryboardTask,
+  uploadProjectAsset,
   watchProductionJob,
 } from '../../shared/api/controlPlaneClient';
 import type {
@@ -53,6 +55,7 @@ import type {
   ProductionJobStatus,
   ProductionStage,
   ProjectAssetRecord,
+  ProjectAssetUploadResponse,
   ProjectDetail,
   ProjectStatus,
   ProjectSummary,
@@ -161,6 +164,7 @@ type ProductionFlowItem = {
   label: string;
   skillName: string;
   state: FlowItemState;
+  needsReview: boolean;
 };
 
 type ActiveReview = {
@@ -181,7 +185,11 @@ type ComposerAttachment = {
   mimeType: string;
   size: number;
   kind: ComposerAttachmentKind;
+  file?: File;
   text?: string;
+  assetId?: string;
+  uploadStatus?: 'pending' | 'uploaded' | 'failed';
+  message?: string;
 };
 
 type UploadMenuOption = {
@@ -197,14 +205,34 @@ type UploadMenuOption = {
 const STORY_MIN_LENGTH = 500;
 const STORY_MAX_LENGTH = 2000;
 const SAVED_JOB_PREFIX = 'milu.workspace.latestJob.';
-const TEXT_ATTACHMENT_EXTENSIONS = new Set(['txt', 'md', 'markdown']);
-const IMAGE_REFERENCE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif']);
-const VIDEO_REFERENCE_EXTENSIONS = new Set(['mp4', 'mov', 'webm']);
+const TEXT_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+const IMAGE_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+const VIDEO_UPLOAD_MAX_BYTES = 1024 * 1024 * 1024;
+const TEXT_ATTACHMENT_EXTENSIONS = new Set([
+  'txt',
+  'md',
+  'markdown',
+  'csv',
+  'json',
+  'srt',
+  'ass',
+  'vtt',
+  'log',
+  'xml',
+  'yaml',
+  'yml',
+  'rtf',
+  'docx',
+  'doc',
+  'pdf',
+]);
+const IMAGE_REFERENCE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'avif', 'heic', 'heif']);
+const VIDEO_REFERENCE_EXTENSIONS = new Set(['mp4', 'mov', 'webm', 'mkv', 'avi', 'm4v', 'wmv', 'flv', 'mpeg', 'mpg', 'ts', 'm2ts', '3gp']);
 const STORYBOARD_REFERENCE_EXTENSIONS = new Set(['json', 'csv', 'srt']);
-const STORY_TEXT_ACCEPT = '.txt,.md,.markdown';
-const STORYBOARD_TEXT_ACCEPT = '.txt,.md,.markdown,.json,.csv,.srt';
-const IMAGE_REFERENCE_ACCEPT = '.png,.jpg,.jpeg,.webp,.gif,image/*';
-const VIDEO_REFERENCE_ACCEPT = '.mp4,.mov,.webm,video/*';
+const STORY_TEXT_ACCEPT = '.txt,.md,.markdown,.csv,.json,.srt,.ass,.vtt,.log,.xml,.yaml,.yml,.rtf,.docx,.doc,.pdf,text/*,application/pdf';
+const STORYBOARD_TEXT_ACCEPT = `${STORY_TEXT_ACCEPT},.json,.csv,.srt`;
+const IMAGE_REFERENCE_ACCEPT = '.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff,.avif,.heic,.heif,image/*';
+const VIDEO_REFERENCE_ACCEPT = '.mp4,.mov,.webm,.mkv,.avi,.m4v,.wmv,.flv,.mpeg,.mpg,.ts,.m2ts,.3gp,video/*';
 const FIXED_PRODUCTION_FLOW: Array<{ label: string; skillName: string }> = [
   { label: '故事解析', skillName: 'story_intake' },
   { label: '短剧改编', skillName: 'plot_adaptation' },
@@ -244,6 +272,8 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
   const [checkpointAction, setCheckpointAction] = useState<CheckpointAction>(null);
   const [checkpointNotes, setCheckpointNotes] = useState('');
   const [checkpointNotice, setCheckpointNotice] = useState('');
+  const [rollbackConfirmSkill, setRollbackConfirmSkill] = useState<string | null>(null);
+  const [rollbackActionSkill, setRollbackActionSkill] = useState<string | null>(null);
   const [deleteConfirmProjectId, setDeleteConfirmProjectId] = useState<string | null>(null);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
@@ -271,6 +301,7 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
   );
   const productionFlow = useMemo(() => buildProductionFlow(job, tasks), [job, tasks]);
   const activeReview = useMemo(() => findActiveReview(job, tasks), [job, tasks]);
+  const rollbackCandidateSkill = useMemo(() => findLatestConfirmedReviewSkill(job, tasks), [job, tasks]);
   const uploadOptions = useMemo(() => buildUploadMenuOptions(job, project), [job, project]);
   const completedFlowCount = productionFlow.filter((item) => item.state === 'done').length;
   const progress = Math.round((completedFlowCount / FIXED_PRODUCTION_FLOW.length) * 100);
@@ -427,28 +458,37 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
   };
 
   const submitComposer = async () => {
-    const source = resolveSubmissionStorySource(draftText, composerAttachments, project);
-    const text = buildSubmissionStoryText(draftText, composerAttachments, project);
-    const currentLength = countStoryCharacters(text);
-
-    if (!source.text) {
-      setNotice('请先上传或输入剧本文本。参考图和视频只会作为补充信息，不会替代剧本正文。');
-      return;
-    }
-
-    if (currentLength < STORY_MIN_LENGTH || currentLength > STORY_MAX_LENGTH) {
-      setNotice(`剧本正文需要保持在 ${STORY_MIN_LENGTH}-${STORY_MAX_LENGTH} 个非空白字符之间，当前 ${currentLength}。`);
+    const hasPendingStoryFile = composerAttachments.some((attachment) => attachment.kind === 'storyText' && attachment.file);
+    if (!project && !hasPendingStoryFile) {
+      setNotice('请先通过加号上传剧本文本文件；输入框只填写制作要求。');
       return;
     }
 
     setComposerBusy(true);
-    setNotice('正在写入项目并启动生产任务。');
+    setNotice('正在上传解析附件并启动生产任务。');
 
     try {
-      const payload = buildProjectPayload(text, project);
-      const savedProject = project
-        ? await updateProject(project.id, payload)
-        : await createProject().then((created) => updateProject(created.id, payload));
+      const initialProject = project ?? (await createProject());
+      const uploadedAttachments = await uploadPendingComposerAttachments(initialProject.id, composerAttachments);
+      setComposerAttachments(uploadedAttachments);
+
+      const sourceProject = project ? initialProject : null;
+      const rawText = buildSubmissionStoryText(draftText, uploadedAttachments, sourceProject);
+      const text = fitStoryTextForProject(rawText);
+      const currentLength = countStoryCharacters(text);
+
+      if (!text) {
+        setNotice('文本附件已上传，但没有解析出可用于故事解析的正文；DOC/PDF/OCR 支持会在后续阶段继续补齐。');
+        return;
+      }
+
+      if (currentLength < STORY_MIN_LENGTH || currentLength > STORY_MAX_LENGTH) {
+        setNotice(`剧本正文需要保持在 ${STORY_MIN_LENGTH}-${STORY_MAX_LENGTH} 个非空白字符之间，当前 ${currentLength}。`);
+        return;
+      }
+
+      const payload = buildProjectPayload(text, initialProject);
+      const savedProject = await updateProject(initialProject.id, payload);
       setProject(savedProject);
       setActiveProjectId(savedProject.id);
       setMessages((current) => [
@@ -470,7 +510,7 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
       await loadProjectSummaries();
       setDraftText('');
       setComposerAttachments([]);
-      setNotice('生产任务已启动。');
+      setNotice('附件已上传解析，生产任务已启动。');
     } catch (error) {
       setNotice(error instanceof Error ? error.message : '启动生产任务失败。');
     } finally {
@@ -519,19 +559,9 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
         continue;
       }
 
-      if (kind === 'storyText') {
-        if (file.size > 2 * 1024 * 1024) {
-          skipped.push(`${file.name}（超过 2MB）`);
-          continue;
-        }
-
-        const text = (await file.text()).trim();
-        if (!text) {
-          skipped.push(`${file.name}（空文本）`);
-          continue;
-        }
-
-        accepted.push(createComposerAttachment(file, kind, text));
+      const limit = uploadLimitForKind(kind);
+      if (file.size > limit) {
+        skipped.push(`${file.name}（超过 ${formatFileSize(limit)}）`);
         continue;
       }
 
@@ -546,12 +576,40 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
     const referenceCount = accepted.length - textCount;
     const noticeParts = [
       accepted.length ? `已添加 ${accepted.length} 个附件` : '',
-      textCount ? `${textCount} 个文本将作为剧本来源` : '',
-      referenceCount ? `${referenceCount} 个参考文件仅记录文件信息` : '',
+      textCount ? `${textCount} 个文本将在开始生成前上传解析` : '',
+      referenceCount ? `${referenceCount} 个参考文件将在开始生成前上传解析` : '',
       skipped.length ? `未添加：${skipped.join('、')}` : '',
     ].filter(Boolean);
 
     setNotice(noticeParts.join('，') || '没有可添加的附件。');
+  };
+
+  const uploadPendingComposerAttachments = async (
+    projectId: string,
+    attachments: ComposerAttachment[],
+  ): Promise<ComposerAttachment[]> => {
+    const uploaded: ComposerAttachment[] = [];
+
+    for (const attachment of attachments) {
+      if (!attachment.file || attachment.assetId) {
+        uploaded.push(attachment);
+        continue;
+      }
+
+      try {
+        const response = await uploadProjectAsset(projectId, attachment.file, attachment.kind);
+        uploaded.push(applyUploadResponse(attachment, response));
+      } catch (error) {
+        uploaded.push({
+          ...attachment,
+          uploadStatus: 'failed',
+          message: error instanceof Error ? error.message : '上传解析失败',
+        });
+        throw error;
+      }
+    }
+
+    return uploaded;
   };
 
   const openSettingsPanel = (panel: Exclude<SettingsPanel, null>) => {
@@ -630,6 +688,97 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
     }
   };
 
+  const runRollbackAction = async (skillName: string, label: string) => {
+    if (!job) {
+      return;
+    }
+
+    setRollbackConfirmSkill(skillName);
+    const confirmed = window.confirm(`确认回退到「${label}」待审核？该步骤之后的所有任务输出会清空，并重新等待计算。`);
+    if (!confirmed) {
+      setRollbackConfirmSkill(null);
+      return;
+    }
+
+    setRollbackActionSkill(skillName);
+    setNotice(`正在回退「${label}」。`);
+
+    try {
+      const nextJob = await rollbackProductionJob(job.id, skillName, `用户回退到「${label}」待审核。`);
+      setJob(nextJob);
+      await refreshOutputs(nextJob.id, nextJob.projectId);
+      await loadProjectSummaries();
+      setCheckpointNotes('');
+      setNotice(`已回退到「${label}」待审核，下游步骤已重置。`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '回退失败。');
+    } finally {
+      setRollbackActionSkill(null);
+      setRollbackConfirmSkill(null);
+    }
+  };
+
+  const renderFlowStatus = (item: ProductionFlowItem, index: number) => {
+    const isFirstVisiblePending =
+      item.state === 'pending' &&
+      (index === 0 || productionFlow[index - 1].state !== 'pending') &&
+      !productionFlow.slice(0, index).some((candidate) => candidate.state === 'active' || candidate.state === 'review');
+
+    if (!job && index === 0) {
+      return <span className="flow-status-label">未开始</span>;
+    }
+
+    if (item.state === 'active') {
+      return <span className="flow-status-label active">进行中</span>;
+    }
+
+    if (item.state === 'review') {
+      return (
+        <button
+          className="flow-status-button review"
+          disabled={!canCheckpoint || checkpointAction !== null}
+          onClick={() => void runCheckpointAction(true)}
+          title="确认当前审核"
+          type="button"
+        >
+          待确认
+        </button>
+      );
+    }
+
+    if (item.state === 'done') {
+      if (!item.needsReview) {
+        return <span className="flow-status-label done">已完成</span>;
+      }
+
+      const canRollback = rollbackCandidateSkill === item.skillName;
+      return (
+        <button
+          className="flow-status-button confirmed"
+          disabled={!canRollback || rollbackActionSkill === item.skillName || rollbackConfirmSkill === item.skillName}
+          onClick={() => void runRollbackAction(item.skillName, item.label)}
+          title={canRollback ? '回退到当前步骤待审核' : '只能回退最近一个已确认审核步骤'}
+          type="button"
+        >
+          {rollbackActionSkill === item.skillName ? (
+            <Loader2 className="spin" size={13} />
+          ) : (
+            <>
+              <span className="normal-label">已确认</span>
+              <span className="hover-label">回退</span>
+            </>
+          )}
+        </button>
+      );
+    }
+
+    if (isFirstVisiblePending) {
+      return <span className="flow-status-label">未开始</span>;
+    }
+
+    return null;
+  };
+
   return (
     <div className="codex-workspace-shell">
       <aside className="workspace-sidebar" aria-label="历史项目">
@@ -642,7 +791,7 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
             <Search size={17} />
             <span>搜索</span>
           </button>
-          <button className="workspace-command-button" onClick={() => openSettingsPanel('providers')} type="button">
+          <button className="workspace-command-button" hidden onClick={() => openSettingsPanel('providers')} type="button">
             <SlidersHorizontal size={17} />
             <span>模型</span>
           </button>
@@ -710,8 +859,9 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
                 <span>个人账户</span>
               </button>
               <div className="settings-menu-separator" />
-              <button onClick={() => openSettingsPanel('providers')} type="button">
-                <Settings size={16} />
+              <button className="provider-menu-entry" onClick={() => openSettingsPanel('providers')} type="button">
+                <SlidersHorizontal size={16} />
+                <span className="provider-menu-label">模型</span>
                 <span>设置</span>
               </button>
               <button onClick={() => setNotice('当前版本未接入真实计费，暂无余额数据。')} type="button">
@@ -783,7 +933,8 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
                   <span className="composer-attachment-copy">
                     <strong>{attachment.name}</strong>
                     <span>
-                      {attachmentKindLabel(attachment.kind)} · {attachment.extension.toUpperCase() || '文件'} · {formatFileSize(attachment.size)}
+                      {attachmentKindLabel(attachment.kind)} · {attachment.extension.toUpperCase() || '文件'} · {formatFileSize(attachment.size)} ·{' '}
+                      {formatUploadStatus(attachment)}
                     </span>
                   </span>
                   <button
@@ -799,7 +950,7 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
             </div>
           )}
           <textarea
-            placeholder={composerAttachments.length || project ? '写下本次制作要求' : '粘贴剧本，或写下剧本正文和制作要求'}
+            placeholder={composerAttachments.length || project ? '写下本次制作要求' : '先用加号上传剧本文本，再写制作要求'}
             value={draftText}
             onChange={(event) => setDraftText(event.target.value)}
           />
@@ -885,18 +1036,21 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
           </div>
 
           <div className="fixed-flow-list" aria-label="固定生产流程">
-            {productionFlow.map((item) => (
+            {productionFlow.map((item, index) => (
               <div className={`fixed-flow-item ${item.state}`} key={item.skillName}>
                 <span className="fixed-flow-icon">
                   {item.state === 'done' ? (
                     <CheckCircle2 size={16} />
                   ) : item.state === 'review' ? (
                     <Clock3 size={16} />
+                  ) : item.state === 'active' ? (
+                    <Loader2 className="spin" size={16} />
                   ) : (
                     <Circle size={16} />
                   )}
                 </span>
                 <span>{item.label}</span>
+                {renderFlowStatus(item, index)}
               </div>
             ))}
           </div>
@@ -1812,6 +1966,28 @@ function buildSubmissionStoryText(
   return parts.join('\n\n').trim();
 }
 
+function fitStoryTextForProject(text: string): string {
+  const normalized = text.trim();
+  if (countStoryCharacters(normalized) <= STORY_MAX_LENGTH) {
+    return normalized;
+  }
+
+  let count = 0;
+  let end = 0;
+  for (const character of normalized) {
+    if (!/\s/.test(character)) {
+      count += 1;
+    }
+
+    end += character.length;
+    if (count >= STORY_MAX_LENGTH) {
+      break;
+    }
+  }
+
+  return normalized.slice(0, end).trim();
+}
+
 function formatReferenceAttachmentSummary(attachments: ComposerAttachment[]): string {
   const references = attachments.filter((attachment) => attachment.kind !== 'storyText');
   if (!references.length) {
@@ -1819,7 +1995,7 @@ function formatReferenceAttachmentSummary(attachments: ComposerAttachment[]): st
   }
 
   return [
-    '参考附件（仅记录文件信息，未读取媒体内容）：',
+    '参考附件（已上传到项目资产并做技术解析）：',
     ...references.map(
       (attachment) =>
         `- ${attachment.name}｜${attachmentKindLabel(attachment.kind)}｜${attachment.extension.toUpperCase() || '文件'}｜${formatFileSize(attachment.size)}`,
@@ -1857,8 +2033,32 @@ function createComposerAttachment(file: File, kind: ComposerAttachmentKind, text
     mimeType: file.type || 'application/octet-stream',
     size: file.size,
     kind,
+    file,
     text,
+    uploadStatus: 'pending',
   };
+}
+
+function applyUploadResponse(attachment: ComposerAttachment, response: ProjectAssetUploadResponse): ComposerAttachment {
+  return {
+    ...attachment,
+    assetId: response.id,
+    text: response.extractedText?.trim() || attachment.text,
+    uploadStatus: 'uploaded',
+    message: response.message,
+  };
+}
+
+function uploadLimitForKind(kind: ComposerAttachmentKind): number {
+  if (kind === 'imageReference') {
+    return IMAGE_UPLOAD_MAX_BYTES;
+  }
+
+  if (kind === 'videoReference') {
+    return VIDEO_UPLOAD_MAX_BYTES;
+  }
+
+  return TEXT_UPLOAD_MAX_BYTES;
 }
 
 function createAttachmentId(): string {
@@ -1884,6 +2084,18 @@ function attachmentKindLabel(kind: ComposerAttachmentKind): string {
   };
 
   return labels[kind];
+}
+
+function formatUploadStatus(attachment: ComposerAttachment): string {
+  if (attachment.uploadStatus === 'uploaded') {
+    return '已上传解析';
+  }
+
+  if (attachment.uploadStatus === 'failed') {
+    return '上传失败';
+  }
+
+  return '待上传解析';
 }
 
 function attachmentIcon(kind: ComposerAttachmentKind) {
@@ -1954,9 +2166,23 @@ function buildProductionFlow(job: ProductionJob | null, tasks: GenerationTaskRec
 
     return {
       ...item,
+      needsReview: Boolean(stage?.needsReview),
       state: doneByTask || doneByStage ? 'done' : reviewByStage || reviewByTask ? 'review' : activeByStage ? 'active' : 'pending',
     };
   });
+}
+
+function findLatestConfirmedReviewSkill(job: ProductionJob | null, tasks: GenerationTaskRecord[]): string | null {
+  if (!job) {
+    return null;
+  }
+
+  const reviewSkills = new Set(job.stages.filter((stage) => stage.needsReview).map((stage) => stage.skill));
+  return (
+    tasks
+      .filter((task) => task.status === 'completed' && reviewSkills.has(task.skillName))
+      .sort((left, right) => right.queueIndex - left.queueIndex)[0]?.skillName ?? null
+  );
 }
 
 function findActiveReview(job: ProductionJob | null, tasks: GenerationTaskRecord[]): ActiveReview | null {

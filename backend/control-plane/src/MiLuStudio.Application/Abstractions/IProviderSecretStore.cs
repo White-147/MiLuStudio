@@ -12,6 +12,8 @@ public interface IProviderSecretStore
         DateTimeOffset now,
         CancellationToken cancellationToken);
 
+    Task<string?> GetSecretAsync(string kind, CancellationToken cancellationToken);
+
     Task ClearAsync(string kind, DateTimeOffset now, CancellationToken cancellationToken);
 
     Task<ProviderSecretStoreStatusDto> GetStatusAsync(CancellationToken cancellationToken);

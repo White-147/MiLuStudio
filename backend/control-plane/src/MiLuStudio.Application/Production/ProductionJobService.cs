@@ -146,6 +146,33 @@ public sealed class ProductionJobService
         return ToDto(snapshot.Job, snapshot.Tasks);
     }
 
+    public async Task<ProductionJobDto?> RollbackAsync(
+        string jobId,
+        ProductionRollbackRequest request,
+        CancellationToken cancellationToken)
+    {
+        var snapshot = await LoadSnapshotAsync(jobId, cancellationToken);
+
+        if (snapshot is null)
+        {
+            return null;
+        }
+
+        var skillName = string.IsNullOrWhiteSpace(request.SkillName)
+            ? LatestCompletedReviewSkill(snapshot.Tasks)
+            : request.SkillName.Trim();
+
+        if (string.IsNullOrWhiteSpace(skillName))
+        {
+            throw new ProductionCommandValidationException("rollback requires a completed review skill.");
+        }
+
+        _stateMachine.RollbackToReview(snapshot.Job, snapshot.Tasks, skillName, _clock.Now, request.Notes);
+        await PersistAsync(snapshot, cancellationToken);
+
+        return ToDto(snapshot.Job, snapshot.Tasks);
+    }
+
     private async Task RetireActiveJobsAsync(
         string projectId,
         DateTimeOffset now,
@@ -165,6 +192,17 @@ public sealed class ProductionJobService
             activeJob.ErrorMessage = "已根据当前输入重新生成，新任务已取代该旧任务。";
             await _jobs.UpdateAsync(activeJob, cancellationToken);
         }
+    }
+
+    private static string? LatestCompletedReviewSkill(IReadOnlyList<GenerationTask> tasks)
+    {
+        return tasks
+            .Where(task => task.Status == GenerationTaskStatus.Completed)
+            .Select(task => new { Task = task, Stage = ProductionStageCatalog.FindBySkill(task.SkillName) })
+            .Where(item => item.Stage?.NeedsReview == true)
+            .OrderByDescending(item => item.Task.QueueIndex)
+            .Select(item => item.Task.SkillName)
+            .FirstOrDefault();
     }
 
     public async IAsyncEnumerable<ProductionJobEventDto> StreamEventsAsync(
