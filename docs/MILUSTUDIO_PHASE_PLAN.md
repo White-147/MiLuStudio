@@ -96,10 +96,18 @@ Environment check:
 
 ```text
 Current phase: Stage 23C
-Status: pending
-Goal: 继续 Stage 23B 之后的正式功能阶段：固化 Tesseract-compatible OCR runtime 安装和正向验证，继续 PDF rasterizer、DOC/PDF 深度解析、工作台详情展示、生产链路实际消费 asset analysis endpoint 和媒体派生策略回归。Stage 23B-P0/P1/P2/P3/P4/P5/P6 均为补丁阶段，不覆盖原任务。
+Status: in_progress_stage23c_p6_complete
+Goal: 继续 Stage 23B 之后的正式功能阶段：固化 Tesseract-compatible OCR runtime / Poppler PDF rasterizer 的后端边界与可恢复验证，同时继续 DOC/PDF 深度解析、工作台详情展示、生产链路实际消费 asset analysis endpoint 和媒体派生策略回归。Stage 23B-P0/P1/P2/P3/P4/P5/P6/P7/P8/P9 均为补丁阶段且已完成；Stage 23C-P0 已完成前端 upload-sessions 和工作台 asset analysis 消费，Stage 23C-P1 已补 OCR runtime 导入/安装脚本、preflight 细节和正向验证 wrapper，Stage 23C-P2 已让 Worker `story_intake` 实际消费上传故事文本资产解析结果，Stage 23C-P3 已补 Poppler PDF rasterizer 后端路径、导入脚本、preflight 检测项和缺 runtime 可恢复验证，Stage 23C-P4 已补 DOCX 结构化 ZIP/XML 解析与 `documentStructure` analysis endpoint 暴露，Stage 23C-P5 已把 PDF embedded text probe 升级为 `stage23c_pdf_embedded_text_probe`，可在后端 adapter 内解码简单 `/Filter /FlateDecode` stream 并记录 stream 统计，Stage 23C-P6 已让 `image_prompt_builder` / `video_prompt_builder` 通过 Worker 输入消费上传参考图 / 视频的 asset analysis 摘要。按最新要求，当前不再把本机缺少 `runtime\tesseract` / `runtime\poppler` 作为 Stage 23C 功能推进限制；外部离线包后续补齐后再执行 `-RequireRuntime` 正向验证。
 Next handoff owner: current / next session
 ```
+
+Stage 23C-P6 当前补充：
+
+- 2026-05-15 已完成复杂 PDF embedded text probe 补强：`FfmpegAssetTechnicalAnalyzer` 会在后端 adapter 内尝试解码简单 Flate 压缩 stream，parser metadata 记录 `streamCount`、`decodedStreamCount` 和 `failedStreamCount`。
+- `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1` 已新增压缩 PDF fixture，验证不依赖 Poppler / OCR runtime 也能生成文本切片和 analysis parser 详情。
+- 2026-05-15 已完成参考图 / 视频 asset analysis 消费扩展：上传 metadata 会记录可用于生产链路的 reference candidate 摘要；Worker 构造 `image_prompt_builder` / `video_prompt_builder` 输入时注入 `asset_analysis`，只包含 asset id、探测摘要、派生类型和边界标记，不暴露本地路径。
+- Python `image_prompt_builder` / `video_prompt_builder` schema、validator、executor 和 Stage 8 / Stage 9 tests 已接入可选 `asset_analysis`，输出中记录 uploaded reference summary，仍保持 provider=none、writes_files=false、uses_ffmpeg=false。
+- Runtime 策略已按最新要求调整：缺失 OCR / PDF 离线包不再阻塞当前功能阶段；后续拿到外部离线包后再跑 `Test-MiLuStudioStage23COcrRuntime.ps1 -RequireRuntime` 与 `Test-MiLuStudioStage23CPdfRasterizer.ps1 -RequireRuntime`。
 
 Stage 16 已完成，且已按当前 MVP 范围撤下许可证 / 激活码体验：
 
@@ -164,8 +172,19 @@ Stage 23B 已正式确认：
 8. 2026-05-15 已完成 Stage 23B-P4 工作台 UI 视觉轻量化：设置菜单、历史项目条目、开始生成按钮、设置弹窗、模型配置、依赖和诊断面板统一降低字重、按钮填充、边框、圆角和卡片重量；右侧进度卡片保持为当前基准。
 9. 2026-05-15 已完成 Stage 23B-P5 composer 与品牌栏细节收尾：缩小并弱化“麋鹿”logo / 字样，不改“项目”标题；制作要求输入框提高到多行高度；新项目必须添加故事文本附件后才启用生成；上传菜单展示文本 50 MB、图片 50 MB、视频 1 GB 的真实文件大小限制，不新增文本字数硬限制。
 10. 2026-05-15 已完成 Stage 23B-P6 侧栏与进度卡补丁：右侧进度卡顶部摘要去除重复状态文案，只保留完成计数；左侧项目栏支持桌面 / 移动端拖拽宽度、持久化宽度和 Codex 式完全收缩 / 展开。
-11. Stage 23C 回到原 Stage 23B 主线之后的正式功能阶段：继续 OCR runtime 固化、PDF rasterizer、DOC/PDF 深度解析、工作台详情展示、生产链路消费 analysis endpoint 和媒体派生策略回归。
-12. 后置安排：Stage 23D 做 provider dry-run / audit contract；Stage 24 做工作台高级编辑；正式证书到位后再做 signed release 回归。
+11. 2026-05-15 已完成 Stage 23B-P7 项目搜索和设置页收尾：搜索从刷新项目列表改为真实筛选；新项目保持空白草稿逻辑但补齐状态清理；模型配置和依赖配置清理开发态文案，并改善弹窗内布局与当前工作台 UI 的一致性。
+12. 2026-05-15 已完成 Stage 23B-P8 左侧交互补丁：项目行搜索改为行内展开，项目操作按钮默认隐藏并在 hover / focus 时出现，搜索态弱化隐藏新项目按钮，统一收缩 / 搜索 / 新项目按钮对齐，补齐设置和上传二级菜单外部点击 / Escape 取消，并收口设置按钮旧 UI 残留。
+    - 追加 P8 follow-up 已完成：修正项目区标题与空状态文本左对齐、品牌栏与收缩按钮纵向对齐、搜索态点击外部退出、设置入口文字 / 图标减重和侧栏收缩 / 展开动效。
+13. 2026-05-15 已完成 Stage 23B-P9 主题切换与 XiaoLouAI 方向轻度对齐：新增 Web 主题地基、本地存储和启动初始化；默认保持深色，新增浅色 token；左下设置上方新增“切换到浅色 / 切换到深色”；清理硬编码深色阴影、进度轨道和 provider 状态色；仍作为 UI 补丁阶段，不覆盖 Stage 23C。
+14. Stage 23C 前置检查已完成：Stage 23B-P9 后未发现仍需追加的 P 阶段任务；下一棒直接进入正式 Stage 23C，继续 OCR runtime 固化、PDF rasterizer、DOC/PDF 深度解析、工作台详情展示、生产链路消费 analysis endpoint 和媒体派生策略回归。
+15. 2026-05-15 已完成 Stage 23C-P0：前端上传已走 Control API upload-sessions / chunks / complete；工作台资产行已消费 `GET /api/projects/{projectId}/assets/{assetId}/analysis` 展示解析详情；暂停期间遗留的未接入 agent C# 骨架已移除。
+16. 2026-05-15 已完成 Stage 23C-P1：新增 Tesseract-compatible OCR runtime 离线导入/显式辅助下载脚本、runtime manifest、preflight tessdata / language 细节、依赖中心详情显示和正向 OCR 验证 wrapper；当前本机无 `runtime\tesseract`，正向 OCR 需先导入可控 runtime 后运行 `-RequireRuntime`。
+17. 2026-05-15 已完成 Stage 23C-P2：上传 metadata 新增 `productionInput.storyTextCandidate`，`ProductionSkillExecutionService` 在构造 `story_intake` 输入时优先读取最新 `story_text` 资产解析候选，缺失时回退 `story_inputs.original_text`；新增 `scripts\windows\Test-MiLuStudioStage23CAssetConsumption.ps1` 验证 Worker 实际消费 asset analysis 文本。
+18. 2026-05-15 已完成 Stage 23C-P3：`FfmpegAssetTechnicalAnalyzer` 在 PDF 无 embedded text 时会探测 Poppler `pdftoppm` 和 Tesseract runtime，runtime 可用时在后端 adapter 内 rasterize 页图并复用 OCR wrapper，缺 runtime 时记录结构化 `pdfRasterizer` / `ocr` 降级；新增 `Install-MiLuStudioPdfRasterizer.ps1`、`Test-MiLuStudioStage23CPdfRasterizer.ps1`、`ControlPlane:PdfRasterizer*` 配置和 preflight `pdf_rasterizer_runtime` 检测。当前本机无 `runtime\tesseract` / `runtime\poppler`，正向验证需导入 runtime 后运行 `-RequireRuntime`。
+19. 2026-05-15 已完成 Stage 23C-P4：DOCX 上传解析从简单 `<w:t>` 文本抽取升级为后端结构化 ZIP/XML 解析，记录段落、表格、页眉页脚、脚注 / 尾注 / 批注和 preview blocks；asset analysis response 新增 `documentStructure`，工作台资产详情 JSON 同步展示。
+20. 2026-05-15 已完成 Stage 23C-P5：PDF embedded text probe 升级为 `stage23c_pdf_embedded_text_probe`，可解码简单 Flate stream 并记录 stream 统计；缺 Poppler / OCR runtime 不再阻塞该路径。
+21. 2026-05-15 已完成 Stage 23C-P6：上传参考图 / 视频的 asset analysis 摘要已进入 `image_prompt_builder` / `video_prompt_builder` 输入；Python skill 只消费元数据摘要，不读取媒体、不执行 FFmpeg / OCR、不调用 provider。
+22. 后置安排：Stage 23D 做 provider dry-run / audit contract；Stage 24 做工作台高级编辑；正式证书到位后再做 signed release 回归。
 
 说明：本文件中 Stage 12-14 等历史阶段仍会保留 PostgreSQL 当时落地记录，作为归档上下文；当前和后续实现口径以 Stage 23B-P0 的 SQLite 路线为准。
 
@@ -1598,7 +1617,7 @@ Status: in_progress
 - 已盘点并继续沿用 `ProjectAssetUploadService` / `IProjectAssetFileStore` / `IAssetTechnicalAnalyzer` / `FfmpegAssetTechnicalAnalyzer` 分层边界。
 - `ProjectAssetUploadService` 已把 metadata stage 升级为 `stage23b_document_media_analysis` / `stage23b_asset_analysis_v1`，并记录上传分片策略契约、后端合并边界和 no-provider 标记。
 - `FfmpegAssetTechnicalAnalyzer` 已补文本 / DOCX / PDF 的 `contentBlocks` 与 `chunkManifest`；DOCX entry 路径已兼容 Windows ZIP 反斜杠。
-- PDF 已提供轻量嵌入文本探测；不可抽取文本时返回 `ocr_required`、warnings 和 unavailable chunk manifest，不让上传失败成裸异常。
+- PDF 已提供轻量嵌入文本探测；Stage 23C-P3 起不可抽取 embedded text 时会尝试后端 Poppler `pdftoppm` rasterizer，再把页图交给 OCR wrapper；缺 Poppler / Tesseract 或 OCR 无文本时返回结构化降级，不让上传失败成裸异常。
 - DOC 已返回 `parser_unavailable`、后端 converter runtime 建议路径和结构化降级，不在 UI / Electron 中隐藏 Office 自动化。
 - OCR 已作为后端 Tesseract-compatible runtime 调用路径接入：检查 `ControlPlane:OcrTesseractPath`、项目 `runtime\tesseract` 和 `D:\tools\tesseract`；图片上传在 runtime 可用时调用 CLI 并生成 `image_ocr` content blocks / chunk manifest，runtime 缺失时记录 `runtime_not_configured`。
 - 图片已通过后端 FFmpeg adapter 生成 `thumbnail.jpg` 和 `preview_1280.jpg`；视频已记录均匀抽帧 metadata，并尝试生成短 `review_proxy_720p.mp4`，均不生成最终成片。
@@ -1612,6 +1631,13 @@ Status: in_progress
 - `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1` 已补带文字 PNG OCR fixture：runtime 可用时要求 OCR 成功并生成 manifest；当前本机无 Tesseract runtime 时要求结构化降级通过。
 - Stage 23B-P0 已完成：默认 API / Worker / Desktop runtime 配置使用 SQLite；`MiLuStudio.Infrastructure` 已替换为 EF Core SQLite provider、SQLite repository、SQLite migration service 和 SQLite preflight service。
 - `GET /api/system/dependencies` 已提供依赖中心后端检测契约，返回 SQLite、storage、uploads、FFmpeg、OCR、Python runtime 和 skills root 状态。
+- Stage 23C-P0 已让 Web 上传实际消费 `upload-sessions` 分片 API，并在工作台中通过 asset analysis endpoint 展示 parser / OCR / chunk manifest / derivative summary。
+- Stage 23C-P1 已新增 `Install-MiLuStudioTesseract.ps1` 和 `Test-MiLuStudioStage23COcrRuntime.ps1`；后端 preflight 现在会显示 OCR executable、tessdata path、语言包状态和安装脚本，InMemory / SQLite 口径一致。
+- Stage 23C-P2 已让 production worker 消费上传资产解析结果：`ProjectAssetUploadService` 将可用故事文本写入 `productionInput.storyTextCandidate`，`story_intake` 输入优先使用最新 `story_text` 资产候选，再回退项目正文。
+- Stage 23C-P3 已新增 Poppler `pdftoppm` PDF rasterizer 后端调用路径、离线导入脚本、可恢复验证脚本、`ControlPlane:PdfRasterizer*` 配置、preflight `pdf_rasterizer_runtime` 检测，以及扫描 PDF rasterize -> OCR wrapper 的结构化降级路径。
+- Stage 23C-P4 已将 DOCX 升级为结构化 ZIP/XML 解析，并通过 asset analysis response 暴露 `documentStructure`。
+- Stage 23C-P5 已将 PDF embedded text probe 升级为 `stage23c_pdf_embedded_text_probe`，可解码简单 Flate stream 并记录 stream 统计。
+- Stage 23C-P6 已将上传参考图 / 视频的 asset analysis 摘要接入 `image_prompt_builder` / `video_prompt_builder`，保持 metadata-only、no-provider、no-local-path 边界。
 - Stage14 / Stage16 / Stage17 / Stage21 / Stage23B 验证脚本已改为临时 SQLite 数据库；Stage17 / Stage21 / Stage23B 脚本只清理本脚本 build output 下的 dotnet 进程。
 
 验收：
@@ -1625,6 +1651,9 @@ Status: in_progress
 - Desktop TypeScript build 通过。
 - Stage 23B 上传 / 解析验证脚本通过。
 - Stage 23B 分片上传验证脚本通过。
+- Stage 23C OCR runtime wrapper 在当前无 `runtime\tesseract` 时通过可恢复缺 runtime 路径；导入 runtime 后需使用 `-RequireRuntime` 跑正向 OCR。
+- Stage 23C PDF rasterizer wrapper 在当前无 `runtime\poppler` 时通过可恢复缺 runtime 路径；导入 Poppler + Tesseract 后需使用 `Test-MiLuStudioStage23CPdfRasterizer.ps1 -RequireRuntime` 做正向验证。
+- Stage 23C asset consumption 验证脚本通过：除故事文本资产外，参考图上传后也会进入 `image_prompt_builder.inputJson.asset_analysis`。
 - `git diff --check` 通过。
 - 上传 PDF / DOC / OCR 不可用场景不会失败成裸异常，而是返回结构化降级 metadata。
 - 文本切片 manifest 可在 `assets.metadata_json` 中记录，并可通过 Control API analysis endpoint 被后续链路稳定消费。

@@ -21,6 +21,32 @@ $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $resolvedRoot ".ms-playwright"
 $env:HF_HOME = Join-Path $resolvedRoot ".cache\huggingface"
 $env:TRANSFORMERS_CACHE = Join-Path $resolvedRoot ".cache\huggingface\transformers"
 $env:MILUSTUDIO_PYTHON = "D:\soft\program\Python\Python313\python.exe"
+$env:ControlPlane__OcrTesseractPath = Join-Path $resolvedRoot "runtime\tesseract\tesseract.exe"
+$pdfRasterizerCandidates = @(
+  (Join-Path $resolvedRoot "runtime\poppler\Library\bin\pdftoppm.exe"),
+  (Join-Path $resolvedRoot "runtime\poppler\bin\pdftoppm.exe")
+)
+$resolvedPdfRasterizer = $null
+foreach ($candidate in $pdfRasterizerCandidates) {
+  if (Test-Path -LiteralPath $candidate) {
+    $resolvedPdfRasterizer = $candidate
+    break
+  }
+}
+if ([string]::IsNullOrWhiteSpace($resolvedPdfRasterizer)) {
+  $resolvedPdfRasterizer = $pdfRasterizerCandidates[0]
+}
+
+$env:ControlPlane__PdfRasterizerPath = $resolvedPdfRasterizer
+$env:ControlPlane__PdfRasterizerDpi = "180"
+$env:ControlPlane__PdfRasterizerPageLimit = "3"
+
+$ocrTessdataPath = Join-Path $resolvedRoot "runtime\tesseract\tessdata"
+if (Test-Path -LiteralPath $ocrTessdataPath) {
+  $env:ControlPlane__OcrTessdataPath = $ocrTessdataPath
+} else {
+  Remove-Item Env:\ControlPlane__OcrTessdataPath -ErrorAction SilentlyContinue
+}
 
 @(
   $env:TMP,

@@ -127,13 +127,50 @@ public sealed class SqliteControlPlanePreflightService : IControlPlanePreflightS
             }));
 
         var ocrPath = ResolveOcrExecutablePath();
+        var ocrTessdataPath = ResolveOcrTessdataPath(ocrPath);
+        var ocrExecutableExists = File.Exists(ocrPath);
+        var ocrTessdataExists = Directory.Exists(ocrTessdataPath);
+        var ocrRuntimeReady = ocrExecutableExists && ocrTessdataExists;
         checks.Add(new(
             "ocr_runtime",
-            File.Exists(ocrPath) ? "ok" : "warning",
-            File.Exists(ocrPath)
-                ? "OCR runtime is available through the backend adapter."
-                : "OCR runtime is not ready; image OCR will use metadata fallback.",
-            new Dictionary<string, string> { ["tesseractPath"] = ocrPath }));
+            ocrRuntimeReady ? "ok" : "warning",
+            ocrRuntimeReady
+                ? "OCR runtime and tessdata are available through the backend adapter."
+                : ocrExecutableExists
+                    ? "OCR executable exists, but tessdata is not ready; image OCR will use structured fallback if invocation fails."
+                    : "OCR runtime is not ready; image OCR will use structured metadata fallback.",
+            new Dictionary<string, string>
+            {
+                ["tesseractPath"] = ocrPath,
+                ["tessdataPath"] = ocrTessdataPath,
+                ["tessdataAvailable"] = ocrTessdataExists ? "true" : "false",
+                ["languages"] = ResolveOcrLanguagesText(),
+                ["installScript"] = "scripts\\windows\\Install-MiLuStudioTesseract.ps1"
+            }));
+        if (!ocrRuntimeReady)
+        {
+            recommendations.Add("Install or import a Tesseract-compatible OCR runtime with scripts\\windows\\Install-MiLuStudioTesseract.ps1, including tessdata for eng and chi_sim when needed.");
+        }
+
+        var pdfRasterizerPath = ResolvePdfRasterizerPath();
+        var pdfRasterizerExists = File.Exists(pdfRasterizerPath);
+        checks.Add(new(
+            "pdf_rasterizer_runtime",
+            pdfRasterizerExists ? "ok" : "warning",
+            pdfRasterizerExists
+                ? "PDF rasterizer runtime is available through the backend adapter."
+                : "PDF rasterizer runtime is not ready; scanned PDF uploads will use structured fallback metadata.",
+            new Dictionary<string, string>
+            {
+                ["pdftoppmPath"] = pdfRasterizerPath,
+                ["dpi"] = _options.PdfRasterizerDpi.ToString(),
+                ["pageLimit"] = _options.PdfRasterizerPageLimit.ToString(),
+                ["installScript"] = "scripts\\windows\\Install-MiLuStudioPdfRasterizer.ps1"
+            }));
+        if (!pdfRasterizerExists)
+        {
+            recommendations.Add("Install or import a Poppler pdftoppm runtime with scripts\\windows\\Install-MiLuStudioPdfRasterizer.ps1 before validating scanned PDF OCR.");
+        }
 
         var pythonExists = File.Exists(_options.PythonExecutablePath);
         checks.Add(new(
@@ -195,9 +232,48 @@ public sealed class SqliteControlPlanePreflightService : IControlPlanePreflightS
     {
         if (!string.IsNullOrWhiteSpace(_options.OcrTesseractPath))
         {
-            return _options.OcrTesseractPath;
+            return Path.GetFullPath(_options.OcrTesseractPath.Trim());
         }
 
         return Path.Combine("D:\\code\\MiLuStudio", "runtime", "tesseract", "tesseract.exe");
+    }
+
+    private string ResolveOcrTessdataPath(string ocrExecutablePath)
+    {
+        if (!string.IsNullOrWhiteSpace(_options.OcrTessdataPath))
+        {
+            return Path.GetFullPath(_options.OcrTessdataPath.Trim());
+        }
+
+        return Path.Combine(Path.GetDirectoryName(ocrExecutablePath) ?? ".", "tessdata");
+    }
+
+    private string ResolveOcrLanguagesText()
+    {
+        return string.IsNullOrWhiteSpace(_options.OcrLanguages) ? "chi_sim+eng;eng" : _options.OcrLanguages;
+    }
+
+    private string ResolvePdfRasterizerPath()
+    {
+        var candidates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(_options.PdfRasterizerPath))
+        {
+            candidates.Add(_options.PdfRasterizerPath);
+        }
+
+        candidates.AddRange(
+        [
+            Path.Combine("D:\\code\\MiLuStudio", "runtime", "poppler", "Library", "bin", "pdftoppm.exe"),
+            Path.Combine("D:\\code\\MiLuStudio", "runtime", "poppler", "bin", "pdftoppm.exe"),
+            Path.Combine("D:\\tools", "poppler", "Library", "bin", "pdftoppm.exe"),
+            Path.Combine("D:\\tools", "poppler", "bin", "pdftoppm.exe")
+        ]);
+
+        var fullPaths = candidates
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => Path.GetFullPath(path.Trim()))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return fullPaths.FirstOrDefault(File.Exists) ?? fullPaths[0];
     }
 }

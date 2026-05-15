@@ -69,6 +69,7 @@ public sealed class ProjectAssetAnalysisService
             CloneNode(GetNode(technical, "text")),
             CloneNode(contentBlocks),
             CloneNode(chunkManifest),
+            CloneNode(GetNode(technical, "documentStructure")),
             CloneNode(GetNode(metadata, "limits")),
             BuildDerivativeSummary(metadata, technical),
             metadata is not null,

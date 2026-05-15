@@ -15,6 +15,7 @@ using Regex = global::System.Text.RegularExpressions.Regex;
 using RegexOptions = global::System.Text.RegularExpressions.RegexOptions;
 using TextEncoding = global::System.Text.Encoding;
 using XDocument = global::System.Xml.Linq.XDocument;
+using XElement = global::System.Xml.Linq.XElement;
 using ZipFile = global::System.IO.Compression.ZipFile;
 
 public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
@@ -25,8 +26,14 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
     private const int MaxChunkPreviewCharacters = 220;
     private const int MaxOcrTextCharacters = 40_000;
     private const int MaxOcrAttemptErrorCharacters = 1_200;
+    private const int MaxDocxStructurePreviewBlocks = 40;
+    private const int MaxDocxBlockPreviewCharacters = 180;
+    private const int MaxPdfDecodedStreamBytes = 4_000_000;
+    private const int MaxPdfStreamDecodeAttempts = 64;
     private const int ImagePreviewMaxWidth = 1_280;
     private const int VideoReviewProxySeconds = 6;
+    private const int DefaultPdfRasterizerDpi = 180;
+    private const int DefaultPdfRasterizerPageLimit = 3;
 
     private static readonly Regex PdfLiteralTextRegex = new(
         @"\((?<text>(?:\\.|[^\\)])*)\)\s*Tj",
@@ -48,6 +55,18 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
         @"<(?<hex>(?:[0-9A-Fa-f]\s*){2,})>",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
 
+    private static readonly Regex PdfStreamRegex = new(
+        @"(?<dictionary><<.*?>>)\s*stream(?<body>.*?)endstream",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+
+    private static readonly Regex PdfStreamLengthRegex = new(
+        @"/Length\s+(?<length>\d+)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex PdfFlateDecodeRegex = new(
+        @"/Filter\s*(?:\[[^\]]*)?/FlateDecode",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+
     private static readonly HashSet<string> PlainTextExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         "txt", "md", "markdown", "csv", "json", "srt", "ass", "vtt", "log", "xml", "yaml", "yml", "rtf"
@@ -67,6 +86,14 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
     [
         "D:\\code\\MiLuStudio\\runtime\\tesseract\\tesseract.exe",
         "D:\\tools\\tesseract\\tesseract.exe"
+    ];
+
+    private static readonly string[] DefaultPdfRasterizerCandidatePaths =
+    [
+        "D:\\code\\MiLuStudio\\runtime\\poppler\\Library\\bin\\pdftoppm.exe",
+        "D:\\code\\MiLuStudio\\runtime\\poppler\\bin\\pdftoppm.exe",
+        "D:\\tools\\poppler\\Library\\bin\\pdftoppm.exe",
+        "D:\\tools\\poppler\\bin\\pdftoppm.exe"
     ];
 
     private static readonly string[] DefaultOcrLanguages = ["chi_sim+eng", "eng"];
@@ -137,13 +164,14 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
         {
             try
             {
-                var text = ExtractDocxText(file.LocalPath);
-                var extractedText = string.IsNullOrWhiteSpace(text) ? null : Truncate(text, MaxExtractedTextCharacters);
+                var docx = ExtractDocxText(file.LocalPath);
+                var extractedText = string.IsNullOrWhiteSpace(docx.Text) ? null : Truncate(docx.Text, MaxExtractedTextCharacters);
                 metadata["parser"] = new Dictionary<string, object?>
                 {
-                    ["engine"] = "stage23b_docx_zip_xml_reader",
+                    ["engine"] = "stage23c_docx_zip_xml_structured_reader",
                     ["status"] = extractedText is null ? "empty_text" : "ok"
                 };
+                metadata["documentStructure"] = docx.StructureMetadata;
 
                 if (extractedText is null)
                 {
@@ -151,12 +179,12 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
                 }
                 else
                 {
-                    AddTextManifest(metadata, extractedText, "docx", "document_body", text.Length > extractedText.Length);
+                    AddTextManifest(metadata, extractedText, "docx_structured", "document_body", docx.Text.Length > extractedText.Length);
                 }
 
                 return new ProjectAssetTechnicalAnalysis(
                     extractedText is null ? "metadata_only" : "ok",
-                    extractedText is null ? "DOCX saved, but no body text was extracted." : "DOCX body parsed and Stage 23B chunk manifest generated.",
+                    extractedText is null ? "DOCX saved, but no structured text was extracted." : "DOCX structure parsed and Stage 23C chunk manifest generated.",
                     extractedText,
                     [],
                     metadata);
@@ -165,7 +193,7 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
             {
                 metadata["parser"] = new Dictionary<string, object?>
                 {
-                    ["engine"] = "stage23b_docx_zip_xml_reader",
+                    ["engine"] = "stage23c_docx_zip_xml_structured_reader",
                     ["status"] = "parser_failed",
                     ["message"] = Truncate(error.Message, 500)
                 };
@@ -186,29 +214,44 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
             var extractedText = string.IsNullOrWhiteSpace(pdf.Text) ? null : Truncate(pdf.Text, MaxExtractedTextCharacters);
             metadata["parser"] = new Dictionary<string, object?>
             {
-                ["engine"] = "stage23b_pdf_literal_text_probe",
+                ["engine"] = "stage23c_pdf_embedded_text_probe",
                 ["status"] = extractedText is null ? "ocr_required" : "ok",
                 ["textObjectCount"] = pdf.TextObjectCount,
+                ["streamCount"] = pdf.StreamCount,
+                ["decodedStreamCount"] = pdf.DecodedStreamCount,
+                ["failedStreamCount"] = pdf.FailedStreamCount,
                 ["warnings"] = pdf.Warnings
             };
-            metadata["ocr"] = extractedText is null
-                ? BuildOcrPlan(file, "runtime_not_configured", "pdf_rasterizer_not_configured")
-                : BuildOcrPlan(file, "not_required");
 
             if (extractedText is null)
             {
-                AddUnavailableChunkManifest(metadata, "pdf_text_not_found_ocr_required");
+                var rasterOcr = await AnalyzeScannedPdfOcrAsync(file, cancellationToken);
+                metadata["pdfRasterizer"] = rasterOcr.RasterizerMetadata;
+                metadata["ocr"] = rasterOcr.OcrMetadata;
+
+                if (rasterOcr.ExtractedText is null)
+                {
+                    AddUnavailableChunkManifest(metadata, rasterOcr.UnavailableChunkReason);
+                }
+                else
+                {
+                    extractedText = rasterOcr.ExtractedText;
+                    AddTextManifest(metadata, rasterOcr.ExtractedText, "pdf_raster_ocr", "document_body", rasterOcr.Truncated);
+                }
             }
             else
             {
+                metadata["ocr"] = BuildOcrPlan(file, "not_required");
                 AddTextManifest(metadata, extractedText, "pdf", "document_body", pdf.Text.Length > extractedText.Length);
             }
 
             return new ProjectAssetTechnicalAnalysis(
                 extractedText is null ? "metadata_only" : "ok",
                 extractedText is null
-                    ? "PDF saved. No embedded text was found by the local probe; OCR is recorded as required."
-                    : "PDF embedded text parsed and Stage 23B chunk manifest generated.",
+                    ? "PDF saved. No embedded text was found; backend PDF rasterizer/OCR fallback metadata was recorded."
+                    : metadata.ContainsKey("pdfRasterizer")
+                        ? "PDF scanned pages rasterized by the backend adapter and OCR chunk manifest generated."
+                        : "PDF embedded text parsed and Stage 23B chunk manifest generated.",
                 extractedText,
                 [],
                 metadata);
@@ -700,12 +743,182 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
                 false);
         }
 
+        return await RunOcrForPathAsync(
+            file,
+            file.LocalPath,
+            probe,
+            "image_ocr_runtime_failed_or_no_text",
+            cancellationToken);
+    }
+
+    private async Task<PdfRasterOcrResult> AnalyzeScannedPdfOcrAsync(
+        StoredProjectAssetFile file,
+        CancellationToken cancellationToken)
+    {
+        var rasterizerProbe = ResolvePdfRasterizerRuntime();
+        var ocrProbe = ResolveOcrRuntime();
+        var rasterizerMetadata = BuildPdfRasterizerMetadata(
+            rasterizerProbe,
+            ocrProbe,
+            rasterizerProbe.RuntimeAvailable ? "ready" : "runtime_not_configured",
+            invoked: false);
+        var ocrMetadata = BuildOcrMetadata(
+            file,
+            ocrProbe,
+            ocrProbe.RuntimeAvailable ? "waiting_for_pdf_rasterizer" : "runtime_not_configured",
+            invoked: false);
+
+        if (!rasterizerProbe.RuntimeAvailable || string.IsNullOrWhiteSpace(rasterizerProbe.ExecutablePath))
+        {
+            ocrMetadata = BuildOcrMetadata(
+                file,
+                ocrProbe,
+                ocrProbe.RuntimeAvailable ? "pdf_rasterizer_not_configured" : "runtime_not_configured",
+                invoked: false);
+            return new PdfRasterOcrResult(
+                rasterizerMetadata,
+                ocrMetadata,
+                null,
+                "pdf_rasterizer_not_configured",
+                false);
+        }
+
+        if (!ocrProbe.RuntimeAvailable || string.IsNullOrWhiteSpace(ocrProbe.ExecutablePath))
+        {
+            rasterizerMetadata["status"] = "ocr_runtime_not_configured";
+            return new PdfRasterOcrResult(
+                rasterizerMetadata,
+                ocrMetadata,
+                null,
+                "pdf_ocr_runtime_not_configured",
+                false);
+        }
+
+        var pageLimit = Math.Clamp(_options.PdfRasterizerPageLimit, 1, 12);
+        var dpi = Math.Clamp(_options.PdfRasterizerDpi, 72, 300);
+        var pageDirectory = Path.Combine(Path.GetDirectoryName(file.LocalPath) ?? ".", "analysis", "pdf-pages");
+        Directory.CreateDirectory(pageDirectory);
+
+        var outputPrefix = Path.Combine(pageDirectory, "page");
+        var rasterize = await RunToolAsync(
+            rasterizerProbe.ExecutablePath,
+            [
+                "-png",
+                "-r", dpi.ToString(CultureInfo.InvariantCulture),
+                "-f", "1",
+                "-l", pageLimit.ToString(CultureInfo.InvariantCulture),
+                file.LocalPath,
+                outputPrefix
+            ],
+            TimeSpan.FromSeconds(Math.Max(10, _options.AssetParseTimeoutSeconds)),
+            cancellationToken);
+
+        var pageImages = Directory.GetFiles(pageDirectory, "page-*.png")
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .Take(pageLimit)
+            .ToList();
+
+        rasterizerMetadata["status"] = rasterize.ExitCode == 0 && pageImages.Count > 0 ? "ok" : "failed";
+        rasterizerMetadata["invoked"] = true;
+        rasterizerMetadata["exitCode"] = rasterize.ExitCode;
+        rasterizerMetadata["stderr"] = Truncate(rasterize.Stderr, MaxOcrAttemptErrorCharacters);
+        rasterizerMetadata["dpi"] = dpi;
+        rasterizerMetadata["pageLimit"] = pageLimit;
+        rasterizerMetadata["generatedPageCount"] = pageImages.Count;
+
+        if (pageImages.Count == 0)
+        {
+            return new PdfRasterOcrResult(
+                rasterizerMetadata,
+                BuildOcrMetadata(file, ocrProbe, "waiting_for_pdf_rasterizer", invoked: false),
+                null,
+                "pdf_rasterizer_failed_or_no_pages",
+                false);
+        }
+
+        var pageSummaries = new List<Dictionary<string, object?>>();
+        var textParts = new List<string>();
+        var truncated = false;
+        for (var index = 0; index < pageImages.Count; index++)
+        {
+            var pageOcr = await RunOcrForPathAsync(
+                file,
+                pageImages[index],
+                ocrProbe,
+                "pdf_page_ocr_runtime_failed_or_no_text",
+                cancellationToken);
+            pageSummaries.Add(new Dictionary<string, object?>
+            {
+                ["pageNumber"] = index + 1,
+                ["status"] = pageOcr.Metadata.TryGetValue("status", out var status) ? status : "unknown",
+                ["language"] = pageOcr.Metadata.TryGetValue("language", out var language) ? language : null,
+                ["extractedTextLength"] = pageOcr.ExtractedText?.Length ?? 0,
+                ["unavailableReason"] = pageOcr.ExtractedText is null ? pageOcr.UnavailableChunkReason : null
+            });
+
+            if (!string.IsNullOrWhiteSpace(pageOcr.ExtractedText))
+            {
+                textParts.Add($"Page {index + 1}\n{pageOcr.ExtractedText}");
+                truncated |= pageOcr.Truncated;
+            }
+        }
+
+        rasterizerMetadata["pageOcr"] = pageSummaries;
+        var combinedText = string.Join("\n\n", textParts).Trim();
+        if (!ContainsTextSignal(combinedText))
+        {
+            rasterizerMetadata["status"] = "no_text";
+            var noTextOcrMetadata = BuildOcrMetadata(file, ocrProbe, "runtime_failed_or_no_text", invoked: true);
+            noTextOcrMetadata["source"] = "pdf_rasterizer";
+            noTextOcrMetadata["pageCount"] = pageImages.Count;
+            noTextOcrMetadata["pages"] = pageSummaries;
+            return new PdfRasterOcrResult(
+                rasterizerMetadata,
+                noTextOcrMetadata,
+                null,
+                "pdf_raster_ocr_text_not_found",
+                false);
+        }
+
+        var extractedText = Truncate(combinedText, MaxOcrTextCharacters);
+        var finalOcrMetadata = BuildOcrMetadata(file, ocrProbe, "ok", invoked: true);
+        finalOcrMetadata["source"] = "pdf_rasterizer";
+        finalOcrMetadata["pageCount"] = pageImages.Count;
+        finalOcrMetadata["extractedTextLength"] = extractedText.Length;
+        finalOcrMetadata["truncatedToAnalysisLimit"] = truncated || combinedText.Length > extractedText.Length;
+        finalOcrMetadata["pages"] = pageSummaries;
+
+        return new PdfRasterOcrResult(
+            rasterizerMetadata,
+            finalOcrMetadata,
+            extractedText,
+            "pdf_raster_ocr_text_not_found",
+            truncated || combinedText.Length > extractedText.Length);
+    }
+
+    private async Task<OcrAnalysisResult> RunOcrForPathAsync(
+        StoredProjectAssetFile file,
+        string inputPath,
+        OcrRuntimeProbe probe,
+        string unavailableChunkReason,
+        CancellationToken cancellationToken)
+    {
+        if (!probe.RuntimeAvailable || string.IsNullOrWhiteSpace(probe.ExecutablePath))
+        {
+            return new OcrAnalysisResult(
+                BuildOcrMetadata(file, probe, "runtime_not_configured", invoked: false),
+                null,
+                unavailableChunkReason,
+                false);
+        }
+
+        var executablePath = probe.ExecutablePath;
         var attempts = new List<Dictionary<string, object?>>();
         foreach (var language in probe.Languages)
         {
             var arguments = new List<string>
             {
-                file.LocalPath,
+                inputPath,
                 "stdout",
                 "--psm",
                 "6",
@@ -723,7 +936,7 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
                 ? null
                 : new Dictionary<string, string> { ["TESSDATA_PREFIX"] = probe.TessdataPath };
             var result = await RunToolAsync(
-                probe.ExecutablePath,
+                executablePath,
                 arguments,
                 TimeSpan.FromSeconds(Math.Max(5, _options.OcrTimeoutSeconds)),
                 cancellationToken,
@@ -759,7 +972,7 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
         return new OcrAnalysisResult(
             failedMetadata,
             null,
-            "image_ocr_runtime_failed_or_no_text",
+            unavailableChunkReason,
             false);
     }
 
@@ -799,6 +1012,61 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
             ["generationPayloadSent"] = false,
             ["modelProviderUsed"] = false
         };
+    }
+
+    private Dictionary<string, object?> BuildPdfRasterizerMetadata(
+        PdfRasterizerRuntimeProbe rasterizerProbe,
+        OcrRuntimeProbe ocrProbe,
+        string status,
+        bool invoked)
+    {
+        return new Dictionary<string, object?>
+        {
+            ["engine"] = "poppler_pdftoppm_backend_runtime",
+            ["status"] = status,
+            ["candidate"] = true,
+            ["runtimeAvailable"] = rasterizerProbe.RuntimeAvailable,
+            ["checkedPaths"] = rasterizerProbe.CheckedPaths,
+            ["ocrRuntimeAvailable"] = ocrProbe.RuntimeAvailable,
+            ["invoked"] = invoked,
+            ["dpi"] = Math.Clamp(_options.PdfRasterizerDpi, 72, 300),
+            ["pageLimit"] = Math.Clamp(_options.PdfRasterizerPageLimit, 1, 12),
+            ["backendAdapterOnly"] = true,
+            ["uiElectronFileAccess"] = false,
+            ["generationPayloadSent"] = false,
+            ["modelProviderUsed"] = false
+        };
+    }
+
+    private PdfRasterizerRuntimeProbe ResolvePdfRasterizerRuntime()
+    {
+        var paths = new List<string>();
+        if (!string.IsNullOrWhiteSpace(_options.PdfRasterizerPath))
+        {
+            paths.Add(_options.PdfRasterizerPath);
+        }
+
+        paths.AddRange(DefaultPdfRasterizerCandidatePaths);
+
+        var checkedPaths = paths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => Path.GetFullPath(path.Trim()))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(path => new Dictionary<string, object?>
+            {
+                ["path"] = path,
+                ["exists"] = File.Exists(path)
+            })
+            .ToList();
+        var executablePath = checkedPaths
+            .Where(candidate => candidate["exists"] is true)
+            .Select(candidate => candidate["path"] as string)
+            .FirstOrDefault();
+
+        return new PdfRasterizerRuntimeProbe(
+            executablePath is not null,
+            executablePath,
+            checkedPaths);
     }
 
     private OcrRuntimeProbe ResolveOcrRuntime()
@@ -898,27 +1166,73 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
 
     private static PdfTextExtractionResult ExtractPdfText(string path)
     {
-        var raw = TextEncoding.Latin1.GetString(File.ReadAllBytes(path));
+        var bytes = File.ReadAllBytes(path);
+        var raw = TextEncoding.Latin1.GetString(bytes);
         var parts = new List<string>();
-        var textObjectCount = 0;
+        var textObjectCount = AddPdfTextPartsFromSource(parts, raw);
+        var streamCount = 0;
+        var decodedStreamCount = 0;
+        var failedStreamCount = 0;
         var warnings = new List<string>
         {
-            "This is a lightweight embedded-text probe. Compressed streams, scanned pages and complex encodings still require a backend PDF/OCR runtime."
+            "This is a lightweight embedded-text probe. Stage 23C can decode simple Flate streams, but scanned pages and complex encodings still require backend PDF/OCR runtime support."
         };
 
-        foreach (global::System.Text.RegularExpressions.Match match in PdfLiteralTextRegex.Matches(raw))
+        foreach (global::System.Text.RegularExpressions.Match match in PdfStreamRegex.Matches(raw).Take(MaxPdfStreamDecodeAttempts))
+        {
+            streamCount++;
+            var dictionary = match.Groups["dictionary"].Value;
+            if (!PdfFlateDecodeRegex.IsMatch(dictionary))
+            {
+                continue;
+            }
+
+            var streamBytes = PreparePdfStreamBytes(match.Groups["body"].Value, dictionary);
+            if (TryDecodePdfFlateStream(streamBytes, out var decoded, out var failureMessage))
+            {
+                decodedStreamCount++;
+                textObjectCount += AddPdfTextPartsFromSource(parts, decoded);
+            }
+            else
+            {
+                failedStreamCount++;
+                warnings.Add($"Flate stream decode failed: {failureMessage}");
+            }
+        }
+
+        var totalStreams = PdfStreamRegex.Matches(raw).Count;
+        streamCount = Math.Max(streamCount, totalStreams);
+        if (totalStreams > MaxPdfStreamDecodeAttempts)
+        {
+            warnings.Add($"Only the first {MaxPdfStreamDecodeAttempts} PDF streams were considered for lightweight decoding.");
+        }
+
+        var text = string.Join("\n", parts.Distinct(StringComparer.Ordinal)).Trim();
+        if (CountNonWhitespace(text) < 20)
+        {
+            warnings.Add("No usable embedded text was found; OCR should be scheduled when runtime support is available.");
+            text = string.Empty;
+        }
+
+        return new PdfTextExtractionResult(text, textObjectCount, streamCount, decodedStreamCount, failedStreamCount, warnings);
+    }
+
+    private static int AddPdfTextPartsFromSource(List<string> parts, string source)
+    {
+        var textObjectCount = 0;
+        foreach (global::System.Text.RegularExpressions.Match match in PdfLiteralTextRegex.Matches(source))
         {
             textObjectCount++;
             AddPdfTextPart(parts, DecodePdfLiteralString(match.Groups["text"].Value));
         }
 
-        foreach (global::System.Text.RegularExpressions.Match match in PdfHexTextRegex.Matches(raw))
+        foreach (global::System.Text.RegularExpressions.Match match in PdfHexTextRegex.Matches(source))
         {
             textObjectCount++;
             AddPdfTextPart(parts, DecodePdfHexString(match.Groups["hex"].Value));
         }
 
-        foreach (global::System.Text.RegularExpressions.Match match in PdfArrayTextRegex.Matches(raw))
+        foreach (global::System.Text.RegularExpressions.Match match in PdfArrayTextRegex.Matches(source))
         {
             textObjectCount++;
             var array = match.Groups["array"].Value;
@@ -933,14 +1247,110 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
             }
         }
 
-        var text = string.Join("\n", parts).Trim();
-        if (CountNonWhitespace(text) < 20)
+        return textObjectCount;
+    }
+
+    private static byte[] PreparePdfStreamBytes(string streamBody, string dictionary)
+    {
+        var body = RemovePdfStreamBoundaryNewlines(streamBody);
+        var bytes = TextEncoding.Latin1.GetBytes(body);
+        var length = TryReadPdfStreamLength(dictionary);
+        if (length is > 0 && length.Value < bytes.Length)
         {
-            warnings.Add("No usable embedded text was found; OCR should be scheduled when runtime support is available.");
-            text = string.Empty;
+            return bytes.Take(length.Value).ToArray();
         }
 
-        return new PdfTextExtractionResult(text, textObjectCount, warnings);
+        return bytes;
+    }
+
+    private static string RemovePdfStreamBoundaryNewlines(string value)
+    {
+        if (value.StartsWith("\r\n", StringComparison.Ordinal))
+        {
+            value = value[2..];
+        }
+        else if (value.StartsWith('\n') || value.StartsWith('\r'))
+        {
+            value = value[1..];
+        }
+
+        if (value.EndsWith("\r\n", StringComparison.Ordinal))
+        {
+            return value[..^2];
+        }
+
+        if (value.EndsWith('\n') || value.EndsWith('\r'))
+        {
+            return value[..^1];
+        }
+
+        return value;
+    }
+
+    private static int? TryReadPdfStreamLength(string dictionary)
+    {
+        var match = PdfStreamLengthRegex.Match(dictionary);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        return int.TryParse(match.Groups["length"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var length)
+            ? length
+            : null;
+    }
+
+    private static bool TryDecodePdfFlateStream(byte[] streamBytes, out string decoded, out string failureMessage)
+    {
+        if (TryInflatePdfStream(streamBytes, useZLibHeader: true, out decoded, out failureMessage))
+        {
+            return true;
+        }
+
+        return TryInflatePdfStream(streamBytes, useZLibHeader: false, out decoded, out failureMessage);
+    }
+
+    private static bool TryInflatePdfStream(
+        byte[] streamBytes,
+        bool useZLibHeader,
+        out string decoded,
+        out string failureMessage)
+    {
+        decoded = string.Empty;
+        failureMessage = string.Empty;
+
+        try
+        {
+            using var input = new MemoryStream(streamBytes);
+            using var output = new MemoryStream();
+            using var inflater = useZLibHeader
+                ? (Stream)new global::System.IO.Compression.ZLibStream(input, global::System.IO.Compression.CompressionMode.Decompress)
+                : new global::System.IO.Compression.DeflateStream(input, global::System.IO.Compression.CompressionMode.Decompress);
+            var buffer = new byte[8192];
+            while (true)
+            {
+                var read = inflater.Read(buffer, 0, buffer.Length);
+                if (read <= 0)
+                {
+                    break;
+                }
+
+                output.Write(buffer, 0, read);
+                if (output.Length > MaxPdfDecodedStreamBytes)
+                {
+                    failureMessage = $"decoded stream exceeded {MaxPdfDecodedStreamBytes} bytes";
+                    return false;
+                }
+            }
+
+            decoded = TextEncoding.Latin1.GetString(output.ToArray());
+            return decoded.Length > 0;
+        }
+        catch (Exception error) when (error is InvalidDataException or IOException)
+        {
+            failureMessage = error.Message;
+            return false;
+        }
     }
 
     private static void AddPdfTextPart(List<string> parts, string value)
@@ -1113,26 +1523,320 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
         return await reader.ReadToEndAsync(cancellationToken);
     }
 
-    private static string ExtractDocxText(string path)
+    private static DocxExtractionResult ExtractDocxText(string path)
     {
         using var archive = ZipFile.OpenRead(path);
         var entries = archive.Entries
-            .Where(entry =>
-            {
-                var normalizedName = entry.FullName.Replace('\\', '/');
-                return normalizedName is "word/document.xml" || normalizedName.StartsWith("word/header") || normalizedName.StartsWith("word/footer");
-            })
+            .Where(entry => IsDocxStructuredTextPart(entry.FullName.Replace('\\', '/')))
+            .OrderBy(entry => GetDocxPartSortKey(entry.FullName.Replace('\\', '/')))
+            .ThenBy(entry => entry.FullName, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var parts = new List<string>();
+        var blocks = new List<DocxTextBlock>();
+        var sourceParts = new List<Dictionary<string, object?>>();
+        var warnings = new List<string>();
 
         foreach (var entry in entries)
         {
+            var normalizedName = entry.FullName.Replace('\\', '/');
+            var partType = GetDocxPartType(normalizedName);
+            var beforeCount = blocks.Count;
             using var entryStream = entry.Open();
             var document = XDocument.Load(entryStream);
-            parts.AddRange(document.Descendants().Where(element => element.Name.LocalName == "t").Select(element => element.Value));
+
+            if (partType == "document")
+            {
+                AddDocxDocumentBlocks(document, normalizedName, blocks, warnings);
+            }
+            else if (partType is "header" or "footer")
+            {
+                AddDocxHeaderFooterBlocks(document, normalizedName, partType, blocks);
+            }
+            else
+            {
+                AddDocxNoteBlocks(document, normalizedName, partType, blocks);
+            }
+
+            sourceParts.Add(new Dictionary<string, object?>
+            {
+                ["name"] = normalizedName,
+                ["type"] = partType,
+                ["blockCount"] = blocks.Count - beforeCount
+            });
         }
 
-        return string.Join("\n", parts.Where(part => !string.IsNullOrWhiteSpace(part))).Trim();
+        var text = string.Join(
+                "\n\n",
+                blocks.Select(block => block.Text).Where(part => !string.IsNullOrWhiteSpace(part)))
+            .Trim();
+        var preview = blocks
+            .Take(MaxDocxStructurePreviewBlocks)
+            .Select((block, index) => new Dictionary<string, object?>
+            {
+                ["id"] = $"docx_block_{index + 1:0000}",
+                ["kind"] = block.Kind,
+                ["sourcePart"] = block.SourcePart,
+                ["style"] = block.Style,
+                ["rowCount"] = block.RowCount,
+                ["cellCount"] = block.CellCount,
+                ["characterCount"] = CountNonWhitespace(block.Text),
+                ["preview"] = Truncate(CollapseWhitespace(block.Text), MaxDocxBlockPreviewCharacters)
+            })
+            .ToList();
+        var structure = new Dictionary<string, object?>
+        {
+            ["engine"] = "stage23c_docx_zip_xml_structured_reader",
+            ["status"] = string.IsNullOrWhiteSpace(text) ? "empty_text" : "ok",
+            ["sourcePartCount"] = sourceParts.Count,
+            ["sourceParts"] = sourceParts,
+            ["blockCount"] = blocks.Count,
+            ["paragraphCount"] = blocks.Count(block => block.Kind is "paragraph" or "header" or "footer" or "footnote" or "endnote" or "comment"),
+            ["tableCount"] = blocks.Count(block => block.Kind == "table"),
+            ["tableCellCount"] = blocks.Sum(block => block.CellCount ?? 0),
+            ["headerFooterBlockCount"] = blocks.Count(block => block.Kind is "header" or "footer"),
+            ["noteBlockCount"] = blocks.Count(block => block.Kind is "footnote" or "endnote" or "comment"),
+            ["previewBlocks"] = preview,
+            ["warnings"] = warnings.Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList(),
+            ["backendAdapterOnly"] = true,
+            ["uiElectronFileAccess"] = false,
+            ["generationPayloadSent"] = false,
+            ["modelProviderUsed"] = false
+        };
+
+        return new DocxExtractionResult(text, structure);
+    }
+
+    private static bool IsDocxStructuredTextPart(string normalizedName)
+    {
+        return normalizedName is "word/document.xml"
+            || normalizedName.StartsWith("word/header", StringComparison.OrdinalIgnoreCase)
+            || normalizedName.StartsWith("word/footer", StringComparison.OrdinalIgnoreCase)
+            || normalizedName is "word/footnotes.xml"
+            || normalizedName is "word/endnotes.xml"
+            || normalizedName is "word/comments.xml";
+    }
+
+    private static int GetDocxPartSortKey(string normalizedName)
+    {
+        if (normalizedName is "word/document.xml")
+        {
+            return 0;
+        }
+
+        if (normalizedName.StartsWith("word/header", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        if (normalizedName.StartsWith("word/footer", StringComparison.OrdinalIgnoreCase))
+        {
+            return 2;
+        }
+
+        if (normalizedName is "word/footnotes.xml")
+        {
+            return 3;
+        }
+
+        if (normalizedName is "word/endnotes.xml")
+        {
+            return 4;
+        }
+
+        return 5;
+    }
+
+    private static string GetDocxPartType(string normalizedName)
+    {
+        if (normalizedName is "word/document.xml")
+        {
+            return "document";
+        }
+
+        if (normalizedName.StartsWith("word/header", StringComparison.OrdinalIgnoreCase))
+        {
+            return "header";
+        }
+
+        if (normalizedName.StartsWith("word/footer", StringComparison.OrdinalIgnoreCase))
+        {
+            return "footer";
+        }
+
+        if (normalizedName is "word/footnotes.xml")
+        {
+            return "footnote";
+        }
+
+        if (normalizedName is "word/endnotes.xml")
+        {
+            return "endnote";
+        }
+
+        return "comment";
+    }
+
+    private static void AddDocxDocumentBlocks(
+        XDocument document,
+        string sourcePart,
+        List<DocxTextBlock> blocks,
+        List<string> warnings)
+    {
+        var body = document.Descendants().FirstOrDefault(element => element.Name.LocalName == "body");
+        if (body is null)
+        {
+            warnings.Add("word/document.xml did not expose a WordprocessingML body element; paragraph fallback was used.");
+            AddDocxParagraphBlocks(document.Descendants().Where(element => element.Name.LocalName == "p"), sourcePart, "paragraph", blocks);
+            return;
+        }
+
+        foreach (var element in body.Elements())
+        {
+            if (element.Name.LocalName == "p")
+            {
+                AddDocxParagraphBlock(element, sourcePart, "paragraph", blocks);
+            }
+            else if (element.Name.LocalName == "tbl")
+            {
+                AddDocxTableBlock(element, sourcePart, blocks);
+            }
+        }
+    }
+
+    private static void AddDocxHeaderFooterBlocks(
+        XDocument document,
+        string sourcePart,
+        string kind,
+        List<DocxTextBlock> blocks)
+    {
+        AddDocxParagraphBlocks(
+            document.Descendants().Where(element => element.Name.LocalName == "p" && !HasDocxAncestor(element, "tbl")),
+            sourcePart,
+            kind,
+            blocks);
+
+        foreach (var table in document.Descendants().Where(element => element.Name.LocalName == "tbl"))
+        {
+            AddDocxTableBlock(table, sourcePart, blocks);
+        }
+    }
+
+    private static void AddDocxNoteBlocks(
+        XDocument document,
+        string sourcePart,
+        string kind,
+        List<DocxTextBlock> blocks)
+    {
+        var containers = document.Descendants().Where(element => element.Name.LocalName == kind);
+        foreach (var container in containers)
+        {
+            var text = CollapseWhitespace(ExtractDocxElementText(container));
+            if (text.Length > 0)
+            {
+                blocks.Add(new DocxTextBlock(kind, sourcePart, null, text, null, null));
+            }
+        }
+    }
+
+    private static void AddDocxParagraphBlocks(
+        IEnumerable<XElement> paragraphs,
+        string sourcePart,
+        string kind,
+        List<DocxTextBlock> blocks)
+    {
+        foreach (var paragraph in paragraphs)
+        {
+            AddDocxParagraphBlock(paragraph, sourcePart, kind, blocks);
+        }
+    }
+
+    private static void AddDocxParagraphBlock(
+        XElement paragraph,
+        string sourcePart,
+        string kind,
+        List<DocxTextBlock> blocks)
+    {
+        var text = CollapseWhitespace(ExtractDocxElementText(paragraph));
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        blocks.Add(new DocxTextBlock(kind, sourcePart, GetDocxParagraphStyle(paragraph), text, null, null));
+    }
+
+    private static void AddDocxTableBlock(XElement table, string sourcePart, List<DocxTextBlock> blocks)
+    {
+        var rows = table
+            .Elements()
+            .Where(element => element.Name.LocalName == "tr")
+            .Select(row => row
+                .Elements()
+                .Where(cell => cell.Name.LocalName == "tc")
+                .Select(cell => CollapseWhitespace(ExtractDocxElementText(cell)))
+                .Where(text => text.Length > 0)
+                .ToList())
+            .Where(cells => cells.Count > 0)
+            .ToList();
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        var text = string.Join("\n", rows.Select(cells => string.Join(" | ", cells)));
+        blocks.Add(new DocxTextBlock(
+            "table",
+            sourcePart,
+            null,
+            text,
+            rows.Count,
+            rows.Sum(cells => cells.Count)));
+    }
+
+    private static string? GetDocxParagraphStyle(XElement paragraph)
+    {
+        var style = paragraph
+            .Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "pPr")
+            ?.Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "pStyle");
+        var value = style?.Attributes().FirstOrDefault(attribute => attribute.Name.LocalName == "val")?.Value;
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string ExtractDocxElementText(XElement element)
+    {
+        var builder = new global::System.Text.StringBuilder();
+        foreach (var descendant in element.Descendants())
+        {
+            switch (descendant.Name.LocalName)
+            {
+                case "t":
+                    builder.Append(descendant.Value);
+                    break;
+                case "tab":
+                    builder.Append('\t');
+                    break;
+                case "br":
+                case "cr":
+                    builder.Append('\n');
+                    break;
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool HasDocxAncestor(XElement? element, string ancestorLocalName, XElement? stopAt = null)
+    {
+        for (var current = element?.Parent; current is not null && current != stopAt; current = current.Parent)
+        {
+            if (current.Name.LocalName == ancestorLocalName)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static Dictionary<string, object?> BuildProbeSummary(string json)
@@ -1323,7 +2027,35 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
         return value.Length <= maxLength ? value : value[..maxLength];
     }
 
-    private sealed record PdfTextExtractionResult(string Text, int TextObjectCount, IReadOnlyList<string> Warnings);
+    private sealed record DocxExtractionResult(string Text, Dictionary<string, object?> StructureMetadata);
+
+    private sealed record DocxTextBlock(
+        string Kind,
+        string SourcePart,
+        string? Style,
+        string Text,
+        int? RowCount,
+        int? CellCount);
+
+    private sealed record PdfTextExtractionResult(
+        string Text,
+        int TextObjectCount,
+        int StreamCount,
+        int DecodedStreamCount,
+        int FailedStreamCount,
+        IReadOnlyList<string> Warnings);
+
+    private sealed record PdfRasterizerRuntimeProbe(
+        bool RuntimeAvailable,
+        string? ExecutablePath,
+        IReadOnlyList<Dictionary<string, object?>> CheckedPaths);
+
+    private sealed record PdfRasterOcrResult(
+        Dictionary<string, object?> RasterizerMetadata,
+        Dictionary<string, object?> OcrMetadata,
+        string? ExtractedText,
+        string UnavailableChunkReason,
+        bool Truncated);
 
     private sealed record OcrRuntimeProbe(
         bool RuntimeAvailable,

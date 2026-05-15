@@ -10,7 +10,9 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     storyboard = normalized["storyboard_director"]
     image_prompt_builder = normalized["image_prompt_builder"]
     image_generation = normalized["image_generation"]
+    asset_analysis = normalized["asset_analysis"]
     video_requests = build_video_requests(storyboard, image_prompt_builder, image_generation)
+    uploaded_reference_summary = build_uploaded_reference_summary(asset_analysis)
 
     data = {
         "project_id": storyboard["project_id"],
@@ -21,18 +23,24 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         "prompt_set_id": f"{storyboard['project_id']}:episode_{storyboard['episode_index']}:video_prompts",
         "video_requests": video_requests,
         "negative_prompt": merge_negative_prompt(image_prompt_builder),
-        "source_asset_manifest": build_source_asset_manifest(image_generation, video_requests),
+        "source_asset_manifest": build_source_asset_manifest(
+            image_generation,
+            video_requests,
+            uploaded_reference_summary,
+        ),
         "generation_plan": {
             "mode": "mock_ready",
             "provider": "none",
             "model": "none",
             "request_count": len(video_requests),
+            "uploaded_reference_asset_count": uploaded_reference_summary["total_reference_count"],
             "writes_files": False,
             "writes_database": False,
             "uses_ffmpeg": False,
             "notes": [
                 "Stage 9 only builds video prompt requests and does not call a video model.",
                 "Mock image assets are logical inputs; real files and adapters remain deferred.",
+                "Uploaded image and video references are consumed as backend metadata only.",
             ],
         },
         "review": {
@@ -198,6 +206,7 @@ def merge_negative_prompt(image_prompt_builder: dict[str, Any]) -> list[str]:
 def build_source_asset_manifest(
     image_generation: dict[str, Any],
     video_requests: list[dict[str, Any]],
+    uploaded_reference_summary: dict[str, Any],
 ) -> dict[str, Any]:
     by_shot = {
         request["shot_id"]: [source_image["asset_id"] for source_image in request["source_images"]]
@@ -213,6 +222,7 @@ def build_source_asset_manifest(
         "image_asset_count": len(image_generation.get("assets", [])),
         "by_shot": by_shot,
         "character_references": character_references,
+        "uploaded_reference_summary": uploaded_reference_summary,
         "source_manifest_writes_files": bool(image_generation.get("asset_manifest", {}).get("writes_files")),
         "source_manifest_writes_database": bool(image_generation.get("asset_manifest", {}).get("writes_database")),
         "writes_files": False,
@@ -220,5 +230,61 @@ def build_source_asset_manifest(
         "notes": [
             "All source image URIs are logical placeholders until a later asset adapter writes real files.",
             "Video prompt requests reference mock image assets but do not dereference or read them.",
+            "Uploaded media references remain behind the Control API and backend adapter boundary.",
         ],
     }
+
+
+def build_uploaded_reference_summary(asset_analysis: dict[str, Any]) -> dict[str, Any]:
+    image_references = [
+        reference
+        for reference in as_list(asset_analysis.get("image_references"))
+        if isinstance(reference, dict)
+    ]
+    video_references = [
+        reference
+        for reference in as_list(asset_analysis.get("video_references"))
+        if isinstance(reference, dict)
+    ]
+    derivative_kinds = sorted(
+        {
+            kind
+            for reference in [*image_references, *video_references]
+            for kind in as_list(reference.get("derivative_kinds"))
+            if isinstance(kind, str) and kind
+        }
+    )
+
+    return {
+        "schema_version": asset_analysis.get("schema_version", "not_provided"),
+        "source": asset_analysis.get("source", "not_provided"),
+        "media_access_policy": asset_analysis.get("media_access_policy", "backend_adapter_only"),
+        "image_reference_count": len(image_references),
+        "video_reference_count": len(video_references),
+        "total_reference_count": len(image_references) + len(video_references),
+        "image_asset_ids": [
+            reference["asset_id"]
+            for reference in image_references
+            if isinstance(reference.get("asset_id"), str) and reference["asset_id"]
+        ],
+        "video_asset_ids": [
+            reference["asset_id"]
+            for reference in video_references
+            if isinstance(reference.get("asset_id"), str) and reference["asset_id"]
+        ],
+        "derivative_kinds": derivative_kinds,
+        "video_frame_count": sum(
+            reference.get("video_frame_count", 0)
+            for reference in video_references
+            if isinstance(reference.get("video_frame_count", 0), int)
+        ),
+        "has_video_review_proxy": any(bool(reference.get("has_video_review_proxy")) for reference in video_references),
+        "local_paths_exposed": False,
+        "ui_electron_file_access": False,
+        "generation_payload_sent": False,
+        "model_provider_used": False,
+    }
+
+
+def as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []

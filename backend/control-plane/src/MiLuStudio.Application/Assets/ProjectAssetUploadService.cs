@@ -208,6 +208,26 @@ public sealed class ProjectAssetUploadService
                 generationPayloadSent = false,
                 modelProviderUsed = false
             },
+            productionInput = new
+            {
+                storyTextCandidate = kind == "story_text" && !string.IsNullOrWhiteSpace(analysis.ExtractedText)
+                    ? analysis.ExtractedText
+                    : null,
+                source = "asset_analysis_metadata",
+                usableAsStoryCandidate = kind == "story_text" && !string.IsNullOrWhiteSpace(analysis.ExtractedText),
+                imageReferenceCandidate = kind == "image_reference"
+                    ? BuildReferenceProductionCandidate(kind, analysis)
+                    : null,
+                videoReferenceCandidate = kind == "video_reference"
+                    ? BuildReferenceProductionCandidate(kind, analysis)
+                    : null,
+                usableAsImageReference = kind == "image_reference",
+                usableAsVideoReference = kind == "video_reference",
+                mediaAccessPolicy = "backend_adapter_only",
+                uiElectronFileAccess = false,
+                generationPayloadSent = false,
+                modelProviderUsed = false
+            },
             technical = analysis.Metadata,
             derivatives = analysis.DerivativePaths,
             limits = new
@@ -220,6 +240,173 @@ public sealed class ProjectAssetUploadService
                 videoCompressionPolicyRecorded = true
             }
         };
+    }
+
+    private static object BuildReferenceProductionCandidate(
+        string kind,
+        ProjectAssetTechnicalAnalysis analysis)
+    {
+        return new
+        {
+            kind,
+            source = "asset_analysis_media_metadata",
+            parseStatus = analysis.Status,
+            extractedTextLength = analysis.ExtractedText?.Length ?? 0,
+            derivativeSummary = BuildDerivativeProductionSummary(analysis),
+            probeSummary = GetMetadataObject(analysis.Metadata, "probeSummary"),
+            compressionPolicy = GetMetadataObject(analysis.Metadata, "compressionPolicy"),
+            ocr = BuildOcrProductionSummary(analysis),
+            thumbnail = BuildOperationProductionSummary(analysis, "thumbnail"),
+            imagePreview = BuildOperationProductionSummary(analysis, "imagePreview"),
+            frameExtraction = BuildFrameExtractionProductionSummary(analysis),
+            videoReviewProxy = BuildOperationProductionSummary(analysis, "videoReviewProxy"),
+            mediaAccessPolicy = "backend_adapter_only",
+            uiElectronFileAccess = false,
+            generationPayloadSent = false,
+            modelProviderUsed = false
+        };
+    }
+
+    private static object BuildDerivativeProductionSummary(ProjectAssetTechnicalAnalysis analysis)
+    {
+        var kinds = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (analysis.Metadata.TryGetValue("derivativeDetails", out var details) &&
+            details is IEnumerable<Dictionary<string, object?>> derivativeDetails)
+        {
+            foreach (var detail in derivativeDetails)
+            {
+                if (detail.TryGetValue("kind", out var kindValue) && kindValue is string kind && !string.IsNullOrWhiteSpace(kind))
+                {
+                    kinds.Add(kind);
+                }
+            }
+        }
+
+        return new
+        {
+            count = Math.Max(analysis.DerivativePaths.Count, kinds.Count),
+            kinds = kinds.ToArray(),
+            accessPolicy = "backend_adapter_only",
+            localPathsExposed = false
+        };
+    }
+
+    private static object BuildOcrProductionSummary(ProjectAssetTechnicalAnalysis analysis)
+    {
+        var ocr = GetMetadataObject(analysis.Metadata, "ocr");
+        return new
+        {
+            status = GetString(ocr, "status") ?? "not_recorded",
+            candidate = GetBool(ocr, "candidate") ?? false,
+            invoked = GetBool(ocr, "invoked") ?? false,
+            language = GetString(ocr, "language"),
+            extractedTextLength = analysis.ExtractedText?.Length ?? GetInt(ocr, "extractedTextLength") ?? 0,
+            uiElectronFileAccess = GetBool(ocr, "uiElectronFileAccess") ?? false,
+            modelProviderUsed = GetBool(ocr, "modelProviderUsed") ?? false
+        };
+    }
+
+    private static object? BuildOperationProductionSummary(
+        ProjectAssetTechnicalAnalysis analysis,
+        string key)
+    {
+        var operation = GetMetadataObject(analysis.Metadata, key);
+        if (operation is null)
+        {
+            return null;
+        }
+
+        return new
+        {
+            status = GetString(operation, "status") ?? "not_recorded",
+            generated = string.Equals(GetString(operation, "status"), "ok", StringComparison.OrdinalIgnoreCase),
+            kind = GetString(operation, "kind"),
+            maxWidth = GetInt(operation, "maxWidth"),
+            maxSeconds = GetInt(operation, "maxSeconds"),
+            originalPreserved = GetBool(operation, "originalPreserved"),
+            finalExportGenerated = GetBool(operation, "finalExportGenerated"),
+            localPathExposed = false
+        };
+    }
+
+    private static object? BuildFrameExtractionProductionSummary(ProjectAssetTechnicalAnalysis analysis)
+    {
+        var frameExtraction = GetMetadataObject(analysis.Metadata, "frameExtraction");
+        if (frameExtraction is null)
+        {
+            return null;
+        }
+
+        return new
+        {
+            status = GetString(frameExtraction, "status") ?? "not_recorded",
+            sampling = GetString(frameExtraction, "sampling"),
+            targetFrameCount = GetInt(frameExtraction, "targetFrameCount"),
+            actualFrameCount = GetInt(frameExtraction, "actualFrameCount") ?? 0,
+            intervalSeconds = GetInt(frameExtraction, "intervalSeconds"),
+            durationSeconds = GetDouble(frameExtraction, "durationSeconds"),
+            localFrameDirectoryExposed = false
+        };
+    }
+
+    private static IReadOnlyDictionary<string, object?>? GetMetadataObject(
+        IReadOnlyDictionary<string, object?> source,
+        string key)
+    {
+        return source.TryGetValue(key, out var value)
+            ? value as IReadOnlyDictionary<string, object?>
+            : null;
+    }
+
+    private static string? GetString(IReadOnlyDictionary<string, object?>? source, string key)
+    {
+        return source is not null &&
+            source.TryGetValue(key, out var value) &&
+            value is string text &&
+            !string.IsNullOrWhiteSpace(text)
+                ? text
+                : null;
+    }
+
+    private static int? GetInt(IReadOnlyDictionary<string, object?>? source, string key)
+    {
+        if (source is null || !source.TryGetValue(key, out var value) || value is null)
+        {
+            return null;
+        }
+
+        return value switch
+        {
+            int typed => typed,
+            long typed => checked((int)typed),
+            double typed => (int)typed,
+            _ => null
+        };
+    }
+
+    private static double? GetDouble(IReadOnlyDictionary<string, object?>? source, string key)
+    {
+        if (source is null || !source.TryGetValue(key, out var value) || value is null)
+        {
+            return null;
+        }
+
+        return value switch
+        {
+            double typed => typed,
+            int typed => typed,
+            long typed => typed,
+            _ => null
+        };
+    }
+
+    private static bool? GetBool(IReadOnlyDictionary<string, object?>? source, string key)
+    {
+        return source is not null &&
+            source.TryGetValue(key, out var value) &&
+            value is bool typed
+                ? typed
+                : null;
     }
 
     private static string NormalizeContentType(string value)

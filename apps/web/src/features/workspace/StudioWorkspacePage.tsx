@@ -12,6 +12,7 @@ import {
   LogOut,
   MessageSquarePlus,
   MonitorCog,
+  Moon,
   PackageCheck,
   PanelLeftClose,
   PanelLeftOpen,
@@ -22,6 +23,7 @@ import {
   Settings,
   SlidersHorizontal,
   Sparkles,
+  Sun,
   Trash2,
   UserCircle2,
   WalletCards,
@@ -36,6 +38,7 @@ import {
   approveProductionCheckpoint,
   createProject,
   deleteProject,
+  getProjectAssetAnalysis,
   getProductionJob,
   getProject,
   listProductionTasks,
@@ -51,6 +54,7 @@ import {
   uploadProjectAsset,
   watchProductionJob,
 } from '../../shared/api/controlPlaneClient';
+import { useTheme } from '../../shared/theme';
 import type {
   AuthState,
   GenerationTaskRecord,
@@ -58,6 +62,7 @@ import type {
   ProductionJob,
   ProductionJobEvent,
   ProductionStage,
+  ProjectAssetAnalysisResponse,
   ProjectAssetRecord,
   ProjectAssetUploadResponse,
   ProjectDetail,
@@ -280,12 +285,17 @@ function readStoredSidebarCollapsed(): boolean {
 }
 
 export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePageProps) {
+  const [theme, setTheme] = useTheme();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [job, setJob] = useState<ProductionJob | null>(null);
   const [tasks, setTasks] = useState<GenerationTaskRecord[]>([]);
   const [assets, setAssets] = useState<ProjectAssetRecord[]>([]);
+  const [selectedAsset, setSelectedAsset] = useState<ProjectAssetRecord | null>(null);
+  const [selectedAssetAnalysis, setSelectedAssetAnalysis] = useState<ProjectAssetAnalysisResponse | null>(null);
+  const [assetAnalysisLoading, setAssetAnalysisLoading] = useState(false);
+  const [assetAnalysisError, setAssetAnalysisError] = useState('');
   const [draftText, setDraftText] = useState('');
   const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
@@ -305,18 +315,36 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
   const [deleteConfirmProjectId, setDeleteConfirmProjectId] = useState<string | null>(null);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const [projectSearchOpen, setProjectSearchOpen] = useState(false);
+  const [projectSearchQuery, setProjectSearchQuery] = useState('');
   const [sidebarWidth, setSidebarWidth] = useState(readStoredSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readStoredSidebarCollapsed);
   const [sidebarDragging, setSidebarDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const projectSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const projectSearchRef = useRef<HTMLDivElement | null>(null);
+  const settingsMenuRef = useRef<HTMLDivElement | null>(null);
+  const uploadMenuRef = useRef<HTMLDivElement | null>(null);
   const uploadIntentRef = useRef<UploadMenuOption | null>(null);
 
+  const normalizedProjectSearchQuery = projectSearchQuery.trim().toLocaleLowerCase();
   const sortedProjects = useMemo(
-    () =>
-      [...projects].sort(
+    () => {
+      const orderedProjects = [...projects].sort(
         (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
-      ),
-    [projects],
+      );
+
+      if (!normalizedProjectSearchQuery) {
+        return orderedProjects;
+      }
+
+      return orderedProjects.filter((item) =>
+        [item.title, item.description, item.status, item.mode]
+          .filter(Boolean)
+          .some((value) => value.toLocaleLowerCase().includes(normalizedProjectSearchQuery)),
+      );
+    },
+    [normalizedProjectSearchQuery, projects],
   );
   const hasStoryTextAttachment = useMemo(
     () =>
@@ -350,19 +378,79 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
     .filter(Boolean)
     .join(' ');
   const workspaceShellStyle = { '--workspace-sidebar-width': `${sidebarWidth}px` } as CSSProperties;
+  const isDarkTheme = theme === 'dark';
+  const themeToggleLabel = isDarkTheme ? '切换到浅色' : '切换到深色';
+  const closeProjectSearch = useCallback(() => {
+    setProjectSearchOpen(false);
+    setProjectSearchQuery('');
+  }, []);
 
   useEffect(() => {
+    if (sidebarDragging) {
+      return;
+    }
+
     window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
-  }, [sidebarWidth]);
+  }, [sidebarDragging, sidebarWidth]);
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, sidebarCollapsed ? 'true' : 'false');
   }, [sidebarCollapsed]);
 
+  useEffect(() => {
+    if (projectSearchOpen) {
+      projectSearchInputRef.current?.focus();
+    }
+  }, [projectSearchOpen]);
+
+  useEffect(() => {
+    if (!settingsMenuOpen && !uploadMenuOpen && !projectSearchOpen) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (settingsMenuOpen && settingsMenuRef.current && !settingsMenuRef.current.contains(target)) {
+        setSettingsMenuOpen(false);
+      }
+
+      if (uploadMenuOpen && uploadMenuRef.current && !uploadMenuRef.current.contains(target)) {
+        setUploadMenuOpen(false);
+      }
+
+      if (projectSearchOpen && projectSearchRef.current && !projectSearchRef.current.contains(target)) {
+        closeProjectSearch();
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      setSettingsMenuOpen(false);
+      setUploadMenuOpen(false);
+      closeProjectSearch();
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [closeProjectSearch, projectSearchOpen, settingsMenuOpen, uploadMenuOpen]);
+
   const collapseSidebar = () => {
     setSidebarCollapsed(true);
     setSettingsMenuOpen(false);
     setUploadMenuOpen(false);
+    closeProjectSearch();
   };
 
   const expandSidebar = () => {
@@ -448,6 +536,9 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
       setJob(null);
       setTasks([]);
       setAssets([]);
+      setSelectedAsset(null);
+      setSelectedAssetAnalysis(null);
+      setAssetAnalysisError('');
       setSelectedTask(null);
       setStreamJobId(null);
       setDraftText('');
@@ -463,6 +554,9 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
     getProject(activeProjectId, controller.signal)
       .then(async (nextProject) => {
         setProject(nextProject);
+        setSelectedAsset(null);
+        setSelectedAssetAnalysis(null);
+        setAssetAnalysisError('');
         setDraftText('');
         setComposerAttachments([]);
         setUploadMenuOpen(false);
@@ -554,11 +648,39 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
 
   const startNewProject = () => {
     setActiveProjectId(null);
+    setProject(null);
+    setJob(null);
+    setTasks([]);
+    setAssets([]);
+    setSelectedAsset(null);
+    setSelectedAssetAnalysis(null);
+    setAssetAnalysisError('');
+    setMessages([]);
+    setSelectedTask(null);
+    setStreamJobId(null);
+    setLoadingProject(false);
     setDeleteConfirmProjectId(null);
+    setCheckpointAction(null);
+    setCheckpointNotes('');
+    setCheckpointNotice('');
+    setRollbackConfirmSkill(null);
+    setRollbackActionSkill(null);
     setDraftText('');
     setComposerAttachments([]);
     setUploadMenuOpen(false);
+    closeProjectSearch();
     setNotice('');
+  };
+
+  const toggleProjectSearch = () => {
+    if (projectSearchOpen) {
+      closeProjectSearch();
+      return;
+    }
+
+    setSettingsMenuOpen(false);
+    setUploadMenuOpen(false);
+    setProjectSearchOpen(true);
   };
 
   const submitComposer = async () => {
@@ -707,6 +829,26 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
     }
 
     return uploaded;
+  };
+
+  const openAssetAnalysis = async (asset: ProjectAssetRecord) => {
+    if (!project) {
+      return;
+    }
+
+    setSelectedAsset(asset);
+    setSelectedAssetAnalysis(null);
+    setAssetAnalysisError('');
+    setAssetAnalysisLoading(true);
+
+    try {
+      const analysis = await getProjectAssetAnalysis(project.id, asset.id);
+      setSelectedAssetAnalysis(analysis);
+    } catch (error) {
+      setAssetAnalysisError(error instanceof Error ? error.message : '资产解析详情加载失败。');
+    } finally {
+      setAssetAnalysisLoading(false);
+    }
   };
 
   const openSettingsPanel = (panel: Exclude<SettingsPanel, null>) => {
@@ -907,22 +1049,43 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
         </div>
 
         <div className="workspace-history">
-          <div className="workspace-section-label">
-            <span>项目</span>
+          <div
+            className={projectSearchOpen ? 'workspace-section-label search-open' : 'workspace-section-label'}
+            ref={projectSearchRef}
+          >
+            <div className="workspace-section-title">
+              {projectSearchOpen ? (
+                <input
+                  aria-label="搜索历史项目"
+                  className="workspace-project-search-input"
+                  onChange={(event) => setProjectSearchQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      closeProjectSearch();
+                    }
+                  }}
+                  placeholder="搜索项目"
+                  ref={projectSearchInputRef}
+                  value={projectSearchQuery}
+                />
+              ) : (
+                <span>项目</span>
+              )}
+            </div>
             <div className="workspace-section-actions">
               {loadingProjects && <Loader2 className="spin" size={14} />}
               <button
-                aria-label="搜索项目"
-                className="workspace-section-action"
-                onClick={() => void loadProjectSummaries()}
-                title="搜索"
+                aria-label={projectSearchOpen ? '关闭项目搜索' : '搜索项目'}
+                className="workspace-section-action search-action"
+                onClick={toggleProjectSearch}
+                title={projectSearchOpen ? '关闭搜索' : '搜索'}
                 type="button"
               >
                 <Search size={15} />
               </button>
               <button
                 aria-label="新项目"
-                className="workspace-section-action"
+                className="workspace-section-action new-project-action"
                 onClick={startNewProject}
                 title="新项目"
                 type="button"
@@ -967,12 +1130,30 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
               </div>
             ))}
             {!loadingProjects && sortedProjects.length === 0 && (
-              <p className="workspace-empty-copy">暂无项目</p>
+              <p className="workspace-empty-copy">
+                {normalizedProjectSearchQuery ? '没有匹配项目' : '暂无项目'}
+              </p>
             )}
           </div>
         </div>
 
-        <div className="workspace-settings-anchor">
+        <div className="workspace-theme-anchor">
+          <button
+            className="workspace-theme-button"
+            onClick={() => {
+              setSettingsMenuOpen(false);
+              setUploadMenuOpen(false);
+              setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'));
+            }}
+            title={themeToggleLabel}
+            type="button"
+          >
+            {isDarkTheme ? <Sun size={16} /> : <Moon size={16} />}
+            <span>{themeToggleLabel}</span>
+          </button>
+        </div>
+
+        <div className="workspace-settings-anchor" ref={settingsMenuRef}>
           {settingsMenuOpen && (
             <div className="workspace-settings-menu" role="menu">
               <div className="settings-menu-account">
@@ -1010,7 +1191,10 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
           )}
           <button
             className={settingsMenuOpen ? 'workspace-settings-button active' : 'workspace-settings-button'}
-            onClick={() => setSettingsMenuOpen((current) => !current)}
+            onClick={() => {
+              setUploadMenuOpen(false);
+              setSettingsMenuOpen((current) => !current);
+            }}
             type="button"
           >
             <Settings size={17} />
@@ -1113,12 +1297,15 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
                   uploadIntentRef.current = null;
                 }}
               />
-              <div className="composer-upload-anchor">
+              <div className="composer-upload-anchor" ref={uploadMenuRef}>
                 <button
                   aria-expanded={uploadMenuOpen}
                   aria-label="添加附件"
                   className="composer-upload-trigger"
-                  onClick={() => setUploadMenuOpen((open) => !open)}
+                  onClick={() => {
+                    setSettingsMenuOpen(false);
+                    setUploadMenuOpen((open) => !open);
+                  }}
                   title="添加附件"
                   type="button"
                 >
@@ -1273,11 +1460,11 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
                 );
               })}
               {assets.map((asset) => (
-                <button className="result-row asset-result-row" key={asset.id} onClick={() => setNotice(`产物路径：${asset.localPath}`)} type="button">
+                <button className="result-row asset-result-row" key={asset.id} onClick={() => void openAssetAnalysis(asset)} type="button">
                   <Folder className="result-file-icon" size={16} />
                   <span className="result-row-main">
                     <strong>{asset.kind}</strong>
-                    <small>{formatFileSize(asset.fileSize)}</small>
+                    <small>{formatFileSize(asset.fileSize)} · 解析详情</small>
                   </span>
                   <ChevronRight size={15} />
                 </button>
@@ -1307,6 +1494,20 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
         />
       )}
 
+      {selectedAsset && (
+        <AssetAnalysisPanel
+          asset={selectedAsset}
+          analysis={selectedAssetAnalysis}
+          error={assetAnalysisError}
+          loading={assetAnalysisLoading}
+          onClose={() => {
+            setSelectedAsset(null);
+            setSelectedAssetAnalysis(null);
+            setAssetAnalysisError('');
+          }}
+        />
+      )}
+
       {settingsPanel && (
         <SettingsPanelOverlay
           authState={authState}
@@ -1316,6 +1517,131 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
         />
       )}
     </div>
+  );
+}
+
+function AssetAnalysisPanel({
+  asset,
+  analysis,
+  error,
+  loading,
+  onClose,
+}: {
+  asset: ProjectAssetRecord;
+  analysis: ProjectAssetAnalysisResponse | null;
+  error: string;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="workspace-modal-backdrop">
+      <section className="task-preview-panel asset-analysis-panel" aria-label="资产解析详情">
+        <header className="modal-heading">
+          <div>
+            <p className="eyebrow">{analysis?.stage ?? asset.kind}</p>
+            <h2>{analysis?.originalFileName ?? asset.kind}</h2>
+          </div>
+          <button className="icon-button" onClick={onClose} type="button" aria-label="关闭">
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="task-preview-body">
+          <section className="task-summary-block">
+            <h3>基础信息</h3>
+            <div className="asset-analysis-grid">
+              <AssetAnalysisMetric label="类型" value={analysis?.kind ?? asset.kind} />
+              <AssetAnalysisMetric label="大小" value={formatFileSize(analysis?.fileSize ?? asset.fileSize)} />
+              <AssetAnalysisMetric label="MIME" value={analysis?.mimeType ?? asset.mimeType} />
+              <AssetAnalysisMetric label="创建时间" value={analysis?.createdAt ?? asset.createdAt} />
+              <AssetAnalysisMetric label="Schema" value={analysis?.analysisSchemaVersion ?? '未记录'} />
+              <AssetAnalysisMetric label="SHA-256" value={analysis?.sha256 ?? asset.sha256 ?? '未记录'} />
+            </div>
+          </section>
+
+          {loading && (
+            <section className="task-summary-block asset-analysis-loading">
+              <Loader2 className="spin" size={16} />
+              <span>正在读取解析详情</span>
+            </section>
+          )}
+
+          {error && (
+            <section className="task-summary-block">
+              <h3>加载失败</h3>
+              <p>{error}</p>
+            </section>
+          )}
+
+          {analysis && (
+            <>
+              <section className="task-summary-block">
+                <h3>边界状态</h3>
+                <div className="asset-analysis-grid compact">
+                  <AssetAnalysisMetric label="UI/Electron 读文件" value={formatNullableBoolean(analysis.boundary.uiElectronFileAccess)} />
+                  <AssetAnalysisMetric label="送入生成 Payload" value={formatNullableBoolean(analysis.boundary.generationPayloadSent)} />
+                  <AssetAnalysisMetric label="调用模型供应商" value={formatNullableBoolean(analysis.boundary.modelProviderUsed)} />
+                  <AssetAnalysisMetric label="后端适配器边界" value={formatNullableBoolean(analysis.boundary.backendAdapterOnly)} />
+                </div>
+              </section>
+
+              <section className="task-summary-block">
+                <h3>文本切片</h3>
+                <div className="asset-analysis-grid compact">
+                  <AssetAnalysisMetric label="状态" value={analysis.chunkManifestSummary.status} />
+                  <AssetAnalysisMetric label="策略" value={analysis.chunkManifestSummary.strategy} />
+                  <AssetAnalysisMetric label="切片数" value={String(analysis.chunkManifestSummary.totalChunks)} />
+                  <AssetAnalysisMetric label="可做故事输入" value={analysis.chunkManifestSummary.usableAsStoryCandidate ? '是' : '否'} />
+                </div>
+              </section>
+
+              <section className="task-summary-block">
+                <h3>OCR / 派生资产</h3>
+                <div className="asset-analysis-grid compact">
+                  <AssetAnalysisMetric label="OCR 状态" value={analysis.ocr.status} />
+                  <AssetAnalysisMetric label="运行时可用" value={analysis.ocr.runtimeAvailable ? '是' : '否'} />
+                  <AssetAnalysisMetric label="已执行 OCR" value={analysis.ocr.invoked ? '是' : '否'} />
+                  <AssetAnalysisMetric label="提取文本" value={`${analysis.ocr.extractedTextLength} 字符`} />
+                  <AssetAnalysisMetric label="派生数量" value={String(analysis.derivatives.count)} />
+                  <AssetAnalysisMetric label="访问策略" value={analysis.derivatives.accessPolicy} />
+                </div>
+                {analysis.derivatives.kinds.length > 0 && (
+                  <div className="asset-analysis-pill-list">
+                    {analysis.derivatives.kinds.map((kind) => (
+                      <span key={kind}>{kind}</span>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="task-summary-block">
+                <h3>结构化解析</h3>
+                <pre className="asset-analysis-json">
+                  {formatEditableJson({
+                    parse: analysis.parse,
+                    parser: analysis.parser,
+                    ocr: analysis.ocr,
+                    contentBlocks: analysis.contentBlocks,
+                    chunkManifest: analysis.chunkManifest,
+                    documentStructure: analysis.documentStructure,
+                    limits: analysis.limits,
+                  })}
+                </pre>
+              </section>
+            </>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function AssetAnalysisMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="asset-analysis-metric">
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </span>
   );
 }
 
@@ -2702,6 +3028,14 @@ function isEditableStructuredSkill(skillName: string): skillName is EditableStru
 
 function formatEditableJson(value: unknown): string {
   return JSON.stringify(value ?? {}, null, 2);
+}
+
+function formatNullableBoolean(value: boolean | null | undefined): string {
+  if (value === null || value === undefined) {
+    return '未记录';
+  }
+
+  return value ? '是' : '否';
 }
 
 function parseEditableJsonObject(value: string, label: string): JsonObjectValue {

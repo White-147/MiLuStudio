@@ -14,11 +14,17 @@ public sealed class ControlPlaneOptions
 
     public string FfmpegBinPath { get; set; } = "D:\\code\\MiLuStudio\\runtime\\ffmpeg\\bin";
 
-    public string OcrTesseractPath { get; set; } = string.Empty;
+    public string OcrTesseractPath { get; set; } = "D:\\code\\MiLuStudio\\runtime\\tesseract\\tesseract.exe";
 
     public string OcrTessdataPath { get; set; } = string.Empty;
 
     public string OcrLanguages { get; set; } = "chi_sim+eng;eng";
+
+    public string PdfRasterizerPath { get; set; } = "D:\\code\\MiLuStudio\\runtime\\poppler\\Library\\bin\\pdftoppm.exe";
+
+    public int PdfRasterizerDpi { get; set; } = 180;
+
+    public int PdfRasterizerPageLimit { get; set; } = 3;
 
     public int AssetParseTimeoutSeconds { get; set; } = 60;
 

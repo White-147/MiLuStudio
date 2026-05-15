@@ -10,7 +10,13 @@ def validate_input(payload: dict[str, Any]) -> dict[str, Any]:
     storyboard = unwrap_skill_data(payload, "storyboard_director", "storyboard_director", "image_prompt_builder")
     character_bible = unwrap_skill_data(payload, "character_bible", "character_bible", "image_prompt_builder")
     style_bible = unwrap_skill_data(payload, "style_bible", "style_bible", "image_prompt_builder")
+    asset_analysis = payload.get("asset_analysis", {})
     errors: list[str] = []
+
+    if asset_analysis is None:
+        asset_analysis = {}
+    elif not isinstance(asset_analysis, dict):
+        errors.append("asset_analysis must be an object when provided.")
 
     required_storyboard_fields = ["project_id", "episode_index", "title", "language", "aspect_ratio", "shots"]
     for field in required_storyboard_fields:
@@ -59,6 +65,7 @@ def validate_input(payload: dict[str, Any]) -> dict[str, Any]:
         "storyboard_director": storyboard,
         "character_bible": character_bible,
         "style_bible": style_bible,
+        "asset_analysis": asset_analysis,
     }
 
 
@@ -120,4 +127,3 @@ def validate_output(data: dict[str, Any]) -> dict[str, Any]:
         raise SkillValidationError("image_prompt_builder output validation failed.", errors)
 
     return data
-

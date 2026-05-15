@@ -9,6 +9,7 @@ import {
 import type {
   ProviderAdapterSettings,
   ProviderCostGuardrails,
+  ProviderPreflightCheck,
   ProviderSafetyStatus,
   ProviderSettingsPreflight,
   ProviderSettingsResponse,
@@ -32,6 +33,38 @@ const supplierLabels: Record<string, string> = {
   openai_compatible: 'OpenAI 兼容中转',
 };
 
+const capabilityLabels: Record<string, string> = {
+  character: '角色',
+  keyframe: '关键帧',
+  rewrite: '改写',
+  script: '脚本',
+  storyboard: '分镜',
+  story: '故事',
+  'style-reference': '风格参考',
+};
+
+const safetyModeLabels: Record<string, string> = {
+  connection_test_allowed_generation_blocked: '仅允许连接测试，生成保持关闭',
+  local_user_encrypted_metadata: '本地用户加密存储',
+  project_local_dpapi: '项目本地加密存储',
+  stage22_no_provider_calls: '生成调用关闭',
+  stage23_connection_test_only: '仅连接测试',
+  stage23_windows_dpapi: 'Windows 本地加密',
+};
+
+const providerPreflightLabels: Record<string, string> = {
+  secret_store: '本地密钥存储',
+  spend_guard: '成本保护',
+  provider_sandbox: '调用边界',
+};
+
+const providerStatusLabels: Record<string, string> = {
+  error: '异常',
+  ok: '正常',
+  skipped: '未启用',
+  warning: '待补齐',
+};
+
 type ConnectionTestState = {
   busy: boolean;
   ok: boolean | null;
@@ -49,7 +82,7 @@ export function ProviderSettingsPage() {
   const [clearApiKeys, setClearApiKeys] = useState<Record<string, boolean>>({});
   const [connectionTests, setConnectionTests] = useState<Record<string, ConnectionTestState>>({});
   const [loadState, setLoadState] = useState<LoadState>('loading');
-  const [message, setMessage] = useState('正在读取本地 provider 配置');
+  const [message, setMessage] = useState('正在读取模型配置');
 
   const preflight = settings?.preflight ?? emptyPreflight;
   const safety = settings?.safety ?? emptySafety;
@@ -66,9 +99,9 @@ export function ProviderSettingsPage() {
     try {
       const nextSettings = await getProviderSettings(signal);
       applySettings(nextSettings);
-      setMessage('本地 provider 配置已同步');
+      setMessage('模型配置已同步');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '读取 provider 配置失败');
+      setMessage(error instanceof Error ? error.message : '读取模型配置失败');
     } finally {
       setLoadState('idle');
     }
@@ -79,9 +112,9 @@ export function ProviderSettingsPage() {
     try {
       const nextPreflight = await getProviderSettingsPreflight();
       setSettings((current) => (current ? { ...current, preflight: nextPreflight } : current));
-      setMessage(nextPreflight.healthy ? 'Provider preflight 通过' : 'Provider preflight 需要处理');
+      setMessage(nextPreflight.healthy ? '模型预检通过' : '模型预检需要处理');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Provider preflight 失败');
+      setMessage(error instanceof Error ? error.message : '模型预检失败');
     } finally {
       setLoadState('idle');
     }
@@ -103,9 +136,9 @@ export function ProviderSettingsPage() {
         })),
       });
       applySettings(nextSettings);
-      setMessage('Provider 配置已保存，真实调用仍保持禁用');
+      setMessage('模型配置已保存，生成调用仍保持关闭');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '保存 provider 配置失败');
+      setMessage(error instanceof Error ? error.message : '保存模型配置失败');
     } finally {
       setLoadState('idle');
     }
@@ -184,12 +217,12 @@ export function ProviderSettingsPage() {
     <section className="provider-settings-view">
       <div className="provider-settings-heading">
         <div>
-          <p className="eyebrow">Stage 23</p>
-          <h1>Provider 前配置</h1>
+          <p className="eyebrow">本地模型服务</p>
+          <h1>模型配置</h1>
         </div>
         <div className="provider-settings-actions">
           <span className={preflight.healthy ? 'api-chip connected' : 'api-chip'}>
-            {preflight.healthy ? '占位预检通过' : '占位预检待处理'}
+            {preflight.healthy ? '预检通过' : '预检待处理'}
           </span>
           <button
             className="secondary-button"
@@ -217,7 +250,7 @@ export function ProviderSettingsPage() {
       <div className="provider-summary-strip">
         <div>
           <strong>{enabledCount}</strong>
-          <span>已启用 adapter</span>
+          <span>已启用接口</span>
         </div>
         <div>
           <strong>{draftCost.projectCostCapCny.toFixed(2)}</strong>
@@ -229,7 +262,7 @@ export function ProviderSettingsPage() {
         </div>
         <div>
           <strong>{safety.sandbox.providerCallsAllowed ? '开放' : '阻断'}</strong>
-          <span>真实 provider 调用</span>
+          <span>生成调用</span>
         </div>
       </div>
 
@@ -244,7 +277,7 @@ export function ProviderSettingsPage() {
                   </span>
                   <div>
                     <h2>{adapter.label}</h2>
-                    <p>{adapter.capabilityFlags.join(' / ')}</p>
+                    <p>{formatCapabilityFlags(adapter.capabilityFlags)}</p>
                   </div>
                 </div>
                 <label className="settings-toggle">
@@ -281,7 +314,7 @@ export function ProviderSettingsPage() {
                   />
                 </label>
                 <label className="wide-field">
-                  <span>Base URL</span>
+                  <span>接口地址</span>
                   <input
                     onChange={(event) => updateAdapter(adapter.kind, 'baseUrl', event.target.value)}
                     placeholder="https://relay.example.com/v1"
@@ -303,12 +336,12 @@ export function ProviderSettingsPage() {
               <div className="provider-secret-row">
                 <span>
                   {apiKeyInputs[adapter.kind]
-                    ? '待保存新 key'
+                    ? '待保存新密钥'
                     : adapter.apiKeyConfigured
                       ? `已配置 ${adapter.apiKeyPreview}`
-                      : '未配置 key'}
+                      : '未配置密钥'}
                 </span>
-                <small>{adapter.safety.secretStoreMode}</small>
+                <small>{formatSafetyMode(adapter.safety.secretStoreMode)}</small>
                 <button
                   className="ghost-button"
                   disabled={connectionTests[adapter.kind]?.busy || (!adapter.apiKeyConfigured && !apiKeyInputs[adapter.kind])}
@@ -383,19 +416,19 @@ export function ProviderSettingsPage() {
             </div>
             <div className="provider-safety-list">
               <SafetyRow
-                label="Secret Store"
+                label="密钥存储"
                 status={safety.secretStore.rawSecretPersistenceAllowed ? 'error' : 'ok'}
-                value={safety.secretStore.mode}
+                value={formatSafetyMode(safety.secretStore.mode)}
               />
               <SafetyRow
-                label="Spend Guard"
+                label="成本保护"
                 status={safety.spendGuard.enabled ? 'ok' : 'error'}
-                value={safety.spendGuard.enforcementMode}
+                value={formatSafetyMode(safety.spendGuard.enforcementMode)}
               />
               <SafetyRow
-                label="Sandbox"
+                label="调用边界"
                 status={safety.sandbox.providerCallsAllowed ? 'error' : 'ok'}
-                value={safety.sandbox.mode}
+                value={formatSafetyMode(safety.sandbox.mode)}
               />
             </div>
           </section>
@@ -409,10 +442,10 @@ export function ProviderSettingsPage() {
               {preflight.checks.map((check) => (
                 <article className="provider-preflight-row" key={check.kind}>
                   <div>
-                    <strong>{check.label}</strong>
-                    <p>{statusLabel(check.status)}</p>
+                    <strong>{formatProviderCheckLabel(check)}</strong>
+                    <p>{formatProviderCheckMessage(check)}</p>
                   </div>
-                  <span className={`status-pill ${check.status}`}>{check.status}</span>
+                  <span className={`status-pill ${check.status}`}>{formatProviderStatus(check.status)}</span>
                 </article>
               ))}
             </div>
@@ -423,32 +456,60 @@ export function ProviderSettingsPage() {
   );
 }
 
-function SafetyRow({ label, status, value }: { label: string; status: string; value: string }) {
+function SafetyRow({ label, status, value }: { label: string; status: 'ok' | 'error'; value: string }) {
   return (
     <article className="provider-safety-row">
       <div>
         <strong>{label}</strong>
         <p>{value}</p>
       </div>
-      <span className={`status-pill ${status}`}>{status}</span>
+      <span className={`status-pill ${status}`}>{formatProviderStatus(status)}</span>
     </article>
   );
 }
 
-function statusLabel(status: string): string {
-  if (status === 'ok') {
-    return '占位配置完整';
+function formatCapabilityFlags(flags: string[]): string {
+  return flags.map((flag) => capabilityLabels[flag] ?? flag).join(' / ');
+}
+
+function formatSafetyMode(value: string): string {
+  return safetyModeLabels[value] ?? value.replaceAll('_', ' ');
+}
+
+function formatProviderCheckLabel(check: ProviderPreflightCheck): string {
+  return providerPreflightLabels[check.kind] ?? check.label;
+}
+
+function formatProviderCheckMessage(check: ProviderPreflightCheck): string {
+  if (check.kind === 'secret_store') {
+    return '本地密钥只保存加密材料和引用信息，不在界面回显明文。';
   }
 
-  if (status === 'warning') {
-    return '已启用但配置不完整';
+  if (check.kind === 'spend_guard') {
+    return '单项目成本上限和重试次数会在后续真实调用前生效。';
   }
 
-  if (status === 'skipped') {
-    return '当前未启用';
+  if (check.kind === 'provider_sandbox') {
+    return '当前只允许连接测试，真实生成、媒体读取和 FFmpeg 调用仍保持关闭。';
   }
 
-  return '需要处理';
+  if (check.status === 'skipped') {
+    return '该接口未启用，当前继续使用本地确定性生产链路。';
+  }
+
+  if (check.status === 'warning') {
+    return '该接口已启用，但供应商、模型、接口地址或密钥仍需补齐。';
+  }
+
+  if (check.status === 'ok') {
+    return '连接测试所需的本地配置已齐备，真实生成调用仍保持关闭。';
+  }
+
+  return check.message;
+}
+
+function formatProviderStatus(status: string): string {
+  return providerStatusLabels[status] ?? status;
 }
 
 const emptyPreflight: ProviderSettingsPreflight = {

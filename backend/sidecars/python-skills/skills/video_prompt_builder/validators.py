@@ -10,7 +10,13 @@ def validate_input(payload: dict[str, Any]) -> dict[str, Any]:
     storyboard = unwrap_skill_data(payload, "storyboard_director", "storyboard_director", "video_prompt_builder")
     image_prompt_builder = unwrap_skill_data(payload, "image_prompt_builder", "image_prompt_builder", "video_prompt_builder")
     image_generation = unwrap_skill_data(payload, "image_generation", "image_generation", "video_prompt_builder")
+    asset_analysis = payload.get("asset_analysis", {})
     errors: list[str] = []
+
+    if asset_analysis is None:
+        asset_analysis = {}
+    elif not isinstance(asset_analysis, dict):
+        errors.append("asset_analysis must be an object when provided.")
 
     required_storyboard_fields = ["project_id", "episode_index", "title", "language", "aspect_ratio", "shots"]
     for field in required_storyboard_fields:
@@ -85,6 +91,7 @@ def validate_input(payload: dict[str, Any]) -> dict[str, Any]:
         "storyboard_director": storyboard,
         "image_prompt_builder": image_prompt_builder,
         "image_generation": image_generation,
+        "asset_analysis": asset_analysis,
     }
 
 

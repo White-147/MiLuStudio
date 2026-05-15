@@ -35,6 +35,7 @@ class Stage8ImagePipelineTests(unittest.TestCase):
                 "storyboard_director": storyboard_result,
                 "character_bible": character_result,
                 "style_bible": style_result,
+                "asset_analysis": stage23c_asset_analysis(),
             },
         )
         image_result = gateway.run("image_generation", {"image_prompt_builder": prompt_result})
@@ -53,11 +54,15 @@ class Stage8ImagePipelineTests(unittest.TestCase):
 
         self.assertEqual(prompts["project_id"], "demo-episode-01")
         self.assertEqual(prompts["generation_plan"]["provider"], "none")
+        self.assertEqual(prompts["generation_plan"]["uploaded_reference_asset_count"], 1)
         self.assertEqual(prompts["generation_plan"]["writes_files"], False)
         self.assertEqual(prompts["generation_plan"]["writes_database"], False)
         self.assertGreaterEqual(len(prompts["image_requests"]), expected_min_requests)
         self.assertEqual(prompts["checkpoint"]["required"], False)
         self.assertIn("wrong aspect ratio", prompts["negative_prompt"])
+        self.assertEqual(prompts["reference_strategy"]["uploaded_reference_summary"]["image_reference_count"], 1)
+        self.assertEqual(prompts["reference_strategy"]["uploaded_reference_summary"]["asset_ids"], ["asset_image_ref_001"])
+        self.assertEqual(prompts["reference_strategy"]["uploaded_reference_summary"]["local_paths_exposed"], False)
 
         request_asset_types = {request["asset_type"] for request in prompts["image_requests"]}
         self.assertIn("character_reference", request_asset_types)
@@ -125,6 +130,33 @@ def load_story_input() -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def stage23c_asset_analysis() -> dict[str, object]:
+    return {
+        "schema_version": "stage23c_reference_asset_analysis_v1",
+        "source": "control_api_asset_metadata",
+        "media_access_policy": "backend_adapter_only",
+        "ui_electron_file_access": False,
+        "generation_payload_sent": False,
+        "model_provider_used": False,
+        "image_reference_count": 1,
+        "video_reference_count": 0,
+        "image_references": [
+            {
+                "asset_id": "asset_image_ref_001",
+                "kind": "image_reference",
+                "derivative_count": 2,
+                "derivative_kinds": ["thumbnail", "image_preview"],
+                "has_thumbnail": True,
+                "has_image_preview": True,
+                "local_paths_exposed": False,
+                "ui_electron_file_access": False,
+                "generation_payload_sent": False,
+                "model_provider_used": False,
+            }
+        ],
+        "video_references": [],
+    }
+
+
 if __name__ == "__main__":
     unittest.main()
-

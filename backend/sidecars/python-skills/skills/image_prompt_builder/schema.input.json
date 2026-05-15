@@ -17,7 +17,10 @@
     "style_bible": {
       "type": "object",
       "description": "A successful style_bible runtime envelope for the same project and episode."
+    },
+    "asset_analysis": {
+      "type": "object",
+      "description": "Optional Stage 23C backend asset-analysis summary for uploaded image reference assets."
     }
   }
 }
-

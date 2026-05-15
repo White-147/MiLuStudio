@@ -4041,3 +4041,530 @@ Verification:
 Next phase:
 
 - Stage 23C。
+
+### 2026-05-15 Stage 23B-P7 项目搜索与设置页收尾（开始）
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P7 follow-up UI polish。
+
+Trigger:
+
+- 用户确认搜索入口当前只刷新项目列表，应改为真实搜索；新项目逻辑大体保留，不需要反复点击生成多个空项目，但可以补齐切回空白草稿时的状态清理。模型配置和依赖配置需要继续保证后端对接可用，同时清理过大的弹窗感、开发态文案和与当前整体 UI 不一致的问题。
+
+Planned action:
+
+- 将项目搜索图标改为真实搜索入口，提供查询输入并过滤左侧历史项目列表。
+- 新项目入口继续只回到空白草稿态，不立即创建数据库项目；补齐 project / job / tasks / assets / messages / selection 等 UI 状态清理，避免残留。
+- 模型配置和依赖配置仍只通过 Control API / DTO 消费后端状态，不让 Web / Electron 触碰 SQLite、文件系统、FFmpeg 或 OCR。
+- 清理 Provider / Dependency 设置页中的 Stage、provider、Secret Store、Spend Guard、SQLite Schema 等开发态展示文案，改为用户可理解的模型服务、本地密钥、成本保护、本地数据库、数据库结构等表达。
+- 调整设置弹窗和设置页内部布局，优先保证无横向滚动、控件可用、视觉与当前工作台保持统一；深浅色切换和 XiaoLouAI 配色对齐后续改为 Stage 23B-P9 单独推进。
+
+Next phase:
+
+- Stage 23C 主线继续顺延；Stage 23B-P8 先处理左侧栏交互补丁，深浅色切换和整体配色对齐顺延到 Stage 23B-P9。
+
+### 2026-05-15 Stage 23B-P7 项目搜索与设置页收尾（完成）
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P7 follow-up UI polish。
+
+Action:
+
+- 项目区“搜索”图标从刷新项目列表改为真实搜索入口：展开轻量搜索框，按项目标题、描述、状态和模式过滤左侧历史项目列表，Esc 或关闭按钮可清空并退出搜索。
+- “新项目”入口继续只切回空白草稿态，不立即创建数据库项目；补齐 project / job / tasks / assets / messages / selectedTask / stream / checkpoint / rollback 等 UI 状态清理，避免从旧项目残留到新草稿。
+- 模型配置页清理 Stage / provider / Secret Store / Spend Guard / Sandbox 等开发态文案，改为模型服务、接口、密钥存储、成本保护和调用边界等用户侧表达；真实生成调用仍保持关闭，只允许连接测试。
+- 依赖页清理 SQLite Schema / Storage / Uploads 等原始技术标签，改为本地数据库、数据库结构、存储目录、上传目录、Python 运行时和技能目录等展示文案，并映射常见英文后端消息。
+- 设置弹窗维持弹窗形态但收敛宽度、改为纵向滚动、禁止横向滚动；模型 / 依赖内容改为单列主布局和弹窗内可换行的辅助面板，视觉继续跟随 Stage 23B-P4/P5/P6 的轻量化工作台风格。
+
+Verification:
+
+- `D:\soft\program\nodejs\npm.ps1 run build`：通过。
+- Source check：通过；当前源码包含 `workspace-project-search`、`toggleProjectSearch`、`formatProviderCheckMessage` 和 `formatDependencyMessage`，模型 / 依赖设置源码中已无 `Provider 前配置`、`Secret Store`、`Spend Guard`、`SQLite Schema` 等直接展示文案。
+- `git diff --check`：通过，仅输出 LF/CRLF 换行提示。
+
+Next phase:
+
+- Stage 23B-P8：左侧项目行搜索交互、按钮对齐、菜单外部点击取消和设置按钮 UI 残留收口。
+- Stage 23B-P9：深浅色切换和 XiaoLouAI 方向的整体配色 / 视觉对齐。
+- Stage 23C 主线继续顺延。
+
+### 2026-05-15 Stage 23B-P8 左侧交互与浮层取消收尾（开始）
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P8 follow-up UI polish。
+
+Trigger:
+
+- 用户指出 P7 搜索点击后的独立搜索框很丑，应改为项目标题行内展开搜索；搜索态新项目按钮需要弱化隐藏；收缩按钮、新项目按钮和搜索按钮需要对齐；项目行操作按钮参考 Codex 逻辑默认隐藏，hover / focus 项目行时显示。同时设置二级菜单和添加文件菜单当前只能原位点击关闭，需要补齐点击外部和 Escape 取消逻辑；设置按钮仍有旧 UI 残留。
+
+Planned action:
+
+- 将项目标题行搜索改为行内展开，复用 P7 的真实过滤逻辑。
+- 项目操作按钮默认隐藏，项目行 hover / focus-within 时显示；搜索态隐藏新项目按钮，搜索按钮随输入框右移。
+- 统一侧栏收缩、项目搜索和新项目按钮的右侧对齐、尺寸、透明度、hover / focus 状态。
+- 为设置菜单、composer 上传菜单和工作台内类似轻浮层补齐 outside click 与 Escape 关闭；设置弹窗本身不做外部点击误关闭。
+- 轻量化左下设置按钮残留样式，使其与当前侧栏项目行和图标按钮保持一致。
+
+Next phase:
+
+- Stage 23B-P9：深浅色切换和 XiaoLouAI 方向的整体配色 / 视觉对齐。
+- Stage 23C 主线继续顺延。
+
+### 2026-05-15 Stage 23B-P8 左侧交互与浮层取消收尾（完成）
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P8 follow-up UI polish。
+
+Action:
+
+- 项目标题行搜索改为行内展开：点击搜索后“项目”文本变为搜索输入框，复用 P7 的真实项目过滤逻辑；搜索态新项目按钮弱化隐藏，搜索按钮留在右侧作为关闭 / 清空搜索入口。
+- 项目行操作按钮默认隐藏，hover 或 focus 项目标题行时淡入显示，贴近 Codex 项目行的轻量交互。
+- 统一侧栏收缩按钮、项目搜索按钮和新项目按钮的尺寸、右侧对齐、透明度与 hover / focus 状态。
+- 为左下设置菜单和 composer 加号上传菜单补齐点击外部关闭与 Escape 关闭；设置配置弹窗保持显式关闭，避免误点丢失编辑上下文。
+- 左下设置按钮从旧的大块按钮收口为轻量按钮，减少固定底部区域的粗重感。
+
+Verification:
+
+- `D:\soft\program\nodejs\npm.ps1 run build`：通过。
+- Source check：通过；当前源码包含 `settingsMenuRef`、`uploadMenuRef`、`workspace-project-search-input`、`search-open`、`new-project-action` 和菜单 `pointerdown` / `Escape` 关闭逻辑。
+- `git diff --check`：通过，仅输出 LF/CRLF 换行提示。
+
+Next phase:
+
+- Stage 23B-P9：深浅色切换和 XiaoLouAI 方向的整体配色 / 视觉对齐。
+
+### 2026-05-15 Stage 23B-P8 follow-up 对齐与搜索退出修正（开始）
+
+Scope:
+
+- 修正左侧项目区“项目”和“暂无项目”的文本左边缘不一致问题。
+- 修正左侧品牌栏 logo / “麋鹿”与收缩按钮纵向不齐的问题。
+- 搜索态补齐点击项目行之外区域时自动退出，并保持现有行内搜索交互。
+- 左下设置入口恢复为 Codex 式底部行视觉，重点调整“设置”文本与当前 UI 的一致性，不改变设置功能入口。
+
+Decision:
+
+- 本轮是 Stage 23B-P8 的 follow-up，不新开 P9；原 Stage 23B-P9 继续保留给深浅色切换和 XiaoLouAI 方向整体配色 / 视觉对齐。
+- 不修改 Control API、Worker、SQLite、上传、OCR 或 FFmpeg 边界。
+
+Status:
+
+- 文档已先行记录，随后执行前端修正和本地构建验证。
+
+### 2026-05-15 Stage 23B-P8 follow-up 对齐与搜索退出修正（完成）
+
+Scope:
+
+- 左侧项目区标题与空状态文本左边缘对齐。
+- 左侧品牌栏 logo / “麋鹿”和收缩按钮纵向对齐。
+- 搜索态点击项目搜索行之外任意区域会退出搜索，Escape 仍可退出。
+- 左下设置入口恢复为 Codex 式底部整行按钮，保留当前设置菜单功能。
+
+Changed:
+
+- `apps\web\src\features\workspace\StudioWorkspacePage.tsx`
+- `apps\web\src\styles.css`
+
+Verification:
+
+- `npm run build` passed in `apps\web`。
+
+Design check:
+
+- cohesion: 本轮只调整工作台侧栏交互和侧栏样式，继续沿用当前 Codex 式工作台 UI token。
+- coupling: 搜索态退出只在前端状态层处理，不影响项目 API、上传 API 或设置 API。
+- boundaries: UI 仍不直接访问 SQLite、文件系统、FFmpeg、OCR 或模型 SDK。
+- temporary debt: P9 继续保留给深浅色切换和 XiaoLouAI 方向整体配色 / 视觉对齐。
+
+Environment check:
+
+- project-local files: 改动仅限项目内 Web 源码和文档。
+- D drive only: 构建和文档同步均在 `D:\code\MiLuStudio` 内完成。
+- C drive risk: 未新增 C 盘路径或用户目录依赖。
+- Stage 23C 主线继续顺延。
+
+### 2026-05-15 Stage 23B-P8 follow-up 设置入口与侧栏动效修正（开始）
+
+Scope:
+
+- 继续修正左下设置入口文本仍偏重、偏亮的问题，使其更接近 Codex 式底部行视觉。
+- 为左侧项目栏收缩 / 展开补齐平滑过渡，避免当前 `width: 0` / `visibility: hidden` 硬切。
+
+Decision:
+
+- 本轮仍归入 Stage 23B-P8 follow-up，不新开 P9；P9 继续保留给深浅色切换和 XiaoLouAI 方向整体配色 / 视觉对齐。
+- 只改 Web 前端样式，不改 Control API、Worker、SQLite、上传、OCR、FFmpeg 或模型边界。
+
+Status:
+
+- 文档已先行记录，随后执行侧栏样式与动效修正。
+
+### 2026-05-15 Stage 23B-P8 follow-up 设置入口与侧栏动效修正（完成）
+
+Scope:
+
+- 左下设置入口文字和图标继续减重，避免底部入口文本仍像旧 UI。
+- 左侧项目栏收缩 / 展开加入平滑动效，减少硬切。
+
+Changed:
+
+- `apps\web\src\styles.css`
+
+Verification:
+
+- `npm run build` passed in `apps\web`。
+
+Design check:
+
+- cohesion: 继续沿用当前 Codex 式工作台 token，仅调整侧栏底部入口和侧栏显隐动效。
+- coupling: 改动只在 CSS 样式层，不影响搜索、设置菜单、项目状态或后端 API。
+- boundaries: UI 仍不直接访问 SQLite、文件系统、FFmpeg、OCR 或模型 SDK。
+- temporary debt: P9 继续保留给深浅色切换和 XiaoLouAI 方向整体配色 / 视觉对齐。
+
+Environment check:
+
+- project-local files: 改动仅限项目内 Web 样式和文档。
+- D drive only: 构建和文档同步均在 `D:\code\MiLuStudio` 内完成。
+- C drive risk: 未新增 C 盘路径或用户目录依赖。
+
+### 2026-05-15 Stage 23B-P9 主题切换与 XiaoLouAI 方向轻度对齐（开始）
+
+Scope:
+
+- 新增 MiLuStudio Web 主题地基：本地存储、启动初始化和 `html` 主题标记。
+- 保留当前深色作为默认体验，新增浅色 token，避免破坏已确认的 Codex 式工作台。
+- 在左下设置上方添加“切换到浅色 / 切换到深色”入口，使用轻量图标和当前侧栏按钮风格。
+- 清理影响浅色主题的少量硬编码深色 / 状态色，转为 CSS token。
+- 只做 XiaoLouAI 方向的轻度配色对齐：浅色白 / 浅灰 / 蓝紫，深色保持当前工作台气质并略收强调色。
+
+Decision:
+
+- 不引入 XiaoLouAI 的 Tailwind 主题体系，不复制 XiaoLouAI 的整套导航 / 首页 / 账户卡结构。
+- 不改右侧进度卡结构，不触碰 Control API、Worker、SQLite、上传、OCR、FFmpeg 或模型边界。
+
+Status:
+
+- 文档已先行记录，随后执行 Web 主题补丁和构建验证。
+
+### 2026-05-15 Stage 23B-P9 主题切换与 XiaoLouAI 方向轻度对齐（完成）
+
+Implemented:
+
+- 新增 `apps\web\src\shared\theme.ts`，封装 `milu.theme` 本地存储、`html[data-theme]` 初始化、跨组件主题同步和 `useTheme()`。
+- `apps\web\src\main.tsx` 在 React render 前初始化主题，减少主题切换入口出现前的默认主题漂移。
+- `StudioWorkspacePage` 在左下设置上方新增主题切换入口，深色默认显示“切换到浅色”，浅色显示“切换到深色”；切换时关闭设置菜单和上传菜单，不触碰后端。
+- `styles.css` 将主题 token 拆成默认深色和浅色两组：深色保持当前 Codex 式工作台观感，浅色使用白 / 浅灰 / 蓝紫 restrained token 对齐 XiaoLouAI 方向。
+- 清理硬编码深色阴影、进度轨道、流程激活色和 provider 测试状态色，改为 CSS token；modal、composer、设置浮层、展开按钮和右侧进度卡均随主题切换。
+
+Verification:
+
+- `npm run build` in `apps\web` passed.
+- `git diff --check` passed with only existing LF -> CRLF working-copy warnings.
+
+Boundaries:
+
+- 未引入 Tailwind 主题体系，未复制 XiaoLouAI 源码或视觉资产。
+- 未修改 Control API、Worker、SQLite、上传、OCR、FFmpeg 或模型调用边界。
+- UI / Electron 仍不得直接访问 SQLite、业务文件系统、FFmpeg、OCR 或真实模型 SDK。
+
+Next phase:
+
+- Stage 23C：Tesseract-compatible OCR runtime 固化和正向验证、PDF rasterizer、DOC/PDF 深度解析、工作台详情展示、生产链路实际消费 asset analysis endpoint 和媒体派生策略回归。
+
+### 2026-05-15 Stage 23C 前置检查与交接口径修正
+
+Check:
+
+- 扫查 README、建设方案、阶段计划、任务记录和短棒交接中的当前阶段描述、`Stage 23B-P9` 后续、`P10`、`正在推进`、`正在做`、`如继续 UI 补丁` 和下一棒提示词。
+- 未发现 Stage 23B-P9 之后仍需要在 Stage 23C 前追加的补丁任务。
+- 仍出现的“顺延”多数是历史任务记录中的当时状态；当前交接口径已改为下一棒直接进入正式 Stage 23C。
+
+Updated:
+
+- README 下一阶段说明改为：当前未发现 Stage 23C 前仍需追加的补丁任务，下一棒可直接进入正式功能阶段。
+- 阶段计划 `Current phase` 仍为 Stage 23C，状态改为 `ready_to_start`。
+- 建设方案、任务记录和短棒交接同步去除当前口径中的“继续顺延”表达。
+
+Next phase:
+
+- Stage 23C：固化 Tesseract-compatible OCR runtime 安装和正向 OCR 验证；继续 PDF rasterizer、DOC/PDF 深度解析、工作台详情展示、生产链路实际消费 asset analysis endpoint 和媒体派生策略回归。
+
+### 2026-05-15 Stage 23C-P0 分片上传 UI 与资产解析详情消费（完成）
+
+Implemented:
+
+- `apps\web\src\shared\api\controlPlaneClient.ts` 的 `uploadProjectAsset` 已改为只通过 Control API resumable upload 合同：create session -> PUT chunks -> complete，不再从工作台走旧 multipart 上传入口。
+- 浏览器侧按后端返回的 `chunkSize` 切片上传，并在支持 `crypto.subtle` 时为每个 chunk 计算 SHA-256，写入 `X-MiLuStudio-Chunk-Sha256` 供后端校验。
+- `apps\web\src\shared\types\production.ts` 新增 upload session / chunk / complete DTO，以及 `ProjectAssetAnalysisResponse` 等解析详情 DTO。
+- 工作台生成结果里的资产行不再只提示本地路径，点击后会调用 `GET /api/projects/{projectId}/assets/{assetId}/analysis`，展示基础信息、边界状态、文本切片、OCR summary、派生资产和结构化解析 JSON。
+- 撤掉此前暂停时留下的未接入 agent C# 骨架，避免 SDK 自动编译未完成文件导致当前 Stage 23C 主线 build 失败；agent skill / memory 后续作为独立阶段重新接入。
+
+Verification:
+
+- `D:\soft\program\nodejs\npm.ps1 run build` in `apps\web` passed。
+- `powershell -ExecutionPolicy Bypass -File scripts\windows\Test-MiLuStudioStage23BChunkedUpload.ps1` passed：.NET build 0 warning / 0 error，并验证 session 创建、乱序 chunk、resume status、complete、asset analysis endpoint 和 no-provider 边界。
+- `git diff --check -- apps/web/src/shared/api/controlPlaneClient.ts apps/web/src/shared/types/production.ts apps/web/src/features/workspace/StudioWorkspacePage.tsx apps/web/src/styles.css` passed，仅有现有 LF -> CRLF working-copy 提示。
+
+Boundaries:
+
+- UI / Electron 仍不直接访问 SQLite、业务文件系统、FFmpeg、OCR 或模型 SDK。
+- 分片合并、资产保存、解析、OCR / FFmpeg 调用边界仍在 Control API / backend adapter。
+- 本次不推进 agent 记忆与 skill 配置，只清理 build-breaking 半成品，保留后续阶段方向。
+
+Next:
+
+- Stage 23C 继续推进 Tesseract-compatible runtime 固化与正向 OCR 验证、PDF rasterizer、DOC/PDF 深度解析，以及生产链路实际消费 asset analysis metadata。
+
+### 2026-05-15 Stage 23C-P1 Tesseract Runtime 固化入口与验证闭环（完成）
+
+Start docs:
+
+- 开工前已阅读 `README.md`、`docs\MILUSTUDIO_BUILD_PLAN.md`、`docs\MILUSTUDIO_PHASE_PLAN.md`、`docs\MILUSTUDIO_TASK_RECORD.md` 和 `docs\MILUSTUDIO_HANDOFF.md`，确认当前进入 Stage 23C，且 agent skill / memory 大阶段放在当前上传解析主线之后。
+
+Implemented:
+
+- 新增 `scripts\windows\Install-MiLuStudioTesseract.ps1`：支持 `-PackagePath` 离线目录/ZIP 导入，支持用户显式传 `-DownloadUrl` 的辅助下载；`.exe` installer 必须额外传 `-AllowInstaller`；安装写入限制在 `D:\code\MiLuStudio\runtime\tesseract`，并生成 runtime manifest。
+- 新增 `scripts\windows\Test-MiLuStudioStage23COcrRuntime.ps1`：runtime 缺失时给出可恢复提示；runtime 存在时调用 Stage 23B asset parsing 的 `-RequireOcrRuntime` 强制跑正向图片 OCR。
+- `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1` 新增 `-RequireOcrRuntime`，并在临时 Control API 中显式设置 `ControlPlane__OcrTesseractPath` / `ControlPlane__OcrTessdataPath`。
+- `ControlPlaneOptions.OcrTesseractPath` 默认指向项目内 `runtime\tesseract\tesseract.exe`；`Set-MiLuStudioEnv.ps1` 同步设置 OCR executable path，并仅在 tessdata 目录存在时设置 tessdata path。
+- SQLite / InMemory preflight 均补齐 OCR runtime 细节：`tesseractPath`、`tessdataPath`、`tessdataAvailable`、语言候选和安装脚本；依赖中心前端补充对应详情标签和 OCR 修复建议文案。
+
+Verification:
+
+- PowerShell parser check passed for `Install-MiLuStudioTesseract.ps1`、`Test-MiLuStudioStage23COcrRuntime.ps1`、`Test-MiLuStudioStage23BAssetParsing.ps1` 和 `Set-MiLuStudioEnv.ps1`。
+- `D:\soft\program\dotnet\dotnet.exe build backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore` passed，0 warnings / 0 errors。
+- `D:\soft\program\nodejs\npm.ps1 run build` in `apps\web` passed。
+- `powershell -ExecutionPolicy Bypass -File scripts\windows\Test-MiLuStudioStage23COcrRuntime.ps1` passed the current no-runtime branch：确认 `runtime\tesseract` 缺失时给出导入提示并跳过正向 OCR。
+- `powershell -ExecutionPolicy Bypass -File scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1` passed，确认无 Tesseract 时仍保持结构化降级。
+- `git diff --check` passed with only existing LF -> CRLF working-copy warnings。
+
+Boundaries:
+
+- 未直接安装外部 OCR 程序；在线 URL 只作为用户显式触发的辅助路径，离线目录/ZIP 导入仍是主路径。
+- UI / Electron 仍不直接执行 OCR、不读取业务文件系统、不扫描 `runtime`；依赖状态只通过 Control API preflight / `/api/system/dependencies` 展示。
+- 当前本机仍未安装可控 `runtime\tesseract`，因此正向 OCR 尚未在本机完成；导入包含 `eng.traineddata` 的 runtime 后需运行 `Test-MiLuStudioStage23COcrRuntime.ps1 -RequireRuntime`。
+
+Next:
+
+- 导入可控 Tesseract-compatible runtime 离线包后跑 Stage 23C 正向 OCR 验证。
+- 继续 Stage 23C：PDF rasterizer / 扫描页 OCR、DOC/PDF 更深解析、生产链路实际消费 analysis metadata 和媒体派生策略回归。
+
+### 2026-05-15 Stage 23C-P2 生产链路消费上传资产解析文本（完成）
+
+Start docs:
+
+- 开工前已重新阅读 `README.md`、`docs\MILUSTUDIO_BUILD_PLAN.md`、`docs\MILUSTUDIO_PHASE_PLAN.md`、`docs\MILUSTUDIO_TASK_RECORD.md` 和 `docs\MILUSTUDIO_HANDOFF.md`。
+- 当前本机仍无 `runtime\tesseract`，Stage 23C 正向 OCR 需先导入可控 runtime；因此本轮先推进不依赖新增外部包的“生产链路实际消费 analysis metadata”闭环。
+
+Implemented:
+
+- `ProjectAssetUploadService` 在资产 `metadata_json` 中新增 `productionInput`：当上传结果为可用 `story_text` 时记录 `storyTextCandidate`、候选状态和 no-provider / no-generation-payload 边界。
+- `ProductionSkillExecutionService` 注入 `IAssetRepository`，构造 `story_intake` payload 时优先读取当前项目最新 `story_text` 资产的 `productionInput.storyTextCandidate`，无可用候选时再回退 `story_inputs.original_text`。
+- 保留兼容扩展：若后续 chunk manifest 开始记录 chunk 正文，Worker 也可从 `chunkManifest.chunks[].content/text` 组合故事正文；当前 Stage 23B manifest 仍以摘要 / preview 为主。
+- 新增 `scripts\windows\Test-MiLuStudioStage23CAssetConsumption.ps1`，使用临时 SQLite Control API + Worker 创建项目、上传带 marker 的故事文本资产、启动 production job，并断言 `story_intake.inputJson.story_text` 来自上传资产而不是项目 fallback 正文。
+
+Verification:
+
+- PowerShell parser check passed for `Test-MiLuStudioStage23CAssetConsumption.ps1`。
+- `D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore` passed，0 warnings / 0 errors。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage23CAssetConsumption.ps1 -ProjectRoot D:\code\MiLuStudio` passed。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1 -ProjectRoot D:\code\MiLuStudio` passed，确认新增 metadata 字段未破坏 Stage 23B analysis endpoint / no-provider 边界。
+
+Boundaries:
+
+- 未接真实模型生成，未发送 provider payload。
+- UI / Electron 仍不直接读取上传文件、SQLite、FFmpeg、OCR 或业务文件系统；生产输入选择发生在后端 Worker / Application 边界。
+- 本轮未导入 Tesseract runtime，正向 OCR 仍待 `runtime\tesseract` 可控包到位后执行。
+
+Next:
+
+- 导入可控 Tesseract-compatible runtime 后运行 `scripts\windows\Test-MiLuStudioStage23COcrRuntime.ps1 -RequireRuntime`。
+- 继续 Stage 23C：PDF rasterizer / 扫描页 OCR、DOC/PDF 更深解析和媒体派生策略回归。
+
+### 2026-05-15 Stage 23C-P3 PDF rasterizer 后端路径与可恢复验证（完成）
+
+Start docs:
+
+- 开工前已重新阅读 `README.md`、`docs\MILUSTUDIO_BUILD_PLAN.md`、`docs\MILUSTUDIO_PHASE_PLAN.md`、`docs\MILUSTUDIO_TASK_RECORD.md` 和 `docs\MILUSTUDIO_HANDOFF.md`。
+- 当前本机仍无 `runtime\tesseract`，也无 `runtime\poppler` / `pdftoppm.exe`；因此本轮先把 PDF rasterizer 和扫描页 OCR 消费路径接入后端 adapter，并验证缺 runtime 可恢复分支。
+
+Implemented:
+
+- `ControlPlaneOptions` 新增 `PdfRasterizerPath`、`PdfRasterizerDpi` 和 `PdfRasterizerPageLimit`，默认优先查找 `D:\code\MiLuStudio\runtime\poppler\Library\bin\pdftoppm.exe`，并保留项目 `runtime\poppler\bin` 与 `D:\tools\poppler` fallback。
+- `FfmpegAssetTechnicalAnalyzer` 在 PDF 无 embedded text 时会探测 Poppler `pdftoppm` 与 Tesseract runtime；两者可用时在后端 adapter 内 rasterize 前几页，再复用 OCR wrapper 生成 `pdf_raster_ocr` chunk manifest。
+- 缺 Poppler、缺 Tesseract、rasterize 失败或 OCR 无文本时均写入结构化 `pdfRasterizer` / `ocr` metadata 和 unavailable chunk manifest，不让上传失败成裸异常。
+- SQLite / InMemory preflight 新增 `pdf_rasterizer_runtime` 检测，返回 `pdftoppmPath`、DPI、页数上限和安装脚本；`Set-MiLuStudioEnv.ps1` 同步设置 `ControlPlane__PdfRasterizerPath`。
+- 新增 `scripts\windows\Install-MiLuStudioPdfRasterizer.ps1`：支持离线目录/ZIP 导入、用户显式 `-DownloadUrl` 辅助下载、SHA256 校验和 manifest 写入，所有写入限制在项目 `runtime\poppler` 内。
+- 新增 `scripts\windows\Test-MiLuStudioStage23CPdfRasterizer.ps1`：当前无 runtime 时给出导入提示并跳过正向扫描 PDF 验证；导入 Poppler + Tesseract 后可用 `-RequireRuntime` 阻断式验证。
+
+Verification:
+
+- PowerShell parser check passed for `Install-MiLuStudioPdfRasterizer.ps1` 和 `Test-MiLuStudioStage23CPdfRasterizer.ps1`。
+- `D:\soft\program\dotnet\dotnet.exe build backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore` passed，0 warnings / 0 errors。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\Test-MiLuStudioStage23CPdfRasterizer.ps1` passed the current no-runtime branch：确认 `runtime\poppler` 缺失时给出导入提示并跳过正向扫描 PDF 验证。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1` passed，确认 PDF embedded text、DOC 降级、OCR 缺 runtime 降级、media derivatives 和 analysis endpoint 未回归。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\Test-MiLuStudioStage23CAssetConsumption.ps1` passed，确认 Worker 仍优先消费上传故事文本资产解析结果。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\Test-MiLuStudioStage23COcrRuntime.ps1 -SkipBuild` passed the current no-runtime branch。
+- `git diff --check` passed with only existing LF -> CRLF working-copy warnings。
+
+Boundaries:
+
+- 未直接下载或安装外部 Poppler / Tesseract 程序；在线 URL 只作为用户显式触发的辅助路径，离线目录/ZIP 导入仍是主路径。
+- UI / Electron 仍不直接读取 PDF、执行 OCR、执行 `pdftoppm`、扫描 runtime 或访问业务文件系统；PDF rasterizer、OCR、FFmpeg 和依赖检测都停留在后端 adapter / Control API 边界内。
+- 当前本机仍未安装可控 `runtime\tesseract` 和 `runtime\poppler`，因此扫描 PDF OCR 正向验证仍待 runtime 包到位后执行。
+
+Next:
+
+- 导入可控 Tesseract-compatible runtime 后运行 `scripts\windows\Test-MiLuStudioStage23COcrRuntime.ps1 -RequireRuntime`。
+- 导入可控 Poppler runtime 后运行 `scripts\windows\Test-MiLuStudioStage23CPdfRasterizer.ps1 -RequireRuntime`。
+- 继续 Stage 23C：DOC/PDF 深度解析、扫描 PDF 正向 fixture、媒体派生策略回归和参考图 / 视频派生策略消费扩展。
+
+### 2026-05-15 Stage 23C-P4 DOCX 结构化解析与 analysis 暴露（完成）
+
+Start docs:
+
+- 开工前已重新阅读 `README.md`、`docs\MILUSTUDIO_BUILD_PLAN.md`、`docs\MILUSTUDIO_PHASE_PLAN.md`、`docs\MILUSTUDIO_TASK_RECORD.md` 和 `docs\MILUSTUDIO_HANDOFF.md`。
+- 已检查项目内和 `D:\tools`，当前仍无 `runtime\tesseract`、`runtime\poppler`、`tesseract.exe`、`pdftoppm.exe` 或可导入 runtime 包，因此本轮先推进不依赖外部 runtime 的 DOCX 深度解析。
+
+Implemented:
+
+- `FfmpegAssetTechnicalAnalyzer` 的 DOCX 解析从简单抽取 `<w:t>` 升级为 Stage 23C 结构化 ZIP/XML reader。
+- DOCX 解析现在会记录正文段落、表格、页眉、页脚、脚注、尾注和批注 block，并生成 `technical.documentStructure`，包含 source parts、block counts、table cell counts、preview blocks、warnings 和 no-provider / no-UI-file-boundary 字段。
+- DOCX 文本切片 source type 更新为 `docx_structured`，仍只在后端 adapter 读取上传文件，不让 UI / Electron 触碰文件系统。
+- `ProjectAssetAnalysisResponse` 新增 `documentStructure`，`ProjectAssetAnalysisService` 从 `assets.metadata_json` 暴露该结构；工作台资产详情 JSON 同步显示 `documentStructure`。
+- `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1` 的 DOCX fixture 增加 heading、table、header 和 footnote，并断言 metadata / analysis endpoint 中的结构字段。
+
+Verification:
+
+- `D:\soft\program\dotnet\dotnet.exe build .\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore` passed，0 warnings / 0 errors。
+- `npm run build` in `apps\web` passed。
+- `powershell -ExecutionPolicy Bypass -File .\scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1` passed，确认 DOCX structure metadata、analysis endpoint、PDF embedded text、DOC 降级、OCR 缺 runtime 降级和媒体派生未回归。
+- `powershell -ExecutionPolicy Bypass -File .\scripts\windows\Test-MiLuStudioStage23CAssetConsumption.ps1` passed，确认 Worker 仍优先消费上传故事文本资产解析结果。
+- `powershell -ExecutionPolicy Bypass -File .\scripts\windows\Test-MiLuStudioStage23COcrRuntime.ps1` passed current no-runtime branch，确认缺 Tesseract 时提示导入并跳过正向 OCR。
+- `powershell -ExecutionPolicy Bypass -File .\scripts\windows\Test-MiLuStudioStage23CPdfRasterizer.ps1` passed current no-runtime branch，确认缺 Poppler 时提示导入并跳过正向扫描 PDF 验证。
+
+Design check:
+
+- cohesion: DOCX 结构化读取集中在现有 asset technical analyzer 后端 adapter，analysis response 只负责暴露已有 metadata，不新增跨层文件读取。
+- coupling: 前端只新增 DTO 字段和详情 JSON 展示，不理解 DOCX 文件结构；Worker / provider / SQLite schema 不受 DOCX reader 细节影响。
+- boundaries: UI / Electron 仍不读取上传文件、不执行 OCR、不执行 PDF rasterizer、不访问 SQLite 或业务文件系统；DOCX 解析发生在 Control API / Infrastructure adapter 边界。
+- temporary debt: DOCX reader 仍是轻量 OpenXML ZIP/XML reader，未接完整 Office converter；复杂 DOC、复杂 PDF 和扫描 PDF 正向 OCR 仍依赖后续可控 runtime。
+
+Environment check:
+
+- project-local files: 改动限制在项目源码、脚本和文档内；临时测试文件落在 `.tmp`。
+- D drive only: 所有验证在 `D:\code\MiLuStudio` 内执行，runtime 查找只覆盖项目 `runtime` 和 `D:\tools`。
+- C drive risk: 未新增 C 盘路径、全局安装或用户目录依赖。
+
+Next:
+
+- 导入可控 Tesseract-compatible runtime 后运行 `scripts\windows\Test-MiLuStudioStage23COcrRuntime.ps1 -RequireRuntime`。
+- 导入可控 Poppler runtime 后运行 `scripts\windows\Test-MiLuStudioStage23CPdfRasterizer.ps1 -RequireRuntime`。
+- 继续 Stage 23C：扫描 PDF 正向 fixture、复杂 PDF 解析补强、媒体派生策略回归和参考图 / 视频派生策略消费扩展。
+
+### 2026-05-15 Stage 23C-P5 PDF Flate embedded text probe 与 runtime 限制解除（完成）
+
+Start docs:
+
+- 开工前已重新阅读 `README.md`、`docs\MILUSTUDIO_BUILD_PLAN.md`、`docs\MILUSTUDIO_PHASE_PLAN.md`、`docs\MILUSTUDIO_TASK_RECORD.md` 和 `docs\MILUSTUDIO_HANDOFF.md`。
+- 用户最新确认：解除 runtime 限制，后续再补充外部需要但缺失的离线包；因此本轮不再让 `runtime\tesseract` / `runtime\poppler` 缺失阻塞 Stage 23C 功能推进。
+
+Implemented:
+
+- `FfmpegAssetTechnicalAnalyzer` 的 PDF parser engine 升级为 `stage23c_pdf_embedded_text_probe`。
+- PDF embedded text probe 除原有明文 `Tj/TJ` 探测外，会在后端 adapter 内枚举 PDF stream，针对简单 `/Filter /FlateDecode` 内容尝试 zlib / deflate 解码，再复用现有文字提取逻辑生成 content blocks 和 chunk manifest。
+- Parser metadata 新增 `streamCount`、`decodedStreamCount` 和 `failedStreamCount`，让 asset analysis 详情能看到 PDF stream 探测结果。
+- `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1` 新增 Stage 23C 压缩 PDF fixture，验证无需 Poppler / OCR runtime 也能解析 Flate stream 里的文本 marker。
+
+Verification:
+
+- `D:\soft\program\dotnet\dotnet.exe build .\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore` passed，0 warnings / 0 errors。
+- PowerShell parser check passed for `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1`。
+- `powershell -ExecutionPolicy Bypass -File .\scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1` passed，确认 PDF Flate stream 文本、parser stream 统计、chunk manifest、analysis endpoint 和 no-provider 边界。
+- `powershell -ExecutionPolicy Bypass -File .\scripts\windows\Test-MiLuStudioStage23CAssetConsumption.ps1` passed，确认 Worker 仍优先消费上传故事文本资产解析结果。
+- `powershell -ExecutionPolicy Bypass -File .\scripts\windows\Test-MiLuStudioStage23COcrRuntime.ps1` passed current no-runtime branch。
+- `powershell -ExecutionPolicy Bypass -File .\scripts\windows\Test-MiLuStudioStage23CPdfRasterizer.ps1` passed current no-runtime branch。
+- `npm run build` in `apps\web` passed。
+
+Design check:
+
+- cohesion: PDF Flate 解码集中在现有 asset technical analyzer 后端 adapter，属于上传资产技术解析职责。
+- coupling: 测试脚本只扩展 PDF fixture 与断言；UI / Electron / Worker / provider 不理解 PDF stream 解码细节。
+- boundaries: UI / Electron 仍不读取 PDF、不执行 OCR、不执行 PDF rasterizer、不访问 SQLite 或业务文件系统；PDF stream probe 发生在 Control API / Infrastructure adapter 边界。
+- temporary debt: 当前只覆盖简单 Flate 压缩 stream；复杂编码、字体 ToUnicode map、扫描 PDF OCR 正向验证仍待后续 runtime / 离线包和更深解析阶段。
+
+Environment check:
+
+- project-local files: 改动限制在项目源码、脚本和文档内；测试 fixture 由脚本在项目 `.tmp` 下生成。
+- D drive only: 所有验证在 `D:\code\MiLuStudio` 内执行；没有引入 C 盘或全局安装路径。
+- C drive risk: 未新增 C 盘路径、全局安装或用户目录依赖。
+
+Next:
+
+- 继续 Stage 23C：复杂 PDF 解析补强、扫描 PDF 正向 fixture 预留、媒体派生策略回归和参考图 / 视频派生策略消费扩展。
+- 外部 Tesseract / Poppler 离线包补齐后，再运行 `scripts\windows\Test-MiLuStudioStage23COcrRuntime.ps1 -RequireRuntime` 与 `scripts\windows\Test-MiLuStudioStage23CPdfRasterizer.ps1 -RequireRuntime`。
+
+### 2026-05-15 Stage 23C-P6 参考图 / 视频 asset analysis 生产链路消费（完成）
+
+Start docs:
+
+- 开工前已重新阅读 `README.md`、`docs\MILUSTUDIO_BUILD_PLAN.md`、`docs\MILUSTUDIO_PHASE_PLAN.md`、`docs\MILUSTUDIO_TASK_RECORD.md` 和 `docs\MILUSTUDIO_HANDOFF.md`。
+- 用户最新确认：解除 runtime 限制，外部 OCR / PDF runtime 离线包后续补齐；因此本轮继续推进不依赖 `runtime\tesseract` / `runtime\poppler` 的参考图 / 视频 asset analysis 消费扩展。
+
+Implemented:
+
+- `ProjectAssetUploadService` 的 `productionInput` 已扩展参考图 / 视频候选摘要：记录 reference candidate、派生摘要、OCR / probe / frame extraction 摘要、backend-adapter-only access policy、no-provider 和 no-generation-payload 边界。
+- `ProductionSkillExecutionService` 在构造 `image_prompt_builder` 与 `video_prompt_builder` 输入时注入 `asset_analysis`，聚合当前项目上传的 `image_reference` / `video_reference` 资产，只传 asset id、mime、hash、探测摘要、派生类型和边界标记，不暴露本地路径。
+- Python `image_prompt_builder` / `video_prompt_builder` 的 input schema、validator 和 executor 已支持可选 `asset_analysis`。
+- `image_prompt_builder` 输出 `reference_strategy.uploaded_reference_summary`，`video_prompt_builder` 输出 `source_asset_manifest.uploaded_reference_summary`；两者仍保持 `provider=none`、不写文件、不写数据库、不执行 FFmpeg。
+- `tests\test_stage8_image_pipeline.py` 和 `tests\test_stage9_video_pipeline.py` 已覆盖 reference summary。
+- `scripts\windows\Test-MiLuStudioStage23CAssetConsumption.ps1` 已扩展：除验证 `story_intake` 消费上传故事文本，还上传参考图并断言 `image_prompt_builder.inputJson.asset_analysis` 包含该 asset id 和 backend-adapter-only 边界。
+- 已运行 `apps\desktop` 的 `npm run prepare:runtime`，把更新后的 Python skill 副本同步进 Desktop runtime。
+
+Verification:
+
+- `D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore` passed，0 warnings / 0 errors。
+- `D:\soft\program\Python\Python313\python.exe -m compileall -q milu_studio_skills skills tests` passed。
+- `D:\soft\program\Python\Python313\python.exe -m unittest tests.test_stage8_image_pipeline tests.test_stage9_video_pipeline -v` passed，6 tests。
+- `D:\soft\program\Python\Python313\python.exe -m unittest discover -s tests -v` passed，30 tests。
+- `powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage23CAssetConsumption.ps1` passed，确认 Worker 输入中包含参考图 asset analysis。
+- `D:\soft\program\nodejs\npm.ps1 run prepare:runtime` in `apps\desktop` passed，并顺带完成 Web build 与 Release API / Worker publish。
+- `git diff --check` passed，仅有现有 LF -> CRLF working-copy warnings。
+
+Design check:
+
+- cohesion: 资产候选摘要生成留在上传 / asset metadata 和生产输入构造边界，Python skill 只消费稳定 JSON 摘要。
+- coupling: prompt-builder 不理解本地上传目录、FFmpeg 输出路径、OCR runtime 或文件系统；后续 provider adapter 可从同一 asset analysis 摘要扩展。
+- boundaries: UI / Electron 不读取媒体、不执行 FFmpeg / OCR / PDF rasterizer、不访问 SQLite 或业务文件系统；Python skill 不读取真实媒体、不调用 provider。
+- temporary debt: 当前只把参考图 / 视频 metadata 接入 prompt builder；真实 provider adapter 对参考图二进制、图生视频源素材和媒体派生文件的安全取用仍留给后续 provider / storage adapter 阶段。
+
+Environment check:
+
+- project-local files: 改动限制在项目源码、脚本、Desktop runtime 生成副本和文档内；验证临时文件落在 `.tmp`。
+- D drive only: 验证使用 D 盘 .NET、Python 和 Node；runtime / uploads / sqlite 临时文件均在 `D:\code\MiLuStudio`。
+- C drive risk: 未新增 C 盘路径、全局安装或用户目录依赖。
+
+Next:
+
+- 继续 Stage 23C：复杂 PDF 解析补强、扫描 PDF 正向 fixture 预留和媒体派生策略回归。
+- 外部 Tesseract / Poppler 离线包补齐后，再运行 `scripts\windows\Test-MiLuStudioStage23COcrRuntime.ps1 -RequireRuntime` 与 `scripts\windows\Test-MiLuStudioStage23CPdfRasterizer.ps1 -RequireRuntime`。

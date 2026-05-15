@@ -2,7 +2,8 @@ param(
     [string]$ProjectRoot = "D:\code\MiLuStudio",
     [string]$ApiBaseUrl = "http://127.0.0.1:5398",
     [string]$DotnetPath = "D:\soft\program\dotnet\dotnet.exe",
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$RequireOcrRuntime
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,6 +31,8 @@ $sqlitePath = Join-Path $testRoot "milu-stage23b-asset-parsing.sqlite3"
 $fixturesRoot = Join-Path $testRoot "fixtures"
 $ffmpegBin = Join-Path $ProjectRoot "runtime\ffmpeg\bin"
 $ffmpegExe = Join-Path $ffmpegBin "ffmpeg.exe"
+$tesseractExe = Join-Path $ProjectRoot "runtime\tesseract\tesseract.exe"
+$tessdataRoot = Join-Path $ProjectRoot "runtime\tesseract\tessdata"
 $startedProcesses = New-Object System.Collections.Generic.List[System.Diagnostics.Process]
 $script:AuthHeaders = @{}
 $script:AccessToken = ""
@@ -140,6 +143,10 @@ function Start-ControlApi {
     $env:ControlPlane__StorageRoot = $storageRoot
     $env:ControlPlane__UploadsRoot = $uploadsRoot
     $env:ControlPlane__FfmpegBinPath = $ffmpegBin
+    $env:ControlPlane__OcrTesseractPath = $tesseractExe
+    if (Test-Path -LiteralPath $tessdataRoot) {
+        $env:ControlPlane__OcrTessdataPath = $tessdataRoot
+    }
     $env:ControlPlane__AssetVideoFrameLimit = "4"
 
     $process = Start-Process -FilePath $DotnetPath -ArgumentList @($apiDll) -WorkingDirectory $buildOutput -WindowStyle Hidden -PassThru
@@ -192,10 +199,34 @@ function New-DocxFixture {
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     <w:p>
+      <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
+      <w:r><w:t>Stage23C DOCX structured heading marker</w:t></w:r>
+    </w:p>
+    <w:p>
       <w:r><w:t>$Text</w:t></w:r>
     </w:p>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Stage23C table character</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Stage23C table motivation</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
   </w:body>
 </w:document>
+"@
+    Set-Content -LiteralPath (Join-Path $docxRoot "word\header1.xml") -Encoding UTF8 -Value @"
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:r><w:t>Stage23C DOCX header marker</w:t></w:r></w:p>
+</w:hdr>
+"@
+    Set-Content -LiteralPath (Join-Path $docxRoot "word\footnotes.xml") -Encoding UTF8 -Value @"
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:footnote w:id="1">
+    <w:p><w:r><w:t>Stage23C DOCX footnote marker</w:t></w:r></w:p>
+  </w:footnote>
+</w:footnotes>
 "@
     [System.IO.Compression.ZipFile]::CreateFromDirectory($docxRoot, $Path)
 }
@@ -232,6 +263,60 @@ function New-OcrImageFixture {
     }
 }
 
+function New-FlatePdfFixture {
+    param(
+        [string]$Path,
+        [string]$Text
+    )
+
+    $streamText = @"
+BT
+/F1 12 Tf
+72 720 Td
+($Text) Tj
+ET
+"@
+    $streamBytes = [System.Text.Encoding]::ASCII.GetBytes($streamText)
+    $compressedStream = [System.IO.MemoryStream]::new()
+    $deflater = $null
+    try {
+        $deflater = [System.IO.Compression.DeflateStream]::new($compressedStream, [System.IO.Compression.CompressionLevel]::Optimal, $true)
+        $deflater.Write($streamBytes, 0, $streamBytes.Length)
+    }
+    finally {
+        if ($null -ne $deflater) {
+            $deflater.Dispose()
+        }
+    }
+
+    $compressed = $compressedStream.ToArray()
+    $header = [System.Text.Encoding]::ASCII.GetBytes(@"
+%PDF-1.4
+1 0 obj
+<< /Length $($compressed.Length) /Filter /FlateDecode >>
+stream
+"@)
+    $footer = [System.Text.Encoding]::ASCII.GetBytes(@"
+
+endstream
+endobj
+trailer
+<< /Root 1 0 R >>
+%%EOF
+"@)
+    $pdf = [System.IO.MemoryStream]::new()
+    try {
+        $pdf.Write($header, 0, $header.Length)
+        $pdf.Write($compressed, 0, $compressed.Length)
+        $pdf.Write($footer, 0, $footer.Length)
+        [System.IO.File]::WriteAllBytes($Path, $pdf.ToArray())
+    }
+    finally {
+        $pdf.Dispose()
+        $compressedStream.Dispose()
+    }
+}
+
 function New-Fixtures {
     New-Item -ItemType Directory -Force -Path $fixturesRoot | Out-Null
 
@@ -261,6 +346,10 @@ trailer
 %%EOF
 "@
 
+    $pdfFlatePath = Join-Path $fixturesRoot "stage23c-pdf-flate.pdf"
+    $pdfFlateText = "Stage23C PDF Flate text marker. This compressed stream should be decoded by the backend PDF probe without Poppler or OCR runtime."
+    New-FlatePdfFixture -Path $pdfFlatePath -Text $pdfFlateText
+
     $docPath = Join-Path $fixturesRoot "stage23b-legacy.doc"
     Set-Content -LiteralPath $docPath -Encoding ASCII -Value "Stage23B legacy DOC placeholder. The backend should record parser_unavailable metadata."
 
@@ -284,6 +373,7 @@ trailer
         Text = $textPath
         Docx = $docxPath
         Pdf = $pdfPath
+        PdfFlate = $pdfFlatePath
         Doc = $docPath
         Image = $pngPath
         OcrImage = $ocrImage
@@ -324,6 +414,11 @@ function Assert-AssetAnalysis {
 
 try {
     Stop-IntegrationBuildProcesses
+
+    if ($RequireOcrRuntime) {
+        Assert-True (Test-Path -LiteralPath $tesseractExe) "RequireOcrRuntime was set, but tesseract.exe was not found at $tesseractExe."
+        Assert-True (Test-Path -LiteralPath $tessdataRoot) "RequireOcrRuntime was set, but tessdata was not found at $tessdataRoot."
+    }
 
     if (-not $SkipBuild) {
         & $DotnetPath build $solution --no-restore "-p:OutputPath=$buildOutput\"
@@ -370,10 +465,17 @@ try {
     $docxUpload = Invoke-AssetUpload -ProjectId $project.id -Path $fixtures.Docx -ContentType "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -Intent "storyText"
     $docxMeta = $docxUpload.metadataJson | ConvertFrom-Json
     Assert-True ($docxMeta.technical.parser.status -eq "ok") "DOCX parser did not report ok."
+    Assert-True ($docxMeta.technical.parser.engine -eq "stage23c_docx_zip_xml_structured_reader") "DOCX parser did not use the Stage 23C structured reader."
+    Assert-True ($docxMeta.technical.text.sourceType -eq "docx_structured") "DOCX upload did not record structured DOCX source type."
+    Assert-True ($docxMeta.technical.documentStructure.status -eq "ok") "DOCX structure metadata did not report ok."
+    Assert-True ([int]$docxMeta.technical.documentStructure.tableCount -ge 1) "DOCX structure metadata did not capture table blocks."
+    Assert-True ([int]$docxMeta.technical.documentStructure.headerFooterBlockCount -ge 1) "DOCX structure metadata did not capture header/footer blocks."
+    Assert-True ([int]$docxMeta.technical.documentStructure.noteBlockCount -ge 1) "DOCX structure metadata did not capture note blocks."
     Assert-True ($docxMeta.technical.chunkManifest.status -eq "ok") "DOCX upload did not produce a chunk manifest."
     Assert-NoProviderBoundary -Metadata $docxMeta
     $docxAnalysis = Assert-AssetAnalysis -ProjectId $project.id -AssetId $docxUpload.id -ExpectedManifestStatus "ok" -MinimumChunks 1
     Assert-True ($docxAnalysis.parser.status -eq "ok") "DOCX analysis endpoint did not expose parser status."
+    Assert-True ($docxAnalysis.documentStructure.status -eq "ok") "DOCX analysis endpoint did not expose document structure."
 
     $pdfUpload = Invoke-AssetUpload -ProjectId $project.id -Path $fixtures.Pdf -ContentType "application/pdf" -Intent "storyText"
     $pdfMeta = $pdfUpload.metadataJson | ConvertFrom-Json
@@ -383,6 +485,18 @@ try {
     Assert-NoProviderBoundary -Metadata $pdfMeta
     $pdfAnalysis = Assert-AssetAnalysis -ProjectId $project.id -AssetId $pdfUpload.id -ExpectedManifestStatus "ok" -MinimumChunks 1
     Assert-True (@("not_required", "runtime_available_not_invoked_by_default") -contains $pdfAnalysis.ocr.status) "PDF embedded-text analysis should not require OCR."
+
+    $pdfFlateUpload = Invoke-AssetUpload -ProjectId $project.id -Path $fixtures.PdfFlate -ContentType "application/pdf" -Intent "storyText"
+    $pdfFlateMeta = $pdfFlateUpload.metadataJson | ConvertFrom-Json
+    Assert-True ($pdfFlateMeta.technical.parser.status -eq "ok") "PDF Flate embedded-text probe did not report ok."
+    Assert-True ($pdfFlateMeta.technical.parser.engine -eq "stage23c_pdf_embedded_text_probe") "PDF Flate probe did not use the Stage 23C embedded text parser."
+    Assert-True ([int]$pdfFlateMeta.technical.parser.streamCount -ge 1) "PDF Flate probe did not record stream count."
+    Assert-True ([int]$pdfFlateMeta.technical.parser.decodedStreamCount -ge 1) "PDF Flate probe did not decode any Flate stream."
+    Assert-True ($pdfFlateMeta.technical.chunkManifest.status -eq "ok") "PDF Flate upload did not produce a chunk manifest."
+    Assert-True ($pdfFlateUpload.extractedText -like "*Stage23C PDF Flate text marker*") "PDF Flate extracted text marker was not returned."
+    Assert-NoProviderBoundary -Metadata $pdfFlateMeta
+    $pdfFlateAnalysis = Assert-AssetAnalysis -ProjectId $project.id -AssetId $pdfFlateUpload.id -ExpectedManifestStatus "ok" -MinimumChunks 1
+    Assert-True ([int]$pdfFlateAnalysis.parser.decodedStreamCount -ge 1) "PDF Flate analysis endpoint did not expose decoded stream count."
 
     $docUpload = Invoke-AssetUpload -ProjectId $project.id -Path $fixtures.Doc -ContentType "application/msword" -Intent "storyText"
     $docMeta = $docUpload.metadataJson | ConvertFrom-Json
@@ -417,6 +531,10 @@ try {
             Assert-True ($ocrImageAnalysis.ocr.extractedTextLength -gt 0) "OCR analysis did not report extracted text length."
         }
         else {
+            if ($RequireOcrRuntime) {
+                throw "RequireOcrRuntime was set, but uploaded OCR fixture reported runtime unavailable."
+            }
+
             Assert-True ($ocrImageMeta.technical.ocr.status -eq "runtime_not_configured") "OCR runtime absence did not produce runtime_not_configured."
             Assert-True ($ocrImageMeta.technical.ocr.invoked -eq $false) "OCR runtime was absent but invocation was recorded."
             $ocrImageAnalysis = Assert-AssetAnalysis -ProjectId $project.id -AssetId $ocrImageUpload.id -ExpectedManifestStatus "unavailable"

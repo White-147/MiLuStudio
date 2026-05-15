@@ -4,22 +4,45 @@ import { getSystemDependencies } from '../../shared/api/controlPlaneClient';
 import type { SystemDependenciesReport, SystemDependencyCheck, SystemDependencyStatus } from '../../shared/types/production';
 
 const dependencyLabels: Record<string, string> = {
-  repository_provider: '持久化',
-  database_file: 'SQLite 文件',
-  database_reachable: 'SQLite 连接',
-  sqlite_schema: 'SQLite Schema',
-  storage_root: 'Storage',
-  uploads_root: 'Uploads',
+  repository_provider: '本地数据库',
+  database_file: '数据库文件',
+  database_reachable: '数据库连接',
+  sqlite_schema: '数据库结构',
+  storage_root: '存储目录',
+  uploads_root: '上传目录',
   ffmpeg_runtime: 'FFmpeg',
   ocr_runtime: 'OCR',
-  python_runtime: 'Python',
-  python_skills_root: 'Python Skills',
+  python_runtime: 'Python 运行时',
+  python_skills_root: '技能目录',
 };
 
 const strategyLabels: Record<string, string> = {
   bundled_or_offline_runtime: '随包 / 离线包优先',
   auxiliary_only: '辅助',
   'Control API': 'Control API',
+};
+
+const dependencyDetailLabels: Record<string, string> = {
+  dataSource: '路径',
+  ffmpegPath: 'ffmpeg',
+  ffprobePath: 'ffprobe',
+  path: '路径',
+  pendingCount: '待迁移项',
+  provider: '类型',
+  pythonExecutablePath: '解释器',
+  pythonSkillsRoot: '目录',
+  status: '状态',
+  tesseractPath: 'tesseract',
+  tessdataPath: 'tessdata',
+  tessdataAvailable: '语言包',
+  languages: '语言',
+  installScript: '安装脚本',
+};
+
+const dependencyDetailValues: Record<string, string> = {
+  up_to_date: '已是最新',
+  true: '可用',
+  false: '缺失',
 };
 
 const statusLabels: Record<SystemDependencyStatus, string> = {
@@ -67,7 +90,7 @@ export function DependencySettingsPage() {
     <section className="provider-settings-view dependency-settings-view">
       <div className="provider-settings-heading">
         <div>
-          <p className="eyebrow">本地运行</p>
+          <p className="eyebrow">本地运行环境</p>
           <h1>依赖</h1>
         </div>
         <div className="provider-settings-actions">
@@ -90,7 +113,7 @@ export function DependencySettingsPage() {
 
       <div className="provider-summary-strip dependency-summary-strip">
         <div>
-          <span>持久化</span>
+          <span>数据库</span>
           <strong>{report?.repositoryProvider ?? '-'}</strong>
         </div>
         <div>
@@ -159,7 +182,7 @@ export function DependencySettingsPage() {
             {report?.recommendations.length ? (
               <ul>
                 {report.recommendations.map((item) => (
-                  <li key={item}>{item}</li>
+                  <li key={item}>{formatDependencyRecommendation(item)}</li>
                 ))}
               </ul>
             ) : (
@@ -183,13 +206,13 @@ function DependencyRow({ dependency }: { dependency: SystemDependencyCheck }) {
         </span>
         <div>
           <strong>{dependencyLabels[dependency.id] ?? dependency.id}</strong>
-          <p>{dependency.message}</p>
+          <p>{formatDependencyMessage(dependency)}</p>
           {details.length > 0 && (
             <dl className="dependency-detail-list">
               {details.map(([key, value]) => (
                 <div key={key}>
-                  <dt>{key}</dt>
-                  <dd>{value}</dd>
+                  <dt>{dependencyDetailLabels[key] ?? key}</dt>
+                  <dd>{formatDependencyDetailValue(value)}</dd>
                 </div>
               ))}
             </dl>
@@ -223,4 +246,76 @@ function formatStrategy(value?: string) {
   }
 
   return strategyLabels[value] ?? value;
+}
+
+function formatDependencyMessage(dependency: SystemDependencyCheck): string {
+  if (dependency.id === 'repository_provider') {
+    return 'Control API 已使用本地 SQLite 数据库。';
+  }
+
+  if (dependency.id === 'database_file') {
+    return dependency.status === 'ok' ? '本地数据库文件可用。' : '本地数据库文件尚未创建。';
+  }
+
+  if (dependency.id === 'database_reachable') {
+    return dependency.status === 'ok' ? '后端进程可以访问本地数据库。' : dependency.message;
+  }
+
+  if (dependency.id === 'sqlite_schema') {
+    return dependency.status === 'ok' ? '数据库结构已准备好。' : '数据库结构仍需初始化。';
+  }
+
+  if (dependency.id === 'storage_root') {
+    return dependency.status === 'ok' ? '存储目录已就绪。' : '存储目录尚未创建。';
+  }
+
+  if (dependency.id === 'uploads_root') {
+    return dependency.status === 'ok' ? '上传目录已就绪。' : '上传目录尚未创建。';
+  }
+
+  if (dependency.id === 'ffmpeg_runtime') {
+    return dependency.status === 'ok' ? '项目内 FFmpeg runtime 可用。' : 'FFmpeg runtime 尚未就绪，视频和音频解析会降级。';
+  }
+
+  if (dependency.id === 'ocr_runtime') {
+    return dependency.status === 'ok' ? 'OCR runtime 可由后端 adapter 调用。' : 'OCR runtime 尚未就绪，图片 OCR 会使用结构化降级。';
+  }
+
+  if (dependency.id === 'python_runtime') {
+    return dependency.status === 'ok' ? 'Python 运行时可用于 Worker skills。' : '未找到 Python 运行时。';
+  }
+
+  if (dependency.id === 'python_skills_root') {
+    return dependency.status === 'ok' ? 'Python skills 目录可用。' : '未找到 Python skills 目录。';
+  }
+
+  return dependency.message;
+}
+
+function formatDependencyDetailValue(value: string) {
+  return dependencyDetailValues[value] ?? value;
+}
+
+function formatDependencyRecommendation(value: string) {
+  if (value.includes('ControlPlane:MiLuStudioControlPlane') || value.includes('ConnectionStrings')) {
+    return '请通过后端配置本地数据库连接或存储目录，由后端负责 SQLite 初始化。';
+  }
+
+  if (value.includes('PythonExecutablePath')) {
+    return '请在依赖中心选择或配置可用的 Python 运行时。';
+  }
+
+  if (value.includes('PythonSkillsRoot')) {
+    return '请将技能目录指向随包或仓库内的 Python skills 根目录。';
+  }
+
+  if (value.includes('Tesseract') || value.includes('OCR') || value.includes('Install-MiLuStudioTesseract')) {
+    return '请通过后端脚本导入或安装 Tesseract-compatible OCR runtime，并补齐 tessdata 语言包。';
+  }
+
+  if (value.includes('SQLite')) {
+    return '请通过后端启动或迁移路径初始化本地 SQLite 数据库。';
+  }
+
+  return value;
 }

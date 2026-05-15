@@ -44,6 +44,7 @@ class Stage9VideoPipelineTests(unittest.TestCase):
                 "storyboard_director": storyboard_result,
                 "image_prompt_builder": image_prompt_result,
                 "image_generation": image_result,
+                "asset_analysis": stage23c_asset_analysis(),
             },
         )
         video_result = gateway.run("video_generation", {"video_prompt_builder": video_prompt_result})
@@ -64,11 +65,16 @@ class Stage9VideoPipelineTests(unittest.TestCase):
         self.assertEqual(len(video_prompts["video_requests"]), shot_count)
         self.assertEqual(video_prompts["generation_plan"]["provider"], "none")
         self.assertEqual(video_prompts["generation_plan"]["model"], "none")
+        self.assertEqual(video_prompts["generation_plan"]["uploaded_reference_asset_count"], 2)
         self.assertEqual(video_prompts["generation_plan"]["writes_files"], False)
         self.assertEqual(video_prompts["generation_plan"]["writes_database"], False)
         self.assertEqual(video_prompts["generation_plan"]["uses_ffmpeg"], False)
         self.assertEqual(video_prompts["checkpoint"]["required"], False)
         self.assertIn("identity drift", video_prompts["negative_prompt"])
+        self.assertEqual(video_prompts["source_asset_manifest"]["uploaded_reference_summary"]["image_reference_count"], 1)
+        self.assertEqual(video_prompts["source_asset_manifest"]["uploaded_reference_summary"]["video_reference_count"], 1)
+        self.assertEqual(video_prompts["source_asset_manifest"]["uploaded_reference_summary"]["video_frame_count"], 3)
+        self.assertTrue(video_prompts["source_asset_manifest"]["uploaded_reference_summary"]["has_video_review_proxy"])
 
         for request in video_prompts["video_requests"]:
             self.assertEqual(request["generation_mode"], "image_to_video")
@@ -126,6 +132,41 @@ class Stage9VideoPipelineTests(unittest.TestCase):
 def load_story_input() -> dict[str, object]:
     path = Path(__file__).resolve().parents[1] / "skills" / "story_intake" / "examples" / "input.json"
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def stage23c_asset_analysis() -> dict[str, object]:
+    return {
+        "schema_version": "stage23c_reference_asset_analysis_v1",
+        "source": "control_api_asset_metadata",
+        "media_access_policy": "backend_adapter_only",
+        "ui_electron_file_access": False,
+        "generation_payload_sent": False,
+        "model_provider_used": False,
+        "image_reference_count": 1,
+        "video_reference_count": 1,
+        "image_references": [
+            {
+                "asset_id": "asset_image_ref_001",
+                "kind": "image_reference",
+                "derivative_kinds": ["thumbnail", "image_preview"],
+                "has_thumbnail": True,
+                "has_image_preview": True,
+                "local_paths_exposed": False,
+            }
+        ],
+        "video_references": [
+            {
+                "asset_id": "asset_video_ref_001",
+                "kind": "video_reference",
+                "derivative_kinds": ["thumbnail", "video_frame", "video_review_proxy"],
+                "has_thumbnail": True,
+                "has_video_frames": True,
+                "has_video_review_proxy": True,
+                "video_frame_count": 3,
+                "local_paths_exposed": False,
+            }
+        ],
+    }
 
 
 if __name__ == "__main__":

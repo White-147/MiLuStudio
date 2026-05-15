@@ -15,9 +15,14 @@ import type {
   SystemDependenciesReport,
   ProductionJob,
   ProductionJobEvent,
+  ProjectAssetAnalysisResponse,
   ProjectAssetUploadIntent,
+  ProjectAssetChunkUploadResponse,
+  ProjectAssetUploadCompleteResponse,
   ProjectAssetUploadResponse,
   ProjectAssetRecord,
+  ProjectAssetUploadSessionCreateRequest,
+  ProjectAssetUploadSessionResponse,
   ProjectDetail,
   ProjectUpdateRequest,
   ProjectSummary,
@@ -37,6 +42,7 @@ declare global {
 }
 
 const DEFAULT_API_BASE_URL = 'http://127.0.0.1:5368';
+const DEFAULT_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 
 const injectedApiBaseUrl =
   typeof window !== 'undefined' ? window.__MILUSTUDIO_CONTROL_API_BASE__ : undefined;
@@ -225,21 +231,104 @@ export async function listProjectAssets(projectId: string, signal?: AbortSignal)
   return request<ProjectAssetRecord[]>(`/api/projects/${encodeURIComponent(projectId)}/assets`, { signal });
 }
 
+export async function getProjectAssetAnalysis(
+  projectId: string,
+  assetId: string,
+  signal?: AbortSignal,
+): Promise<ProjectAssetAnalysisResponse> {
+  return request<ProjectAssetAnalysisResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}/analysis`,
+    { signal },
+  );
+}
+
 export async function uploadProjectAsset(
   projectId: string,
   file: File,
   intent: ProjectAssetUploadIntent,
   signal?: AbortSignal,
 ): Promise<ProjectAssetUploadResponse> {
-  const form = new FormData();
-  form.append('file', file);
-  form.append('intent', intent);
+  const session = await createProjectAssetUploadSession(
+    projectId,
+    {
+      intent,
+      originalFileName: file.name,
+      contentType: file.type || 'application/octet-stream',
+      fileSize: file.size,
+      chunkSize: DEFAULT_UPLOAD_CHUNK_BYTES,
+    },
+    signal,
+  );
 
-  return request<ProjectAssetUploadResponse>(`/api/projects/${encodeURIComponent(projectId)}/assets/upload`, {
+  for (let chunkIndex = 0; chunkIndex < session.totalChunks; chunkIndex++) {
+    throwIfAborted(signal);
+    const start = chunkIndex * session.chunkSize;
+    const chunk = file.slice(start, Math.min(start + session.chunkSize, file.size));
+    await uploadProjectAssetChunk(projectId, session.id, chunkIndex, chunk, signal);
+  }
+
+  const completed = await completeProjectAssetUploadSession(projectId, session.id, signal);
+  return completed.asset;
+}
+
+export async function createProjectAssetUploadSession(
+  projectId: string,
+  payload: ProjectAssetUploadSessionCreateRequest,
+  signal?: AbortSignal,
+): Promise<ProjectAssetUploadSessionResponse> {
+  return request<ProjectAssetUploadSessionResponse>(`/api/projects/${encodeURIComponent(projectId)}/assets/upload-sessions`, {
     method: 'POST',
-    body: form,
+    body: JSON.stringify(payload),
     signal,
   });
+}
+
+export async function getProjectAssetUploadSession(
+  projectId: string,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<ProjectAssetUploadSessionResponse> {
+  return request<ProjectAssetUploadSessionResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/assets/upload-sessions/${encodeURIComponent(sessionId)}`,
+    { signal },
+  );
+}
+
+export async function uploadProjectAssetChunk(
+  projectId: string,
+  sessionId: string,
+  chunkIndex: number,
+  chunk: Blob,
+  signal?: AbortSignal,
+): Promise<ProjectAssetChunkUploadResponse> {
+  const sha256 = await hashBlobSha256(chunk);
+  return request<ProjectAssetChunkUploadResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/assets/upload-sessions/${encodeURIComponent(sessionId)}/chunks/${chunkIndex}`,
+    {
+      method: 'PUT',
+      body: chunk,
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        ...(sha256 ? { 'X-MiLuStudio-Chunk-Sha256': sha256 } : {}),
+      },
+      signal,
+    },
+  );
+}
+
+export async function completeProjectAssetUploadSession(
+  projectId: string,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<ProjectAssetUploadCompleteResponse> {
+  return request<ProjectAssetUploadCompleteResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/assets/upload-sessions/${encodeURIComponent(sessionId)}/complete`,
+    {
+      method: 'POST',
+      body: JSON.stringify({}),
+      signal,
+    },
+  );
 }
 
 export async function listProjectCosts(projectId: string, signal?: AbortSignal): Promise<CostLedgerRecord[]> {
@@ -449,6 +538,25 @@ function isAbortError(error: unknown): boolean {
 
 function isFormDataBody(body: BodyInit | null | undefined): body is FormData {
   return typeof FormData !== 'undefined' && body instanceof FormData;
+}
+
+async function hashBlobSha256(blob: Blob): Promise<string | undefined> {
+  if (!globalThis.crypto?.subtle) {
+    return undefined;
+  }
+
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest))
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function throwIfAborted(signal?: AbortSignal) {
+  if (!signal?.aborted) {
+    return;
+  }
+
+  throw new DOMException('Upload aborted.', 'AbortError');
 }
 
 function formatNetworkError(error: any): string {

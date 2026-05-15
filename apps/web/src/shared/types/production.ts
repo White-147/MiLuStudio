@@ -351,6 +351,107 @@ export interface ProjectAssetUploadResponse extends ProjectAssetRecord {
   message: string;
 }
 
+export interface ProjectAssetUploadSessionCreateRequest {
+  intent: ProjectAssetUploadIntent;
+  originalFileName: string;
+  contentType: string;
+  fileSize: number;
+  chunkSize?: number | null;
+}
+
+export interface ProjectAssetUploadSessionResponse {
+  id: string;
+  projectId: string;
+  kind: string;
+  originalFileName: string;
+  contentType: string;
+  fileSize: number;
+  intent: string | null;
+  chunkSize: number;
+  totalChunks: number;
+  uploadedChunks: number[];
+  status: string;
+  assetId: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface ProjectAssetChunkUploadResponse {
+  sessionId: string;
+  chunkIndex: number;
+  bytesReceived: number;
+  sha256: string;
+  uploadedChunks: number[];
+  readyToComplete: boolean;
+}
+
+export interface ProjectAssetUploadCompleteResponse {
+  asset: ProjectAssetUploadResponse;
+  session: ProjectAssetUploadSessionResponse;
+}
+
+export interface ProjectAssetAnalysisBoundary {
+  uiElectronFileAccess: boolean | null;
+  generationPayloadSent: boolean | null;
+  modelProviderUsed: boolean | null;
+  backendAdapterOnly: boolean | null;
+}
+
+export interface ProjectAssetChunkManifestSummary {
+  status: string;
+  strategy: string;
+  totalChunks: number;
+  chunkSizeCharacters: number;
+  overlapCharacters: number;
+  usableAsStoryCandidate: boolean;
+}
+
+export interface ProjectAssetDerivativeSummary {
+  count: number;
+  kinds: string[];
+  accessPolicy: string;
+}
+
+export interface ProjectAssetOcrSummary {
+  engine: string | null;
+  status: string;
+  candidate: boolean;
+  runtimeAvailable: boolean;
+  invoked: boolean;
+  checkedPathCount: number;
+  language: string | null;
+  extractedTextLength: number;
+  uiElectronFileAccess: boolean | null;
+  modelProviderUsed: boolean | null;
+}
+
+export interface ProjectAssetAnalysisResponse {
+  id: string;
+  projectId: string;
+  kind: string;
+  mimeType: string;
+  fileSize: number;
+  sha256: string | null;
+  createdAt: string;
+  originalFileName: string | null;
+  stage: string | null;
+  analysisSchemaVersion: string | null;
+  boundary: ProjectAssetAnalysisBoundary;
+  chunkManifestSummary: ProjectAssetChunkManifestSummary;
+  parse: unknown;
+  upload: unknown;
+  parser: unknown;
+  ocr: ProjectAssetOcrSummary;
+  text: unknown;
+  contentBlocks: unknown;
+  chunkManifest: unknown;
+  documentStructure: unknown;
+  limits: unknown;
+  derivatives: ProjectAssetDerivativeSummary;
+  metadataJsonParsed: boolean;
+  metadataParseError: string | null;
+}
+
 export interface CostLedgerRecord {
   id: string;
   projectId: string;

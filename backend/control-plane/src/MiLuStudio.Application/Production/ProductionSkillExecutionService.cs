@@ -8,6 +8,7 @@ using JsonObject = global::System.Text.Json.Nodes.JsonObject;
 using JsonSerializer = global::System.Text.Json.JsonSerializer;
 using JsonSerializerDefaults = global::System.Text.Json.JsonSerializerDefaults;
 using JsonSerializerOptions = global::System.Text.Json.JsonSerializerOptions;
+using JsonValue = global::System.Text.Json.Nodes.JsonValue;
 using JsonValueKind = global::System.Text.Json.JsonValueKind;
 using MiLuStudio.Application.Abstractions;
 using MiLuStudio.Domain;
@@ -18,6 +19,7 @@ public sealed class ProductionSkillExecutionService
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IClock _clock;
+    private readonly IAssetRepository _assets;
     private readonly IProductionJobRepository _jobs;
     private readonly IProductionSkillRunner _runner;
     private readonly IProjectRepository _projects;
@@ -25,12 +27,14 @@ public sealed class ProductionSkillExecutionService
 
     public ProductionSkillExecutionService(
         IClock clock,
+        IAssetRepository assets,
         IProductionJobRepository jobs,
         IProductionSkillRunner runner,
         IProjectRepository projects,
         SkillEnvelopePersistenceService persistence)
     {
         _clock = clock;
+        _assets = assets;
         _jobs = jobs;
         _runner = runner;
         _projects = projects;
@@ -150,9 +154,21 @@ public sealed class ProductionSkillExecutionService
             }),
             "style_bible" => BuildEnvelopePayload(tasks, ["episode_writer", "character_bible"]),
             "storyboard_director" => BuildEnvelopePayload(tasks, ["episode_writer", "character_bible", "style_bible"]),
-            "image_prompt_builder" => BuildEnvelopePayload(tasks, ["storyboard_director", "character_bible", "style_bible"]),
+            "image_prompt_builder" => await BuildEnvelopePayloadWithAssetAnalysisAsync(
+                task.ProjectId,
+                tasks,
+                ["storyboard_director", "character_bible", "style_bible"],
+                includeImageReferences: true,
+                includeVideoReferences: false,
+                cancellationToken),
             "image_generation" => BuildEnvelopePayload(tasks, ["image_prompt_builder"]),
-            "video_prompt_builder" => BuildEnvelopePayload(tasks, ["storyboard_director", "image_prompt_builder", "image_generation"]),
+            "video_prompt_builder" => await BuildEnvelopePayloadWithAssetAnalysisAsync(
+                task.ProjectId,
+                tasks,
+                ["storyboard_director", "image_prompt_builder", "image_generation"],
+                includeImageReferences: true,
+                includeVideoReferences: true,
+                cancellationToken),
             "video_generation" => BuildEnvelopePayload(tasks, ["video_prompt_builder"]),
             "voice_casting" => BuildEnvelopePayload(tasks, ["episode_writer", "storyboard_director"]),
             "subtitle_generator" => BuildEnvelopePayload(tasks, ["episode_writer", "storyboard_director", "voice_casting"]),
@@ -165,23 +181,373 @@ public sealed class ProductionSkillExecutionService
         return payload.ToJsonString(JsonOptions);
     }
 
+    private async Task<JsonObject> BuildEnvelopePayloadWithAssetAnalysisAsync(
+        string projectId,
+        IReadOnlyList<GenerationTask> tasks,
+        IReadOnlyList<string> skillNames,
+        bool includeImageReferences,
+        bool includeVideoReferences,
+        CancellationToken cancellationToken)
+    {
+        var payload = BuildEnvelopePayload(tasks, skillNames);
+        payload["asset_analysis"] = await BuildReferenceAssetAnalysisPayloadAsync(
+            projectId,
+            includeImageReferences,
+            includeVideoReferences,
+            cancellationToken);
+
+        return payload;
+    }
+
     private async Task<JsonObject> BuildStoryIntakePayloadAsync(string projectId, CancellationToken cancellationToken)
     {
         var project = await _projects.GetAsync(projectId, cancellationToken)
             ?? throw new InvalidOperationException($"Project '{projectId}' does not exist.");
         var storyInput = await _projects.GetStoryInputAsync(projectId, cancellationToken)
             ?? throw new InvalidOperationException($"Project '{projectId}' has no story input.");
+        var storyText = await ResolveStoryTextForProductionAsync(projectId, storyInput.OriginalText, cancellationToken);
 
         return new JsonObject
         {
             ["project_id"] = project.Id,
-            ["story_text"] = storyInput.OriginalText,
+            ["story_text"] = storyText,
             ["language"] = storyInput.Language,
             ["target_duration_seconds"] = project.TargetDurationSeconds,
             ["aspect_ratio"] = project.AspectRatio,
             ["style_preset"] = project.StylePreset,
             ["mode"] = project.Mode == ProjectMode.Fast ? "fast" : "director"
         };
+    }
+
+    private async Task<string> ResolveStoryTextForProductionAsync(
+        string projectId,
+        string fallbackStoryText,
+        CancellationToken cancellationToken)
+    {
+        var assets = await _assets.ListAssetsByProjectAsync(projectId, cancellationToken);
+        foreach (var asset in assets
+            .Where(asset => string.Equals(asset.Kind, "story_text", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(asset => asset.CreatedAt))
+        {
+            var candidate = ExtractStoryTextCandidate(asset.MetadataJson);
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                return candidate.Trim();
+            }
+        }
+
+        return fallbackStoryText;
+    }
+
+    private static string? ExtractStoryTextCandidate(string? metadataJson)
+    {
+        if (string.IsNullOrWhiteSpace(metadataJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            var metadata = JsonNode.Parse(metadataJson) as JsonObject;
+            return ExtractProductionInputStoryText(metadata) ?? ExtractChunkContentStoryText(metadata);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? ExtractProductionInputStoryText(JsonObject? metadata)
+    {
+        var productionInput = GetObject(metadata, "productionInput");
+        if (GetBool(productionInput, "usableAsStoryCandidate") != true)
+        {
+            return null;
+        }
+
+        return GetString(productionInput, "storyTextCandidate");
+    }
+
+    private static string? ExtractChunkContentStoryText(JsonObject? metadata)
+    {
+        var technical = GetObject(metadata, "technical");
+        var chunkManifest = GetObject(technical, "chunkManifest");
+        if (!string.Equals(GetString(chunkManifest, "status"), "ok", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (GetNode(chunkManifest, "chunks") is not JsonArray chunks)
+        {
+            return null;
+        }
+
+        var parts = chunks
+            .OfType<JsonObject>()
+            .Select(chunk => GetString(chunk, "content") ?? GetString(chunk, "text"))
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .ToList();
+
+        return parts.Count == 0 ? null : string.Join(Environment.NewLine, parts);
+    }
+
+    private async Task<JsonObject> BuildReferenceAssetAnalysisPayloadAsync(
+        string projectId,
+        bool includeImageReferences,
+        bool includeVideoReferences,
+        CancellationToken cancellationToken)
+    {
+        var imageReferences = new JsonArray();
+        var videoReferences = new JsonArray();
+        var assets = await _assets.ListAssetsByProjectAsync(projectId, cancellationToken);
+
+        foreach (var asset in assets.OrderByDescending(asset => asset.CreatedAt))
+        {
+            if (includeImageReferences && string.Equals(asset.Kind, "image_reference", StringComparison.OrdinalIgnoreCase))
+            {
+                imageReferences.Add(BuildReferenceAssetCandidate(asset));
+            }
+
+            if (includeVideoReferences && string.Equals(asset.Kind, "video_reference", StringComparison.OrdinalIgnoreCase))
+            {
+                videoReferences.Add(BuildReferenceAssetCandidate(asset));
+            }
+        }
+
+        return new JsonObject
+        {
+            ["schema_version"] = "stage23c_reference_asset_analysis_v1",
+            ["source"] = "control_api_asset_metadata",
+            ["analysis_endpoint_contract"] = "/api/projects/{projectId}/assets/{assetId}/analysis",
+            ["media_access_policy"] = "backend_adapter_only",
+            ["ui_electron_file_access"] = false,
+            ["generation_payload_sent"] = false,
+            ["model_provider_used"] = false,
+            ["image_reference_count"] = imageReferences.Count,
+            ["video_reference_count"] = videoReferences.Count,
+            ["image_references"] = imageReferences,
+            ["video_references"] = videoReferences
+        };
+    }
+
+    private static JsonObject BuildReferenceAssetCandidate(Asset asset)
+    {
+        var metadata = ParseMetadata(asset.MetadataJson);
+        var technical = GetObject(metadata, "technical");
+        var parse = GetObject(metadata, "parse");
+        var productionInput = GetObject(metadata, "productionInput");
+        var ocr = GetObject(technical, "ocr");
+        var derivativeSummary = BuildReferenceDerivativeSummary(metadata, technical);
+        var frameExtraction = BuildFrameExtractionSummary(technical);
+
+        return new JsonObject
+        {
+            ["asset_id"] = asset.Id,
+            ["project_id"] = asset.ProjectId,
+            ["kind"] = asset.Kind,
+            ["original_file_name"] = GetString(metadata, "originalFileName"),
+            ["mime_type"] = asset.MimeType,
+            ["file_size"] = asset.FileSize,
+            ["sha256"] = asset.Sha256,
+            ["created_at"] = asset.CreatedAt.ToUniversalTime().ToString("O"),
+            ["analysis_endpoint"] = $"/api/projects/{asset.ProjectId}/assets/{asset.Id}/analysis",
+            ["source"] = GetString(productionInput, "source") ?? "asset_metadata_json",
+            ["parse_status"] = GetString(parse, "Status") ?? GetString(parse, "status") ?? "unknown",
+            ["extracted_text_length"] = GetInt(parse, "extractedTextLength") ?? GetInt(ocr, "extractedTextLength") ?? 0,
+            ["usable_as_image_reference"] = string.Equals(asset.Kind, "image_reference", StringComparison.OrdinalIgnoreCase),
+            ["usable_as_video_reference"] = string.Equals(asset.Kind, "video_reference", StringComparison.OrdinalIgnoreCase),
+            ["derivative_count"] = GetInt(derivativeSummary, "count") ?? 0,
+            ["derivative_kinds"] = GetNode(derivativeSummary, "kinds")?.DeepClone(),
+            ["has_thumbnail"] = HasDerivativeKind(derivativeSummary, "thumbnail"),
+            ["has_image_preview"] = HasDerivativeKind(derivativeSummary, "image_preview"),
+            ["has_video_frames"] = HasDerivativeKind(derivativeSummary, "video_frame"),
+            ["has_video_review_proxy"] = HasDerivativeKind(derivativeSummary, "video_review_proxy"),
+            ["video_frame_count"] = GetInt(frameExtraction, "actual_frame_count") ?? 0,
+            ["probe_summary"] = BuildProbeSummary(technical),
+            ["ocr_summary"] = BuildOcrSummary(ocr),
+            ["frame_extraction"] = frameExtraction,
+            ["media_access_policy"] = "backend_adapter_only",
+            ["local_paths_exposed"] = false,
+            ["ui_electron_file_access"] = false,
+            ["generation_payload_sent"] = false,
+            ["model_provider_used"] = false
+        };
+    }
+
+    private static JsonObject? ParseMetadata(string? metadataJson)
+    {
+        if (string.IsNullOrWhiteSpace(metadataJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonNode.Parse(metadataJson) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static JsonObject BuildReferenceDerivativeSummary(JsonObject? metadata, JsonObject? technical)
+    {
+        var kinds = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var count = 0;
+
+        if (GetNode(metadata, "derivatives") is JsonArray derivatives)
+        {
+            count = derivatives.Count;
+        }
+
+        if (GetNode(technical, "derivativeDetails") is JsonArray details)
+        {
+            count = Math.Max(count, details.Count);
+            foreach (var detail in details.OfType<JsonObject>())
+            {
+                var kind = GetString(detail, "kind");
+                if (!string.IsNullOrWhiteSpace(kind))
+                {
+                    kinds.Add(kind);
+                }
+            }
+        }
+
+        return new JsonObject
+        {
+            ["count"] = count,
+            ["kinds"] = StringArray(kinds),
+            ["access_policy"] = "backend_adapter_only",
+            ["local_paths_exposed"] = false
+        };
+    }
+
+    private static bool HasDerivativeKind(JsonObject derivativeSummary, string kind)
+    {
+        return GetNode(derivativeSummary, "kinds") is JsonArray kinds &&
+            kinds.OfType<JsonValue>().Any(value => value.TryGetValue<string>(out var candidate) &&
+                string.Equals(candidate, kind, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static JsonObject BuildProbeSummary(JsonObject? technical)
+    {
+        var probe = GetObject(technical, "probeSummary");
+        if (probe is null)
+        {
+            return new JsonObject { ["status"] = "unavailable" };
+        }
+
+        return new JsonObject
+        {
+            ["status"] = GetString(probe, "status") ?? "unknown",
+            ["format"] = GetNode(probe, "format")?.DeepClone(),
+            ["streams"] = GetNode(probe, "streams")?.DeepClone()
+        };
+    }
+
+    private static JsonObject BuildOcrSummary(JsonObject? ocr)
+    {
+        return new JsonObject
+        {
+            ["status"] = GetString(ocr, "status") ?? "not_recorded",
+            ["candidate"] = GetBool(ocr, "candidate") ?? false,
+            ["invoked"] = GetBool(ocr, "invoked") ?? false,
+            ["language"] = GetString(ocr, "language"),
+            ["extracted_text_length"] = GetInt(ocr, "extractedTextLength") ?? 0,
+            ["ui_electron_file_access"] = GetBool(ocr, "uiElectronFileAccess") ?? false,
+            ["model_provider_used"] = GetBool(ocr, "modelProviderUsed") ?? false
+        };
+    }
+
+    private static JsonObject? BuildFrameExtractionSummary(JsonObject? technical)
+    {
+        var frameExtraction = GetObject(technical, "frameExtraction");
+        if (frameExtraction is null)
+        {
+            return null;
+        }
+
+        return new JsonObject
+        {
+            ["status"] = GetString(frameExtraction, "status") ?? "not_recorded",
+            ["sampling"] = GetString(frameExtraction, "sampling"),
+            ["target_frame_count"] = GetInt(frameExtraction, "targetFrameCount") ?? 0,
+            ["actual_frame_count"] = GetInt(frameExtraction, "actualFrameCount") ?? 0,
+            ["interval_seconds"] = GetInt(frameExtraction, "intervalSeconds") ?? 0,
+            ["duration_seconds"] = GetDouble(frameExtraction, "durationSeconds"),
+            ["local_frame_directory_exposed"] = false
+        };
+    }
+
+    private static JsonNode? GetNode(JsonObject? source, string property)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        return source.TryGetPropertyValue(property, out var value) ? value : null;
+    }
+
+    private static JsonObject? GetObject(JsonObject? source, string property)
+    {
+        return GetNode(source, property) as JsonObject;
+    }
+
+    private static string? GetString(JsonObject? source, string property)
+    {
+        if (GetNode(source, property) is not JsonValue value)
+        {
+            return null;
+        }
+
+        return value.TryGetValue<string>(out var result) ? result : null;
+    }
+
+    private static bool? GetBool(JsonObject? source, string property)
+    {
+        if (GetNode(source, property) is not JsonValue value)
+        {
+            return null;
+        }
+
+        return value.TryGetValue<bool>(out var result) ? result : null;
+    }
+
+    private static int? GetInt(JsonObject? source, string property)
+    {
+        if (GetNode(source, property) is not JsonValue value)
+        {
+            return null;
+        }
+
+        return value.TryGetValue<int>(out var intResult)
+            ? intResult
+            : value.TryGetValue<long>(out var longResult)
+                ? checked((int)longResult)
+                : null;
+    }
+
+    private static double? GetDouble(JsonObject? source, string property)
+    {
+        if (GetNode(source, property) is not JsonValue value)
+        {
+            return null;
+        }
+
+        return value.TryGetValue<double>(out var result) ? result : null;
+    }
+
+    private static JsonArray StringArray(IEnumerable<string> values)
+    {
+        var array = new JsonArray();
+        foreach (var value in values)
+        {
+            array.Add(value);
+        }
+
+        return array;
     }
 
     private static JsonObject BuildEnvelopePayload(

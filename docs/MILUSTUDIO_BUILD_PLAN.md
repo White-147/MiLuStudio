@@ -97,6 +97,10 @@ MiLuStudio 不应问“继续二开 ArcReel 还是 LumenX”，而应定为：
 
 > Stage 23B-P0 已完成 SQLite 迁移和开发稳定化主体补丁。Stage 23B-P1 检查确认：PostgreSQL 清理 1/2/3/4 与 Web dev 后端启动编排同属迁移后的稳定化收尾，合并为 Stage 23B-P2。Stage 23B-P2 已完成旧 SQL migration / setup 文档删除、Python skill 示例口径清理、旧生成物清理、Desktop runtime 重新生成、Web dev 本地服务编排和 Control API 不可达提示。`Stage 23B-*P` 均为补丁阶段；原 OCR runtime 固化、PDF rasterizer、DOC/PDF 深度解析、工作台详情和生产链路消费不取消，恢复为正式 Stage 23C。
 
+2026-05-15 Stage 23C 进展更新：
+
+> Stage 23C-P0 已完成前端可恢复分片上传消费和工作台资产解析详情消费；Stage 23C-P1 已补 `scripts\windows\Install-MiLuStudioTesseract.ps1`、`scripts\windows\Test-MiLuStudioStage23COcrRuntime.ps1`、OCR preflight tessdata 细节和 `-RequireOcrRuntime` 正向验证开关；Stage 23C-P2 已让 production worker 的 `story_intake` 优先消费上传 `story_text` 资产解析文本；Stage 23C-P3 已补 Poppler `pdftoppm` PDF rasterizer 后端调用路径、runtime 导入脚本、preflight 检测项和缺 runtime 可恢复验证脚本；Stage 23C-P4 已把 DOCX 升级为后端结构化 ZIP/XML 解析，记录段落、表格、页眉页脚、脚注 / 尾注 / 批注结构，并通过 asset analysis endpoint 暴露 `documentStructure` 给工作台详情；Stage 23C-P5 已把 PDF embedded text probe 升级为可解码简单 Flate 压缩 stream 的 `stage23c_pdf_embedded_text_probe`；Stage 23C-P6 已让图片 / 视频 prompt builder 通过 Worker 输入消费上传参考图 / 参考视频 asset analysis 摘要，仍不读取本地媒体路径、不调用 provider。最新口径：当前不再让 Tesseract / Poppler runtime 缺失阻塞 Stage 23C 功能推进，外部离线包后续补齐后再执行 OCR / 扫描 PDF 正向验证。
+
 ## 4. 产品形态
 
 ### 4.1 普通用户界面只保留四块
@@ -1531,7 +1535,7 @@ Stage 23A 当前落地状态：
 - Web 左上“模型”入口已撤下；左下设置菜单中的“设置”入口改为“模型”，并展示 Base URL、API Key 和“测试连通”。
 - 新增 `scripts\windows\Install-MiLuStudioFfmpeg.ps1`，优先使用 `gyan.dev` release essentials 稳定链接，BtbN GitHub `/latest/` 作为 fallback，安装到 `D:\code\MiLuStudio\runtime\ffmpeg`。
 - 新增 `POST /api/projects/{projectId}/assets/upload`，通过 Control API 接收 multipart 上传，保存到项目 `uploads` 目录，计算 SHA256，登记现有 `assets` 表，不新增 migration。
-- 文本 / Markdown / JSON / SRT / ASS / VTT / CSV / XML / YAML / RTF 可直接解析正文；DOCX 通过 ZIP + XML 提取正文；DOC / PDF 已可保存并标记后续 Office/PDF/OCR 解析器待补。
+- 文本 / Markdown / JSON / SRT / ASS / VTT / CSV / XML / YAML / RTF 可直接解析正文；DOCX 已通过后端结构化 ZIP/XML reader 提取正文、表格、页眉页脚和脚注 / 批注摘要；DOC / PDF 已可保存并在运行时缺失时返回 Office/PDF/OCR 解析器结构化降级。
 - 图片和视频通过后端 Infrastructure adapter 调用项目内 FFmpeg 做 ffprobe、缩略图和最多 8 张抽帧；UI / Electron 仍不得直接读取文件或执行 FFmpeg。
 - 新增 `POST /api/production-jobs/{jobId}/rollback`；最近一个已确认审核步骤可二次确认后回到待审核，并清空下游 task output / 运行状态。
 - 本阶段仍不接真实模型生成 provider，不生成最终真实 MP4 / WAV / SRT / ZIP，不引入 Linux / Docker / Redis / Celery，不让 UI 或 Electron 绕过 Control API / Worker 边界。
@@ -1544,8 +1548,17 @@ Stage 23B 正式安排：
 - Stage 23B-P2 已完成：PostgreSQL 残留清理、旧生成物清理、Desktop runtime 重新生成、Web dev 本地服务启动编排和 Control API 不可达提示。
 - Stage 23B-P5 已完成：左侧品牌栏减重、composer 制作要求输入区加高、旧 500-2000 字输入限制移除、生成按钮改为 composer 专用轻按钮，以及上传菜单展示文本 50 MB / 图片 50 MB / 视频 1 GB 的真实文件大小限制。
 - Stage 23B-P6 已完成：右侧进度卡顶部摘要去除重复状态文案，只保留完成计数；左侧项目栏支持桌面 / 移动端拖拽宽度、localStorage 持久化、完全收缩和左上边缘展开。
-- Stage 23C 回到 OCR runtime 固化、PDF rasterizer、DOC/PDF 深度解析、工作台详情和生产链路消费，原任务顺延不覆盖。
-- 优先补 OCR、PDF / DOC 深度解析、文本切片、上传分片、图片 / 视频压缩策略和更完整媒体抽帧。
+- Stage 23B-P7 已完成：项目搜索从刷新行为改为真实筛选；新项目入口保持不重复创建空项目，只补齐空白草稿状态清理；模型配置和依赖配置在继续通过 Control API 对接后端的前提下，清理开发态文案并改善弹窗内布局可用性。
+- Stage 23B-P8 已完成左侧交互收尾：项目行搜索改为行内展开，搜索 / 新项目图标默认隐藏并在项目行 hover / focus 时显示；搜索态弱化隐藏新项目按钮；统一收缩、搜索、新项目按钮对齐；补齐设置菜单和上传菜单的外部点击 / Escape 取消；设置按钮旧 UI 残留继续轻量化。
+- Stage 23B-P8 follow-up 已完成：修正项目区标题与空状态文本左对齐、品牌栏与收缩按钮纵向对齐、搜索态点击外部退出，继续减重左下设置按钮文字 / 图标，并补齐侧栏收缩 / 展开动效；不新开 P9。
+- Stage 23B-P9 已完成深浅色主题切换、浅色 token、左下主题切换入口和 XiaoLouAI 方向轻度配色对齐；新增主题状态工具和本地存储，默认保持深色体验，浅色模式使用白 / 浅灰 / 蓝紫 restrained token；该补丁仍未改变 Stage 23C 主线顺序和后端边界。
+- Stage 23C 前置检查已完成：当前未发现 Stage 23B-P9 之后仍需追加的 P 阶段任务；Stage 23C-P0 已完成前端 upload-sessions 消费和工作台 asset analysis 详情消费。
+- Stage 23C-P1 已完成 OCR runtime 固化第一步：新增 Tesseract-compatible runtime 离线目录/ZIP 导入脚本、显式 URL 下载辅助入口、installer 显式授权入口、manifest 写入、preflight tessdata / language 细节和正向验证 wrapper。
+- Stage 23C-P2 已完成生产链路消费 analysis metadata 的第一步：上传 metadata 记录 `productionInput.storyTextCandidate`，Worker 构造 `story_intake` payload 时优先取最新 `story_text` 资产候选，缺失时回退项目正文，并新增 `Test-MiLuStudioStage23CAssetConsumption.ps1` 验证。
+- Stage 23C-P3 已完成 Poppler `pdftoppm` PDF rasterizer 后端路径、runtime 导入脚本、preflight `pdf_rasterizer_runtime` 检测和缺 runtime 可恢复验证。
+- Stage 23C-P4 已完成 DOCX 结构化 ZIP/XML 解析与 asset analysis `documentStructure` 暴露，工作台资产详情 JSON 会显示结构摘要。
+- Stage 23C-P5 已完成复杂 PDF embedded text 探测补强：后端 adapter 会解码简单 `/Filter /FlateDecode` stream 后复用 Tj/TJ 文本提取，并在 parser metadata 中记录 stream 解码统计。
+- 下一步继续复杂 PDF 解析、扫描 PDF 正向 fixture 预留、图片 / 视频压缩策略和更完整媒体抽帧回归；Tesseract / Poppler 离线包后续补齐后再分别跑 `Test-MiLuStudioStage23COcrRuntime.ps1 -RequireRuntime` 和 `Test-MiLuStudioStage23CPdfRasterizer.ps1 -RequireRuntime`。
 - Stage 23B 继续复用 Stage 23A 的 Control API / Application service / Infrastructure adapter 边界，默认把解析 metadata、切片 manifest、派生文件和降级原因写入现有资产索引。
 - 若 OCR、PDF 或 DOC 解析运行时暂不可用，必须返回结构化降级 metadata，而不是让上传失败成裸异常。
 - Stage 23B 不接真实模型生成 provider，不发送生成 payload，不生成最终 MP4 / WAV / SRT / ZIP，不引入 Linux / Docker / Redis / Celery。
@@ -1585,13 +1598,16 @@ Stage 23B-P3 设置入口补丁完成状态：
 - Stage 23B-P4 已完成工作台 UI 视觉轻量化：共享按钮、左下设置菜单、历史项目条目、设置弹窗、Provider / 依赖 / 诊断面板统一降低字重、边框、圆角、按钮填充和卡片重量，右侧进度卡片样式保持为当前基准。
 - Stage 23B-P5 已完成 composer 与品牌栏细节统一：缩小并弱化“麋鹿”logo / 字样，不改“项目”标题；制作要求输入框高度提高到多行输入形态，placeholder 改为“上传剧本文档后，写下本次制作要求”；新项目只有添加故事文本附件后才启用生成；上传菜单展示真实文件大小限制，不新增文本字数硬限制。
 - Stage 23B-P6 已完成侧栏与进度卡交互补丁：进度摘要不再重复显示“未开始 / 进行中”等任务状态，流程状态只由每个阶段右侧标签表达；左侧项目栏增加与当前图标 UI 一致的收缩、展开和拖拽宽度控制。
+- Stage 23B-P7 已完成项目搜索与设置页收尾：搜索入口真实过滤项目列表；新项目入口不做重复创建，只强化切回空白草稿时的 UI 状态清理；模型配置 / 依赖配置继续只消费 Control API DTO，但用户侧文案改为产品语境，弹窗布局避免横向滚动和全页后台感。
+- Stage 23B-P8 已完成左侧栏交互收尾：项目标题行内搜索、hover/focus 显示项目操作按钮、搜索态弱化隐藏新项目按钮、按钮右侧视觉轴线统一、设置 / 上传菜单外部点击和 Escape 取消、设置按钮轻量化。
+- Stage 23B-P8 follow-up 已补齐项目区文本左对齐、品牌栏 / 收缩按钮纵向对齐、搜索态外部点击退出、Codex 式设置底部行减重和侧栏收缩 / 展开动效。
 - Web / Electron 不直接读取文件系统、不执行 FFmpeg / OCR、不访问 SQLite；后续修复、离线包导入和启用 / 禁用必须继续落在 Control API / 后端 adapter 边界内。
 
 Stage 23B 第一轮落地状态：
 
 - Asset metadata schema 升级为 `stage23b_asset_analysis_v1`，统一记录上传策略、no-provider 边界、技术解析结果、派生文件和大小限制。
 - 文本 / DOCX / PDF 嵌入文本解析结果会生成 `contentBlocks` 和 `chunkManifest`；切片策略为固定字符窗口 + overlap，先写入现有 `assets.metadata_json`。
-- PDF 已有轻量嵌入文本探测路径；扫描版、压缩复杂流和复杂编码 PDF 仍通过 `ocr_required` / warnings 结构化降级。
+- PDF 已有轻量嵌入文本探测路径；Stage 23C-P3 起扫描版 PDF 在无 embedded text 时会尝试后端 Poppler `pdftoppm` rasterizer，再把页图交给 OCR wrapper；缺 Poppler / Tesseract runtime 时仍通过结构化 metadata 降级。
 - DOC 仍不在 UI / Electron 里调用 Office 自动化，当前返回 `parser_unavailable`、后端 runtime 建议路径和 unavailable chunk manifest。
 - OCR 已从后端 runtime 能力检测推进到图片 OCR 调用路径：`FfmpegAssetTechnicalAnalyzer` 会查找 `ControlPlane:OcrTesseractPath`、`runtime\tesseract\tesseract.exe` 或 `D:\tools\tesseract\tesseract.exe`，runtime 可用时对图片上传调用 Tesseract-compatible CLI，写入 OCR 文本、content blocks 和 chunk manifest；runtime 缺失时不阻塞上传，记录 `runtime_not_configured`。
 - 图片 / 视频压缩策略已在后端 FFmpeg adapter 内落地为派生文件 metadata：图片生成 `preview_1280.jpg`，视频生成均匀抽帧和短 `review_proxy_720p.mp4`，原文件保留。
@@ -1612,14 +1628,33 @@ Stage 23B 解析详情消费接口落地状态：
 - OCR 响应只返回 engine、status、candidate、runtimeAvailable、checkedPathCount、UI/Electron file boundary 和 provider boundary，不把 Tesseract 候选本地路径作为 UI 契约。
 - 派生文件只返回 count、kind 和 `backend_adapter_only` access policy，不把 `uploads/storage` 本地路径暴露为工作台详情或生产链路消费契约。
 - `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1` 与 `scripts\windows\Test-MiLuStudioStage23BChunkedUpload.ps1` 已加入 analysis endpoint 断言，确认 chunk manifest 可经 Control API 稳定消费且响应不泄漏本地上传 / 存储路径。
+- Stage 23C-P2 起，上传服务还会把可用故事正文候选写入 `metadata_json.productionInput.storyTextCandidate`；该字段由后端 Worker 消费，不改变 UI / Electron 仍只通过 Control API 查看解析摘要的边界。
+- Stage 23C-P3 起，PDF 无 embedded text 时的扫描页 rasterizer / OCR 路径也只在 `FfmpegAssetTechnicalAnalyzer` 后端 adapter 内执行；analysis endpoint 仍只消费 metadata，不直接读取 PDF 页图。
 
 Stage 23B OCR runtime 调用落地状态：
 
 - `ControlPlaneOptions` 新增 `OcrTesseractPath`、`OcrTessdataPath`、`OcrLanguages` 和 `OcrTimeoutSeconds`，默认语言候选为 `chi_sim+eng;eng`。
+- Stage 23C-P1 起，`OcrTesseractPath` 默认指向 `D:\code\MiLuStudio\runtime\tesseract\tesseract.exe`；`Set-MiLuStudioEnv.ps1` 同步设置后端 OCR path，并仅在 `runtime\tesseract\tessdata` 存在时设置 tessdata path。
 - 图片上传在后端 Infrastructure adapter 内尝试调用 Tesseract CLI，调用参数限定在上传文件、`stdout`、`--psm 6` 和语言候选内；不发送 provider payload，不让 UI / Electron 读取文件或执行 OCR。
 - OCR 成功时把识别文本写入 `technical.text`、`technical.contentBlocks` 和 `technical.chunkManifest`，sourceType 为 `image_ocr`，可被 analysis endpoint 消费。
 - OCR runtime 缺失、语言包缺失、超时或无可用文本时返回结构化 metadata，上传仍成功；脚本会区分 runtime 可用正向路径和当前环境的 `runtime_not_configured` 降级路径。
-- PDF 当前仍只做 embedded text probe；扫描 PDF 需要后续补 PDF rasterizer / page image extraction 后再交给 OCR，不直接把 PDF 文件传给 Tesseract。
+- PDF 当前先做 embedded text probe；扫描 PDF 已新增 Poppler `pdftoppm` page image extraction 后再交给 OCR 的后端路径，不直接把 PDF 文件传给 Tesseract。当前本机未导入 Poppler / Tesseract，正向扫描 PDF OCR 验证仍待 runtime 到位后执行。
+
+Stage 23C-P1 OCR runtime 固化状态：
+
+- 新增 `scripts\windows\Install-MiLuStudioTesseract.ps1`：支持 `-PackagePath` 离线目录/ZIP 导入，`-DownloadUrl` 只作为用户显式触发的辅助下载，`.exe` installer 需要额外传 `-AllowInstaller`；所有写入限制在项目目录内。
+- 安装脚本会寻找 `tesseract.exe` 和 sibling `tessdata`，写入 `runtime\tesseract\manifest.json`，并通过 `--version`、`eng.traineddata` 和语言包列表做 verify。
+- 新增 `scripts\windows\Test-MiLuStudioStage23COcrRuntime.ps1`：runtime 未安装时给出可恢复提示；runtime 存在时调用 Stage 23B asset parsing 脚本的 `-RequireOcrRuntime` 跑正向图片 OCR。
+- `GET /api/system/dependencies` 的 OCR check 已展示 `tesseractPath`、`tessdataPath`、`tessdataAvailable`、`languages` 和安装脚本；InMemory preflight 也补齐 FFmpeg / OCR runtime 状态以保持依赖中心口径一致。
+
+Stage 23C-P3 PDF rasterizer 固化状态：
+
+- `ControlPlaneOptions` 新增 `PdfRasterizerPath`、`PdfRasterizerDpi` 和 `PdfRasterizerPageLimit`，默认查找项目内 `runtime\poppler\Library\bin\pdftoppm.exe`，并回退到项目 `runtime\poppler\bin` 或明确 D 盘工具目录。
+- `FfmpegAssetTechnicalAnalyzer` 在 PDF 无 embedded text 时，会先探测 Poppler `pdftoppm` 和 Tesseract runtime；两者都可用时在后端 adapter 内 rasterize 前几页，再复用 OCR wrapper 生成 `pdf_raster_ocr` chunk manifest。
+- 缺 Poppler、缺 Tesseract、rasterize 失败或 OCR 无文本时均返回结构化 `pdfRasterizer` / `ocr` metadata 和 unavailable chunk manifest，不让上传失败成裸异常。
+- 新增 `scripts\windows\Install-MiLuStudioPdfRasterizer.ps1`：支持离线目录/ZIP 导入和用户显式 `-DownloadUrl` 辅助下载，所有写入限制在项目 `runtime\poppler`。
+- 新增 `scripts\windows\Test-MiLuStudioStage23CPdfRasterizer.ps1`：当前无 runtime 时输出导入提示并跳过正向验证；导入 Poppler + Tesseract 后可用 `-RequireRuntime` 阻断式验证。
+- SQLite / InMemory preflight 已补 `pdf_rasterizer_runtime`，依赖中心后续可通过 Control API 展示 `pdftoppmPath`、DPI、页数上限和安装脚本。
 
 ## 13. 模型与供应商策略
 

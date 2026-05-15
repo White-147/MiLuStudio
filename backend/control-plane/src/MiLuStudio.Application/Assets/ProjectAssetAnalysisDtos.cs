@@ -22,6 +22,7 @@ public sealed record ProjectAssetAnalysisResponse(
     JsonNode? Text,
     JsonNode? ContentBlocks,
     JsonNode? ChunkManifest,
+    JsonNode? DocumentStructure,
     JsonNode? Limits,
     ProjectAssetDerivativeSummary Derivatives,
     bool MetadataJsonParsed,

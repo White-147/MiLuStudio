@@ -17,6 +17,10 @@
     "image_generation": {
       "type": "object",
       "description": "A successful mock image_generation runtime envelope for the same project and episode."
+    },
+    "asset_analysis": {
+      "type": "object",
+      "description": "Optional Stage 23C backend asset-analysis summary for uploaded image and video reference assets."
     }
   }
 }

@@ -10,7 +10,9 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     storyboard = normalized["storyboard_director"]
     character_bible = normalized["character_bible"]
     style_bible = normalized["style_bible"]
+    asset_analysis = normalized["asset_analysis"]
     image_requests = build_image_requests(storyboard, character_bible, style_bible)
+    reference_strategy = build_reference_strategy(character_bible, style_bible, asset_analysis)
 
     data = {
         "project_id": storyboard["project_id"],
@@ -21,17 +23,19 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         "prompt_set_id": f"{storyboard['project_id']}:episode_{storyboard['episode_index']}:image_prompts",
         "image_requests": image_requests,
         "negative_prompt": merge_negative_prompt(style_bible),
-        "reference_strategy": build_reference_strategy(character_bible, style_bible),
+        "reference_strategy": reference_strategy,
         "generation_plan": {
             "mode": "mock_ready",
             "provider": "none",
             "model": "none",
             "request_count": len(image_requests),
+            "uploaded_reference_asset_count": reference_strategy["uploaded_reference_summary"]["image_reference_count"],
             "writes_files": False,
             "writes_database": False,
             "notes": [
                 "Stage 8 only builds image prompt requests and does not call an image model.",
                 "Later image_generation can consume these requests through mock or real provider adapters.",
+                "Uploaded reference assets are consumed as backend metadata only; this skill does not read files.",
             ],
         },
         "review": {
@@ -199,11 +203,17 @@ def merge_negative_prompt(style_bible: dict[str, Any]) -> list[str]:
     return values
 
 
-def build_reference_strategy(character_bible: dict[str, Any], style_bible: dict[str, Any]) -> dict[str, Any]:
+def build_reference_strategy(
+    character_bible: dict[str, Any],
+    style_bible: dict[str, Any],
+    asset_analysis: dict[str, Any],
+) -> dict[str, Any]:
+    uploaded_summary = build_uploaded_image_reference_summary(asset_analysis)
     return {
         "requires_uploaded_reference": False,
         "character_reference_source": "character_bible",
         "style_reference_source": "style_bible.reusable_prompt_blocks",
+        "uploaded_reference_summary": uploaded_summary,
         "character_ids": [
             character["character_id"]
             for character in character_bible.get("characters", [])
@@ -211,7 +221,48 @@ def build_reference_strategy(character_bible: dict[str, Any], style_bible: dict[
         ],
         "style_name": style_bible.get("style_name", ""),
         "notes": [
-            "This stage uploads no reference images and only emits request structures for later image stages.",
-            "Real reference images, turnarounds, and portrait close-ups stay deferred to asset provider stages.",
+            "This stage emits request structures and consumes uploaded image references as metadata summaries.",
+            "Reference files stay behind the Control API and backend adapter boundary.",
         ],
     }
+
+
+def build_uploaded_image_reference_summary(asset_analysis: dict[str, Any]) -> dict[str, Any]:
+    references = [
+        reference
+        for reference in as_list(asset_analysis.get("image_references"))
+        if isinstance(reference, dict)
+    ]
+    derivative_kinds = sorted(
+        {
+            kind
+            for reference in references
+            for kind in as_list(reference.get("derivative_kinds"))
+            if isinstance(kind, str) and kind
+        }
+    )
+
+    return {
+        "schema_version": asset_analysis.get("schema_version", "not_provided"),
+        "source": asset_analysis.get("source", "not_provided"),
+        "media_access_policy": asset_analysis.get("media_access_policy", "backend_adapter_only"),
+        "image_reference_count": len(references),
+        "asset_ids": [
+            reference["asset_id"]
+            for reference in references
+            if isinstance(reference.get("asset_id"), str) and reference["asset_id"]
+        ],
+        "derivative_kinds": derivative_kinds,
+        "has_preview_derivatives": any(
+            bool(reference.get("has_thumbnail")) or bool(reference.get("has_image_preview"))
+            for reference in references
+        ),
+        "local_paths_exposed": False,
+        "ui_electron_file_access": False,
+        "generation_payload_sent": False,
+        "model_provider_used": False,
+    }
+
+
+def as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
