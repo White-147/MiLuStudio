@@ -23,6 +23,8 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
     private const int TextChunkSizeCharacters = 2_800;
     private const int TextChunkOverlapCharacters = 160;
     private const int MaxChunkPreviewCharacters = 220;
+    private const int MaxOcrTextCharacters = 40_000;
+    private const int MaxOcrAttemptErrorCharacters = 1_200;
     private const int ImagePreviewMaxWidth = 1_280;
     private const int VideoReviewProxySeconds = 6;
 
@@ -56,11 +58,18 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
         "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "heic", "heif", "pdf"
     };
 
-    private static readonly string[] OcrCandidatePaths =
+    private static readonly HashSet<string> DirectOcrImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"
+    };
+
+    private static readonly string[] DefaultOcrCandidatePaths =
     [
         "D:\\code\\MiLuStudio\\runtime\\tesseract\\tesseract.exe",
         "D:\\tools\\tesseract\\tesseract.exe"
     ];
+
+    private static readonly string[] DefaultOcrLanguages = ["chi_sim+eng", "eng"];
 
     private readonly ControlPlaneOptions _options;
 
@@ -98,7 +107,7 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
             });
     }
 
-    private static async Task<ProjectAssetTechnicalAnalysis> AnalyzeTextAsync(
+    private async Task<ProjectAssetTechnicalAnalysis> AnalyzeTextAsync(
         StoredProjectAssetFile file,
         CancellationToken cancellationToken)
     {
@@ -182,7 +191,9 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
                 ["textObjectCount"] = pdf.TextObjectCount,
                 ["warnings"] = pdf.Warnings
             };
-            metadata["ocr"] = BuildOcrPlan(file, extractedText is null ? "runtime_not_configured" : "not_required");
+            metadata["ocr"] = extractedText is null
+                ? BuildOcrPlan(file, "runtime_not_configured", "pdf_rasterizer_not_configured")
+                : BuildOcrPlan(file, "not_required");
 
             if (extractedText is null)
             {
@@ -258,9 +269,21 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
             ["modelProviderUsed"] = false,
             ["compressionPolicy"] = BuildCompressionPolicy(kind)
         };
+
+        string? ocrExtractedText = null;
         if (kind == "image_reference")
         {
-            metadata["ocr"] = BuildOcrPlan(file, "runtime_not_configured");
+            var ocr = await AnalyzeOcrAsync(file, cancellationToken);
+            metadata["ocr"] = ocr.Metadata;
+            ocrExtractedText = ocr.ExtractedText;
+            if (ocr.ExtractedText is null)
+            {
+                AddUnavailableChunkManifest(metadata, ocr.UnavailableChunkReason);
+            }
+            else
+            {
+                AddTextManifest(metadata, ocr.ExtractedText, "image_ocr", "image_ocr_text", ocr.Truncated);
+            }
         }
 
         var derivatives = new List<string>();
@@ -275,9 +298,11 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
             metadata["derivativeDetails"] = derivativeDetails;
 
             return new ProjectAssetTechnicalAnalysis(
-                "metadata_only",
-                "Media saved. Project FFmpeg runtime was not found, so Stage 23B recorded structured fallback metadata.",
-                null,
+                string.IsNullOrWhiteSpace(ocrExtractedText) ? "metadata_only" : "ok",
+                string.IsNullOrWhiteSpace(ocrExtractedText)
+                    ? "Media saved. Project FFmpeg runtime was not found, so Stage 23B recorded structured fallback metadata."
+                    : "Media saved. OCR text was extracted; project FFmpeg runtime was not found, so media derivatives were skipped.",
+                ocrExtractedText,
                 derivatives,
                 metadata);
         }
@@ -350,11 +375,15 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
         metadata["derivativeDetails"] = derivativeDetails;
 
         return new ProjectAssetTechnicalAnalysis(
-            probe.ExitCode == 0 ? "ok" : "metadata_only",
+            probe.ExitCode == 0 || !string.IsNullOrWhiteSpace(ocrExtractedText) ? "ok" : "metadata_only",
             probe.ExitCode == 0
-                ? "Media technical analysis completed with Stage 23B derivative metadata."
-                : "Media saved, but ffprobe could not complete. Structured fallback metadata was recorded.",
-            null,
+                ? string.IsNullOrWhiteSpace(ocrExtractedText)
+                    ? "Media technical analysis completed with Stage 23B derivative metadata."
+                    : "Media technical analysis and OCR completed with Stage 23B metadata."
+                : string.IsNullOrWhiteSpace(ocrExtractedText)
+                    ? "Media saved, but ffprobe could not complete. Structured fallback metadata was recorded."
+                    : "Media saved and OCR text was extracted, but ffprobe could not complete.",
+            ocrExtractedText,
             derivatives,
             metadata);
     }
@@ -648,26 +677,192 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
         return chunks;
     }
 
-    private static object BuildOcrPlan(StoredProjectAssetFile file, string statusWhenUnavailable)
+    private async Task<OcrAnalysisResult> AnalyzeOcrAsync(
+        StoredProjectAssetFile file,
+        CancellationToken cancellationToken)
     {
-        var runtimeCandidates = OcrCandidatePaths
+        var probe = ResolveOcrRuntime();
+        if (!DirectOcrImageExtensions.Contains(file.Extension))
+        {
+            return new OcrAnalysisResult(
+                BuildOcrMetadata(file, probe, "unsupported_extension", invoked: false),
+                null,
+                "image_ocr_unsupported_extension",
+                false);
+        }
+
+        if (!probe.RuntimeAvailable || string.IsNullOrWhiteSpace(probe.ExecutablePath))
+        {
+            return new OcrAnalysisResult(
+                BuildOcrMetadata(file, probe, "runtime_not_configured", invoked: false),
+                null,
+                "image_ocr_runtime_not_configured",
+                false);
+        }
+
+        var attempts = new List<Dictionary<string, object?>>();
+        foreach (var language in probe.Languages)
+        {
+            var arguments = new List<string>
+            {
+                file.LocalPath,
+                "stdout",
+                "--psm",
+                "6",
+                "-l",
+                language
+            };
+
+            if (!string.IsNullOrWhiteSpace(probe.TessdataPath))
+            {
+                arguments.Add("--tessdata-dir");
+                arguments.Add(probe.TessdataPath);
+            }
+
+            var environment = string.IsNullOrWhiteSpace(probe.TessdataPath)
+                ? null
+                : new Dictionary<string, string> { ["TESSDATA_PREFIX"] = probe.TessdataPath };
+            var result = await RunToolAsync(
+                probe.ExecutablePath,
+                arguments,
+                TimeSpan.FromSeconds(Math.Max(5, _options.OcrTimeoutSeconds)),
+                cancellationToken,
+                environment);
+
+            var collapsed = CollapseWhitespace(result.Stdout);
+            attempts.Add(new Dictionary<string, object?>
+            {
+                ["language"] = language,
+                ["exitCode"] = result.ExitCode,
+                ["stdoutLength"] = result.Stdout.Length,
+                ["stderr"] = Truncate(result.Stderr, MaxOcrAttemptErrorCharacters)
+            });
+
+            if (result.ExitCode == 0 && ContainsTextSignal(collapsed))
+            {
+                var extractedText = Truncate(collapsed, MaxOcrTextCharacters);
+                var metadata = BuildOcrMetadata(file, probe, "ok", invoked: true);
+                metadata["language"] = language;
+                metadata["attempts"] = attempts;
+                metadata["extractedTextLength"] = extractedText.Length;
+                metadata["truncatedToAnalysisLimit"] = collapsed.Length > extractedText.Length;
+                return new OcrAnalysisResult(
+                    metadata,
+                    extractedText,
+                    "image_ocr_text_not_found",
+                    collapsed.Length > extractedText.Length);
+            }
+        }
+
+        var failedMetadata = BuildOcrMetadata(file, probe, "runtime_failed", invoked: true);
+        failedMetadata["attempts"] = attempts;
+        return new OcrAnalysisResult(
+            failedMetadata,
+            null,
+            "image_ocr_runtime_failed_or_no_text",
+            false);
+    }
+
+    private Dictionary<string, object?> BuildOcrPlan(
+        StoredProjectAssetFile file,
+        string statusWhenUnavailable,
+        string? statusWhenRuntimeAvailable = null)
+    {
+        var probe = ResolveOcrRuntime();
+        var status = statusWhenUnavailable is "not_required" or "not_applicable"
+            ? statusWhenUnavailable
+            : probe.RuntimeAvailable
+                ? statusWhenRuntimeAvailable ?? "runtime_available_not_invoked_by_default"
+                : statusWhenUnavailable;
+        return BuildOcrMetadata(file, probe, status, invoked: false);
+    }
+
+    private Dictionary<string, object?> BuildOcrMetadata(
+        StoredProjectAssetFile file,
+        OcrRuntimeProbe probe,
+        string status,
+        bool invoked)
+    {
+        return new Dictionary<string, object?>
+        {
+            ["engine"] = "tesseract_compatible_backend_runtime",
+            ["status"] = status,
+            ["candidate"] = OcrCandidateExtensions.Contains(file.Extension),
+            ["directImageInputSupported"] = DirectOcrImageExtensions.Contains(file.Extension),
+            ["pdfRasterizerRequired"] = string.Equals(file.Extension, "pdf", StringComparison.OrdinalIgnoreCase),
+            ["runtimeAvailable"] = probe.RuntimeAvailable,
+            ["invoked"] = invoked,
+            ["checkedPaths"] = probe.CheckedPaths,
+            ["languages"] = probe.Languages,
+            ["tessdataAvailable"] = probe.TessdataAvailable,
+            ["uiElectronFileAccess"] = false,
+            ["generationPayloadSent"] = false,
+            ["modelProviderUsed"] = false
+        };
+    }
+
+    private OcrRuntimeProbe ResolveOcrRuntime()
+    {
+        var paths = new List<string>();
+        if (!string.IsNullOrWhiteSpace(_options.OcrTesseractPath))
+        {
+            paths.Add(_options.OcrTesseractPath);
+        }
+
+        paths.AddRange(DefaultOcrCandidatePaths);
+
+        var checkedPaths = paths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => Path.GetFullPath(path.Trim()))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(path => new Dictionary<string, object?>
             {
                 ["path"] = path,
                 ["exists"] = File.Exists(path)
             })
             .ToList();
-        var runtimeAvailable = runtimeCandidates.Any(candidate => candidate["exists"] is true);
+        var executablePath = checkedPaths
+            .Where(candidate => candidate["exists"] is true)
+            .Select(candidate => candidate["path"] as string)
+            .FirstOrDefault();
+        var tessdataPath = ResolveTessdataPath(executablePath);
+        var languages = ResolveOcrLanguages();
 
-        return new Dictionary<string, object?>
+        return new OcrRuntimeProbe(
+            executablePath is not null,
+            executablePath,
+            tessdataPath,
+            tessdataPath is not null && Directory.Exists(tessdataPath),
+            checkedPaths,
+            languages);
+    }
+
+    private string? ResolveTessdataPath(string? executablePath)
+    {
+        if (!string.IsNullOrWhiteSpace(_options.OcrTessdataPath))
         {
-            ["engine"] = "tesseract_compatible_backend_runtime",
-            ["status"] = runtimeAvailable ? "runtime_available_not_invoked_by_default" : statusWhenUnavailable,
-            ["candidate"] = OcrCandidateExtensions.Contains(file.Extension),
-            ["checkedPaths"] = runtimeCandidates,
-            ["uiElectronFileAccess"] = false,
-            ["modelProviderUsed"] = false
-        };
+            return Path.GetFullPath(_options.OcrTessdataPath.Trim());
+        }
+
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            return null;
+        }
+
+        var sibling = Path.Combine(Path.GetDirectoryName(executablePath) ?? ".", "tessdata");
+        return Directory.Exists(sibling) ? sibling : null;
+    }
+
+    private IReadOnlyList<string> ResolveOcrLanguages()
+    {
+        var values = (string.IsNullOrWhiteSpace(_options.OcrLanguages)
+                ? DefaultOcrLanguages
+                : _options.OcrLanguages.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return values.Count == 0 ? DefaultOcrLanguages : values;
     }
 
     private static object BuildCompressionPolicy(string kind)
@@ -860,7 +1055,8 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
         string executable,
         IReadOnlyList<string> arguments,
         TimeSpan timeout,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? environment = null)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(timeout);
@@ -877,6 +1073,14 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
+        }
+
+        if (environment is not null)
+        {
+            foreach (var item in environment)
+            {
+                startInfo.Environment[item.Key] = item.Value;
+            }
         }
 
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Failed to start {executable}.");
@@ -1120,6 +1324,20 @@ public sealed class FfmpegAssetTechnicalAnalyzer : IAssetTechnicalAnalyzer
     }
 
     private sealed record PdfTextExtractionResult(string Text, int TextObjectCount, IReadOnlyList<string> Warnings);
+
+    private sealed record OcrRuntimeProbe(
+        bool RuntimeAvailable,
+        string? ExecutablePath,
+        string? TessdataPath,
+        bool TessdataAvailable,
+        IReadOnlyList<Dictionary<string, object?>> CheckedPaths,
+        IReadOnlyList<string> Languages);
+
+    private sealed record OcrAnalysisResult(
+        Dictionary<string, object?> Metadata,
+        string? ExtractedText,
+        string UnavailableChunkReason,
+        bool Truncated);
 
     private sealed record ToolResult(int ExitCode, string Stdout, string Stderr);
 }

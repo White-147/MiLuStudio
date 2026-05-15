@@ -21,7 +21,7 @@ $webDist = Join-Path $ProjectRoot "apps\web\dist"
 $webRuntime = Join-Path $runtimeRoot "web"
 $apiRuntime = Join-Path $runtimeRoot "control-plane\api"
 $workerRuntime = Join-Path $runtimeRoot "control-plane\worker"
-$migrationRuntime = Join-Path $runtimeRoot "control-plane\db\migrations"
+$sqliteRuntime = Join-Path $runtimeRoot "control-plane\db\sqlite"
 $pythonSkillsRuntime = Join-Path $runtimeRoot "python-skills"
 $pythonRuntime = Join-Path $runtimeRoot "python-runtime"
 
@@ -211,7 +211,8 @@ if (-not $SkipDotnetPublish) {
 }
 
 Copy-DirectoryContents -Source $webDist -Destination $webRuntime
-Copy-DirectoryContents -Source (Join-Path $ProjectRoot "backend\control-plane\db\migrations") -Destination $migrationRuntime
+Reset-Directory -PathToReset $sqliteRuntime
+Set-Content -LiteralPath (Join-Path $sqliteRuntime "README.txt") -Encoding UTF8 -Value "SQLite schema is initialized by the Control API backend at runtime."
 Copy-DirectoryContents -Source (Join-Path $ProjectRoot "backend\sidecars\python-skills") -Destination $pythonSkillsRuntime
 
 if (-not $SkipPythonRuntimeBundle) {

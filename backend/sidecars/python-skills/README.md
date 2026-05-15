@@ -14,7 +14,7 @@
 - .NET Worker 后续只应通过 CLI / `SkillGateway` 这一层调用。
 - 当前链路为 `story_intake -> plot_adaptation -> episode_writer -> character_bible -> style_bible -> storyboard_director -> image_prompt_builder -> image_generation -> video_prompt_builder -> video_generation -> voice_casting -> subtitle_generator -> auto_editor -> quality_checker -> export_packager`。
 - 当前输出包括脚本、角色、画风、分镜、图片提示词、mock 图片资产、视频提示词、mock 视频片段、配音任务、SRT-ready 字幕、粗剪计划、质量报告结构和导出包占位结构。
-- 当前 skill 本身不写数据库，不写真实媒体文件，不调用 FFmpeg；Stage 13 由 .NET Worker / Control API 边界负责把 envelope 写回 PostgreSQL。
+- 当前 skill 本身不写数据库，不写真实媒体文件，不调用 FFmpeg；.NET Worker / Control API 边界负责把 envelope 写回当前后端持久化层。
 
 ## 示例命令
 
@@ -67,7 +67,7 @@ D:\soft\program\Python\Python313\python.exe -m unittest discover -s tests -v
 
 - UI 必须通过 Control API 与后端通信，不能直接调用本目录。
 - Control API / Worker 后续只应通过 CLI / `SkillGateway` 调用 Skills。
-- PostgreSQL 写入、EF Core DbContext 和 Worker durable claiming 已由 Stage 12 / Stage 13 在 .NET 后端边界接入；Python skill 仍不直接写数据库。
+- EF Core DbContext、SQLite 本地持久化和 Worker durable claiming 已在 .NET 后端边界接入；Python skill 仍不直接写数据库。
 - Stage 8 mock 图片资产只暴露逻辑 `milu://mock-assets/...` URI。
 - Stage 9 mock 视频片段只暴露逻辑 `milu://mock-assets/...` URI。
 - Stage 10 配音、字幕和剪辑只暴露逻辑 `milu://mock-assets/...` URI / output intent。

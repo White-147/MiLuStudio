@@ -9,6 +9,13 @@ $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName System.Net.Http
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+try {
+    Add-Type -AssemblyName System.Drawing
+    $script:CanCreateOcrFixture = $true
+}
+catch {
+    $script:CanCreateOcrFixture = $false
+}
 
 $ProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
 . (Join-Path $ProjectRoot "scripts\windows\Set-MiLuStudioEnv.ps1") -ProjectRoot $ProjectRoot | Out-Null
@@ -19,6 +26,7 @@ $apiDll = Join-Path $buildOutput "MiLuStudio.Api.dll"
 $testRoot = Join-Path $ProjectRoot (".tmp\stage23b-asset-parsing\" + ([guid]::NewGuid().ToString("N")))
 $storageRoot = Join-Path $testRoot "storage"
 $uploadsRoot = Join-Path $testRoot "uploads"
+$sqlitePath = Join-Path $testRoot "milu-stage23b-asset-parsing.sqlite3"
 $fixturesRoot = Join-Path $testRoot "fixtures"
 $ffmpegBin = Join-Path $ProjectRoot "runtime\ffmpeg\bin"
 $ffmpegExe = Join-Path $ffmpegBin "ffmpeg.exe"
@@ -126,7 +134,9 @@ function Wait-ApiHealthy {
 function Start-ControlApi {
     $env:ASPNETCORE_ENVIRONMENT = "Development"
     $env:ASPNETCORE_URLS = $ApiBaseUrl
-    $env:ControlPlane__RepositoryProvider = "InMemory"
+    $env:ControlPlane__RepositoryProvider = "SQLite"
+    $env:ConnectionStrings__MiLuStudioControlPlane = "Data Source=$sqlitePath"
+    $env:ControlPlane__MigrationsPath = Join-Path $ProjectRoot "backend\control-plane\db\sqlite"
     $env:ControlPlane__StorageRoot = $storageRoot
     $env:ControlPlane__UploadsRoot = $uploadsRoot
     $env:ControlPlane__FfmpegBinPath = $ffmpegBin
@@ -160,8 +170,7 @@ function Stop-StartedProcess {
 function Stop-IntegrationBuildProcesses {
     Get-CimInstance Win32_Process -Filter "Name = 'dotnet.exe'" |
         Where-Object {
-            $_.CommandLine -like "*$buildOutput*" -or
-            ($_.CommandLine -like "*$ProjectRoot*" -and $_.CommandLine -like "*MiLuStudio.Api.dll*")
+            $_.CommandLine -like "*$buildOutput*"
         } |
         ForEach-Object {
             Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
@@ -189,6 +198,38 @@ function New-DocxFixture {
 </w:document>
 "@
     [System.IO.Compression.ZipFile]::CreateFromDirectory($docxRoot, $Path)
+}
+
+function New-OcrImageFixture {
+    param([string]$Path)
+
+    if (-not $script:CanCreateOcrFixture) {
+        return $null
+    }
+
+    $bitmap = [System.Drawing.Bitmap]::new(1200, 260)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $font = $null
+    $brush = $null
+    try {
+        $graphics.Clear([System.Drawing.Color]::White)
+        $graphics.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::SingleBitPerPixelGridFit
+        $font = [System.Drawing.Font]::new("Arial", 58, [System.Drawing.FontStyle]::Bold)
+        $brush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::Black)
+        $graphics.DrawString("STAGE23B OCR MARKER", $font, $brush, 48, 82)
+        $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+        return $Path
+    }
+    finally {
+        if ($null -ne $brush) {
+            $brush.Dispose()
+        }
+        if ($null -ne $font) {
+            $font.Dispose()
+        }
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
 }
 
 function New-Fixtures {
@@ -228,6 +269,9 @@ trailer
         $pngPath,
         [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="))
 
+    $ocrImagePath = Join-Path $fixturesRoot "stage23b-ocr-image.png"
+    $ocrImage = New-OcrImageFixture -Path $ocrImagePath
+
     $videoPath = Join-Path $fixturesRoot "stage23b-video.mp4"
     if (Test-Path -LiteralPath $ffmpegExe) {
         & $ffmpegExe -y -hide_banner -loglevel error -f lavfi -i "testsrc=size=320x180:rate=12:duration=2" -pix_fmt yuv420p $videoPath
@@ -242,6 +286,7 @@ trailer
         Pdf = $pdfPath
         Doc = $docPath
         Image = $pngPath
+        OcrImage = $ocrImage
         Video = if (Test-Path -LiteralPath $videoPath) { $videoPath } else { $null }
     }
 }
@@ -251,6 +296,30 @@ function Assert-NoProviderBoundary {
 
     Assert-True ($Metadata.parse.generationPayloadSent -eq $false) "Upload metadata crossed generation payload boundary."
     Assert-True ($Metadata.parse.modelProviderUsed -eq $false) "Upload metadata crossed model provider boundary."
+}
+
+function Assert-AssetAnalysis {
+    param(
+        [string]$ProjectId,
+        [string]$AssetId,
+        [string]$ExpectedManifestStatus,
+        [int]$MinimumChunks = 0
+    )
+
+    $analysis = Invoke-Api -Method Get -Path "/api/projects/$ProjectId/assets/$AssetId/analysis"
+    Assert-True ($analysis.id -eq $AssetId) "Asset analysis endpoint returned the wrong asset id."
+    Assert-True ($analysis.analysisSchemaVersion -eq "stage23b_asset_analysis_v1") "Asset analysis did not expose the Stage 23B schema."
+    Assert-True ($analysis.boundary.uiElectronFileAccess -eq $false) "Asset analysis crossed the UI/Electron file boundary."
+    Assert-True ($analysis.boundary.generationPayloadSent -eq $false) "Asset analysis crossed generation payload boundary."
+    Assert-True ($analysis.boundary.modelProviderUsed -eq $false) "Asset analysis crossed model provider boundary."
+    Assert-True ($analysis.chunkManifestSummary.status -eq $ExpectedManifestStatus) "Asset analysis chunk manifest status mismatch."
+    Assert-True ([int]$analysis.chunkManifestSummary.totalChunks -ge $MinimumChunks) "Asset analysis chunk manifest did not expose enough chunks."
+
+    $serialized = $analysis | ConvertTo-Json -Depth 80
+    Assert-True (-not $serialized.Contains($uploadsRoot)) "Asset analysis leaked local uploads path."
+    Assert-True (-not $serialized.Contains($storageRoot)) "Asset analysis leaked local storage path."
+
+    return $analysis
 }
 
 try {
@@ -295,12 +364,16 @@ try {
     Assert-True ([int]$textMeta.technical.chunkManifest.totalChunks -ge 2) "Text fixture should produce multiple chunks."
     Assert-True ($textMeta.upload.chunkingPolicy.preferredChunkBytes -eq 8388608) "Upload chunking policy was not recorded."
     Assert-NoProviderBoundary -Metadata $textMeta
+    $textAnalysis = Assert-AssetAnalysis -ProjectId $project.id -AssetId $textUpload.id -ExpectedManifestStatus "ok" -MinimumChunks 2
+    Assert-True (@($textAnalysis.contentBlocks).Count -ge 1) "Text analysis did not expose content blocks for downstream consumption."
 
     $docxUpload = Invoke-AssetUpload -ProjectId $project.id -Path $fixtures.Docx -ContentType "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -Intent "storyText"
     $docxMeta = $docxUpload.metadataJson | ConvertFrom-Json
     Assert-True ($docxMeta.technical.parser.status -eq "ok") "DOCX parser did not report ok."
     Assert-True ($docxMeta.technical.chunkManifest.status -eq "ok") "DOCX upload did not produce a chunk manifest."
     Assert-NoProviderBoundary -Metadata $docxMeta
+    $docxAnalysis = Assert-AssetAnalysis -ProjectId $project.id -AssetId $docxUpload.id -ExpectedManifestStatus "ok" -MinimumChunks 1
+    Assert-True ($docxAnalysis.parser.status -eq "ok") "DOCX analysis endpoint did not expose parser status."
 
     $pdfUpload = Invoke-AssetUpload -ProjectId $project.id -Path $fixtures.Pdf -ContentType "application/pdf" -Intent "storyText"
     $pdfMeta = $pdfUpload.metadataJson | ConvertFrom-Json
@@ -308,12 +381,16 @@ try {
     Assert-True ($pdfMeta.technical.chunkManifest.status -eq "ok") "PDF upload did not produce a chunk manifest."
     Assert-True ($pdfUpload.extractedText -like "*Stage23B PDF embedded text marker*") "PDF extracted text marker was not returned."
     Assert-NoProviderBoundary -Metadata $pdfMeta
+    $pdfAnalysis = Assert-AssetAnalysis -ProjectId $project.id -AssetId $pdfUpload.id -ExpectedManifestStatus "ok" -MinimumChunks 1
+    Assert-True (@("not_required", "runtime_available_not_invoked_by_default") -contains $pdfAnalysis.ocr.status) "PDF embedded-text analysis should not require OCR."
 
     $docUpload = Invoke-AssetUpload -ProjectId $project.id -Path $fixtures.Doc -ContentType "application/msword" -Intent "storyText"
     $docMeta = $docUpload.metadataJson | ConvertFrom-Json
     Assert-True ($docMeta.technical.parser.status -eq "parser_unavailable") "Legacy DOC did not record parser_unavailable."
     Assert-True ($docMeta.technical.chunkManifest.status -eq "unavailable") "Legacy DOC should record unavailable chunk manifest."
     Assert-NoProviderBoundary -Metadata $docMeta
+    $docAnalysis = Assert-AssetAnalysis -ProjectId $project.id -AssetId $docUpload.id -ExpectedManifestStatus "unavailable"
+    Assert-True ($docAnalysis.parser.status -eq "parser_unavailable") "Legacy DOC analysis endpoint did not expose parser_unavailable."
 
     $imageUpload = Invoke-AssetUpload -ProjectId $project.id -Path $fixtures.Image -ContentType "image/png" -Intent "imageReference"
     $imageMeta = $imageUpload.metadataJson | ConvertFrom-Json
@@ -321,6 +398,36 @@ try {
     Assert-True ($imageMeta.technical.compressionPolicy.backendAdapterOnly -eq $true) "Image compression policy was not backend-adapter-only."
     Assert-True ($imageMeta.technical.ocr.uiElectronFileAccess -eq $false) "Image OCR metadata crossed UI/Electron file boundary."
     Assert-NoProviderBoundary -Metadata $imageMeta
+    $imageAnalysis = Assert-AssetAnalysis -ProjectId $project.id -AssetId $imageUpload.id -ExpectedManifestStatus "unavailable"
+    Assert-True ($imageAnalysis.derivatives.accessPolicy -eq "backend_adapter_only") "Image analysis did not keep derivatives behind backend adapter policy."
+
+    if ($null -ne $fixtures.OcrImage) {
+        $ocrImageUpload = Invoke-AssetUpload -ProjectId $project.id -Path $fixtures.OcrImage -ContentType "image/png" -Intent "imageReference"
+        $ocrImageMeta = $ocrImageUpload.metadataJson | ConvertFrom-Json
+        Assert-True ($ocrImageMeta.technical.ocr.modelProviderUsed -eq $false) "OCR image crossed model provider boundary."
+        Assert-True ($ocrImageMeta.technical.ocr.generationPayloadSent -eq $false) "OCR image crossed generation payload boundary."
+        Assert-True ($ocrImageMeta.technical.ocr.uiElectronFileAccess -eq $false) "OCR image crossed UI/Electron file boundary."
+
+        if ($ocrImageMeta.technical.ocr.runtimeAvailable -eq $true) {
+            Assert-True ($ocrImageMeta.technical.ocr.status -eq "ok") "OCR runtime was available but image OCR did not succeed: $($ocrImageMeta.technical.ocr.status)"
+            Assert-True ($ocrImageMeta.technical.ocr.invoked -eq $true) "OCR runtime was available but not invoked."
+            Assert-True ($ocrImageUpload.extractedText -like "*STAGE23B*" -or $ocrImageUpload.extractedText -like "*OCR*") "OCR extracted text marker was missing."
+            $ocrImageAnalysis = Assert-AssetAnalysis -ProjectId $project.id -AssetId $ocrImageUpload.id -ExpectedManifestStatus "ok" -MinimumChunks 1
+            Assert-True ($ocrImageAnalysis.ocr.invoked -eq $true) "OCR analysis did not report invocation."
+            Assert-True ($ocrImageAnalysis.ocr.extractedTextLength -gt 0) "OCR analysis did not report extracted text length."
+        }
+        else {
+            Assert-True ($ocrImageMeta.technical.ocr.status -eq "runtime_not_configured") "OCR runtime absence did not produce runtime_not_configured."
+            Assert-True ($ocrImageMeta.technical.ocr.invoked -eq $false) "OCR runtime was absent but invocation was recorded."
+            $ocrImageAnalysis = Assert-AssetAnalysis -ProjectId $project.id -AssetId $ocrImageUpload.id -ExpectedManifestStatus "unavailable"
+            Assert-True ($ocrImageAnalysis.ocr.runtimeAvailable -eq $false) "OCR analysis reported runtime available unexpectedly."
+        }
+
+        Assert-NoProviderBoundary -Metadata $ocrImageMeta
+    }
+    else {
+        Write-Host "System.Drawing was unavailable; OCR image fixture generation skipped while base image OCR fallback metadata remains covered."
+    }
 
     if ($null -ne $fixtures.Video) {
         $videoUpload = Invoke-AssetUpload -ProjectId $project.id -Path $fixtures.Video -ContentType "video/mp4" -Intent "videoReference"
@@ -330,6 +437,8 @@ try {
         Assert-True ($videoMeta.technical.frameExtraction.targetFrameCount -eq 4) "Video frame extraction did not use the configured frame target."
         Assert-True ($videoMeta.technical.frameExtraction.actualFrameCount -ge 1) "Video frame extraction did not create any frames."
         Assert-NoProviderBoundary -Metadata $videoMeta
+        $videoAnalysis = Assert-AssetAnalysis -ProjectId $project.id -AssetId $videoUpload.id -ExpectedManifestStatus "unavailable"
+        Assert-True ($videoAnalysis.derivatives.accessPolicy -eq "backend_adapter_only") "Video analysis did not keep derivatives behind backend adapter policy."
     }
     else {
         Write-Host "FFmpeg was not found at $ffmpegExe; video fixture generation skipped while fallback metadata remains covered by image/media policy checks."

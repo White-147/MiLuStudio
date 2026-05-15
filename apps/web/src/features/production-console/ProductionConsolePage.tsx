@@ -446,7 +446,7 @@ export function ProductionConsolePage({ onBack, projectId }: ProductionConsolePa
       const savedProject = await updateProject(project.id, draft);
       setProject(savedProject);
       setDraft(toProjectDraft(savedProject));
-      setDraftMessage('输入已保存到 Control API / PostgreSQL');
+      setDraftMessage('输入已保存到 Control API / SQLite');
       return savedProject;
     } catch (error) {
       setDraftMessage(error instanceof Error ? error.message : '输入保存失败');

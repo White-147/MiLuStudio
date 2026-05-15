@@ -179,6 +179,6 @@ def build_edit_manifest(
         "uses_ffmpeg": False,
         "notes": [
             "All media URIs are logical placeholders until real adapters write files.",
-            "The rough edit plan can be stored later by PostgreSQL / EF Core adapters without changing skill outputs.",
+            "The rough edit plan can be stored later by backend EF Core adapters without changing skill outputs.",
         ],
     }

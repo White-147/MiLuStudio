@@ -12,6 +12,9 @@ import {
   LogOut,
   MessageSquarePlus,
   MonitorCog,
+  PackageCheck,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   RefreshCw,
   Search,
@@ -24,8 +27,10 @@ import {
   WalletCards,
   X,
 } from 'lucide-react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DesktopDiagnosticsPanel } from '../diagnostics/DesktopDiagnosticsPanel';
+import { DependencySettingsPage } from '../settings/DependencySettingsPage';
 import { ProviderSettingsPage } from '../settings/ProviderSettingsPage';
 import {
   approveProductionCheckpoint,
@@ -52,7 +57,6 @@ import type {
   GenerationTaskRecordStatus,
   ProductionJob,
   ProductionJobEvent,
-  ProductionJobStatus,
   ProductionStage,
   ProjectAssetRecord,
   ProjectAssetUploadResponse,
@@ -69,7 +73,7 @@ interface StudioWorkspacePageProps {
   onSignOut: () => Promise<void> | void;
 }
 
-type SettingsPanel = 'account' | 'diagnostics' | 'providers' | null;
+type SettingsPanel = 'account' | 'dependencies' | 'diagnostics' | 'providers' | null;
 
 type WorkspaceMessage = {
   id: string;
@@ -202,9 +206,12 @@ type UploadMenuOption = {
   disabledReason: string;
 };
 
-const STORY_MIN_LENGTH = 500;
-const STORY_MAX_LENGTH = 2000;
 const SAVED_JOB_PREFIX = 'milu.workspace.latestJob.';
+const SIDEBAR_WIDTH_STORAGE_KEY = 'milu.workspace.sidebarWidth';
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'milu.workspace.sidebarCollapsed';
+const SIDEBAR_DEFAULT_WIDTH = 320;
+const SIDEBAR_MIN_WIDTH = 260;
+const SIDEBAR_MAX_WIDTH = 420;
 const TEXT_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 const IMAGE_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 const VIDEO_UPLOAD_MAX_BYTES = 1024 * 1024 * 1024;
@@ -251,6 +258,27 @@ const FIXED_PRODUCTION_FLOW: Array<{ label: string; skillName: string }> = [
   { label: '导出占位', skillName: 'export_packager' },
 ];
 
+function clampSidebarWidth(value: number): number {
+  return Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, Math.round(value)));
+}
+
+function readStoredSidebarWidth(): number {
+  if (typeof window === 'undefined') {
+    return SIDEBAR_DEFAULT_WIDTH;
+  }
+
+  const value = Number(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
+  return Number.isFinite(value) ? clampSidebarWidth(value) : SIDEBAR_DEFAULT_WIDTH;
+}
+
+function readStoredSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true';
+}
+
 export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePageProps) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -277,6 +305,9 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
   const [deleteConfirmProjectId, setDeleteConfirmProjectId] = useState<string | null>(null);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const [sidebarWidth, setSidebarWidth] = useState(readStoredSidebarWidth);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readStoredSidebarCollapsed);
+  const [sidebarDragging, setSidebarDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadIntentRef = useRef<UploadMenuOption | null>(null);
 
@@ -287,11 +318,15 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
       ),
     [projects],
   );
-  const storyLength = useMemo(
-    () => countStoryCharacters(buildSubmissionStoryText(draftText, composerAttachments, project)),
-    [composerAttachments, draftText, project],
+  const hasStoryTextAttachment = useMemo(
+    () =>
+      composerAttachments.some(
+        (attachment) =>
+          attachment.kind === 'storyText' && Boolean(attachment.file || attachment.text?.trim() || attachment.assetId),
+      ),
+    [composerAttachments],
   );
-  const canSubmitComposer = Boolean(draftText.trim() || composerAttachments.length);
+  const canSubmitComposer = project ? Boolean(draftText.trim() || composerAttachments.length) : hasStoryTextAttachment;
   const generatedResults = useMemo(
     () =>
       tasks
@@ -307,6 +342,75 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
   const progress = Math.round((completedFlowCount / FIXED_PRODUCTION_FLOW.length) * 100);
   const canCheckpoint = Boolean(job && activeReview && job.status === 'paused');
   const isEmptyWorkspace = !project && messages.length === 0 && !loadingProject;
+  const workspaceShellClassName = [
+    'codex-workspace-shell',
+    sidebarCollapsed ? 'sidebar-collapsed' : '',
+    sidebarDragging ? 'sidebar-resizing' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const workspaceShellStyle = { '--workspace-sidebar-width': `${sidebarWidth}px` } as CSSProperties;
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, sidebarCollapsed ? 'true' : 'false');
+  }, [sidebarCollapsed]);
+
+  const collapseSidebar = () => {
+    setSidebarCollapsed(true);
+    setSettingsMenuOpen(false);
+    setUploadMenuOpen(false);
+  };
+
+  const expandSidebar = () => {
+    setSidebarCollapsed(false);
+  };
+
+  const startSidebarResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || sidebarCollapsed) {
+      return;
+    }
+
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    setSidebarDragging(true);
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      setSidebarWidth(clampSidebarWidth(startWidth + moveEvent.clientX - startX));
+    };
+
+    const stopResize = () => {
+      setSidebarDragging(false);
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', stopResize);
+      window.removeEventListener('pointercancel', stopResize);
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', stopResize, { once: true });
+    window.addEventListener('pointercancel', stopResize, { once: true });
+  };
+
+  const handleSidebarResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      setSidebarWidth((current) => clampSidebarWidth(current + (event.key === 'ArrowLeft' ? -16 : 16)));
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault();
+      setSidebarWidth(SIDEBAR_MIN_WIDTH);
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault();
+      setSidebarWidth(SIDEBAR_MAX_WIDTH);
+    }
+  };
 
   const loadProjectSummaries = useCallback(async (signal?: AbortSignal) => {
     setLoadingProjects(true);
@@ -458,8 +562,7 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
   };
 
   const submitComposer = async () => {
-    const hasPendingStoryFile = composerAttachments.some((attachment) => attachment.kind === 'storyText' && attachment.file);
-    if (!project && !hasPendingStoryFile) {
+    if (!project && !hasStoryTextAttachment) {
       setNotice('请先通过加号上传剧本文本文件；输入框只填写制作要求。');
       return;
     }
@@ -474,16 +577,10 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
 
       const sourceProject = project ? initialProject : null;
       const rawText = buildSubmissionStoryText(draftText, uploadedAttachments, sourceProject);
-      const text = fitStoryTextForProject(rawText);
-      const currentLength = countStoryCharacters(text);
+      const text = rawText.trim();
 
       if (!text) {
         setNotice('文本附件已上传，但没有解析出可用于故事解析的正文；DOC/PDF/OCR 支持会在后续阶段继续补齐。');
-        return;
-      }
-
-      if (currentLength < STORY_MIN_LENGTH || currentLength > STORY_MAX_LENGTH) {
-        setNotice(`剧本正文需要保持在 ${STORY_MIN_LENGTH}-${STORY_MAX_LENGTH} 个非空白字符之间，当前 ${currentLength}。`);
         return;
       }
 
@@ -780,31 +877,59 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
   };
 
   return (
-    <div className="codex-workspace-shell">
+    <div className={workspaceShellClassName} style={workspaceShellStyle}>
+      {sidebarCollapsed && (
+        <button
+          aria-label="展开项目栏"
+          className="workspace-sidebar-expand-button"
+          onClick={expandSidebar}
+          title="展开项目栏"
+          type="button"
+        >
+          <PanelLeftOpen size={15} />
+        </button>
+      )}
+
       <aside className="workspace-sidebar" aria-label="历史项目">
-        <nav className="workspace-command-list" aria-label="工作区命令">
-          <button className="workspace-command-button" onClick={startNewProject} type="button">
-            <MessageSquarePlus size={17} />
-            <span>新项目</span>
-          </button>
-          <button className="workspace-command-button" onClick={() => void loadProjectSummaries()} type="button">
-            <Search size={17} />
-            <span>搜索</span>
-          </button>
-          <button className="workspace-command-button" hidden onClick={() => openSettingsPanel('providers')} type="button">
-            <SlidersHorizontal size={17} />
-            <span>模型</span>
-          </button>
-          <button className="workspace-command-button" onClick={() => openSettingsPanel('diagnostics')} type="button">
-            <MonitorCog size={17} />
-            <span>诊断</span>
-          </button>
-        </nav>
+        <button
+          aria-label="收起项目栏"
+          className="workspace-sidebar-collapse-button"
+          onClick={collapseSidebar}
+          title="收起项目栏"
+          type="button"
+        >
+          <PanelLeftClose size={15} />
+        </button>
+
+        <div className="workspace-brand" aria-label="麋鹿">
+          <img alt="" className="workspace-brand-logo" src="/brand/logo.png" />
+          <span>麋鹿</span>
+        </div>
 
         <div className="workspace-history">
           <div className="workspace-section-label">
             <span>项目</span>
-            {loadingProjects && <Loader2 className="spin" size={14} />}
+            <div className="workspace-section-actions">
+              {loadingProjects && <Loader2 className="spin" size={14} />}
+              <button
+                aria-label="搜索项目"
+                className="workspace-section-action"
+                onClick={() => void loadProjectSummaries()}
+                title="搜索"
+                type="button"
+              >
+                <Search size={15} />
+              </button>
+              <button
+                aria-label="新项目"
+                className="workspace-section-action"
+                onClick={startNewProject}
+                title="新项目"
+                type="button"
+              >
+                <MessageSquarePlus size={15} />
+              </button>
+            </div>
           </div>
           <div className="workspace-project-list">
             {sortedProjects.map((item) => (
@@ -854,6 +979,10 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
                 <UserCircle2 size={16} />
                 <span>{authState.account?.email ?? authState.account?.displayName ?? '本机账户'}</span>
               </div>
+              <button onClick={() => openSettingsPanel('diagnostics')} type="button">
+                <MonitorCog size={16} />
+                <span>诊断</span>
+              </button>
               <button onClick={() => openSettingsPanel('account')} type="button">
                 <UserCircle2 size={16} />
                 <span>个人账户</span>
@@ -863,6 +992,10 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
                 <SlidersHorizontal size={16} />
                 <span className="provider-menu-label">模型</span>
                 <span>设置</span>
+              </button>
+              <button onClick={() => openSettingsPanel('dependencies')} type="button">
+                <PackageCheck size={16} />
+                <span>依赖</span>
               </button>
               <button onClick={() => setNotice('当前版本未接入真实计费，暂无余额数据。')} type="button">
                 <WalletCards size={16} />
@@ -884,6 +1017,18 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
             <span>设置</span>
           </button>
         </div>
+
+        <div
+          aria-label="调整项目栏宽度"
+          aria-orientation="vertical"
+          className="workspace-sidebar-resizer"
+          onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_WIDTH)}
+          onKeyDown={handleSidebarResizeKeyDown}
+          onPointerDown={startSidebarResize}
+          role="separator"
+          tabIndex={0}
+          title="拖拽调整项目栏宽度"
+        />
       </aside>
 
       <main className={isEmptyWorkspace ? 'workspace-main empty' : 'workspace-main'}>
@@ -950,7 +1095,7 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
             </div>
           )}
           <textarea
-            placeholder={composerAttachments.length || project ? '写下本次制作要求' : '先用加号上传剧本文本，再写制作要求'}
+            placeholder="上传剧本文档后，写下本次制作要求"
             value={draftText}
             onChange={(event) => setDraftText(event.target.value)}
           />
@@ -1000,11 +1145,8 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
                   </div>
                 )}
               </div>
-              <span className={storyLength < STORY_MIN_LENGTH || storyLength > STORY_MAX_LENGTH ? 'count-badge warn' : 'count-badge'}>
-                {storyLength}/{STORY_MAX_LENGTH}
-              </span>
             </div>
-            <button className="primary-button" disabled={composerBusy || !canSubmitComposer} onClick={submitComposer} type="button">
+            <button className="composer-submit-button" disabled={composerBusy || !canSubmitComposer} onClick={submitComposer} type="button">
               {composerBusy ? <Loader2 className="spin" size={17} /> : <SendHorizontal size={17} />}
               <span>{project ? '更新生成' : '开始生成'}</span>
             </button>
@@ -1029,7 +1171,6 @@ export function StudioWorkspacePage({ authState, onSignOut }: StudioWorkspacePag
 
           <div className="project-progress-summary">
             <span>{completedFlowCount}/{FIXED_PRODUCTION_FLOW.length}</span>
-            <span>{job ? formatJobStatus(job.status) : project ? formatProjectStatus(project.status) : '未开始'}</span>
           </div>
           <div className="progress-meter" aria-label={`当前项目固定流程完成度 ${progress}%`}>
             <span style={{ width: `${progress}%` }} />
@@ -1726,6 +1867,7 @@ function SettingsPanelOverlay({
 }) {
   const titleMap: Record<Exclude<SettingsPanel, null>, string> = {
     account: '账户',
+    dependencies: '依赖',
     diagnostics: '桌面诊断',
     providers: '模型配置',
   };
@@ -1743,6 +1885,7 @@ function SettingsPanelOverlay({
           </button>
         </header>
         {panel === 'providers' && <ProviderSettingsPage />}
+        {panel === 'dependencies' && <DependencySettingsPage />}
         {panel === 'diagnostics' && <DesktopDiagnosticsPanel />}
         {panel === 'account' && (
           <div className="account-settings-panel">
@@ -1792,7 +1935,9 @@ function buildUploadMenuOptions(job: ProductionJob | null, project: ProjectDetai
     {
       kind: 'text',
       label: '文本',
-      description: storySourceStage ? '上传剧本文本' : '上传文字要求或分镜参考',
+      description: storySourceStage
+        ? `上传剧本文本 · 最大 ${formatFileSize(TEXT_UPLOAD_MAX_BYTES)}`
+        : `上传文字要求或分镜参考 · 最大 ${formatFileSize(TEXT_UPLOAD_MAX_BYTES)}`,
       accept: storySourceStage ? STORY_TEXT_ACCEPT : STORYBOARD_TEXT_ACCEPT,
       allowedKinds: textAllowedKinds,
       enabled: !globalDisabledReason && allowedMenuKinds.has('text'),
@@ -1801,7 +1946,7 @@ function buildUploadMenuOptions(job: ProductionJob | null, project: ProjectDetai
     {
       kind: 'image',
       label: '图片',
-      description: '添加角色图或画风参考',
+      description: `角色图或画风参考 · 最大 ${formatFileSize(IMAGE_UPLOAD_MAX_BYTES)}`,
       accept: IMAGE_REFERENCE_ACCEPT,
       allowedKinds: ['imageReference'],
       enabled: !globalDisabledReason && allowedMenuKinds.has('image'),
@@ -1810,7 +1955,7 @@ function buildUploadMenuOptions(job: ProductionJob | null, project: ProjectDetai
     {
       kind: 'video',
       label: '视频',
-      description: '添加视频分镜综合参考',
+      description: `视频分镜综合参考 · 最大 ${formatFileSize(VIDEO_UPLOAD_MAX_BYTES)}`,
       accept: VIDEO_REFERENCE_ACCEPT,
       allowedKinds: ['videoReference'],
       enabled: !globalDisabledReason && allowedMenuKinds.has('video'),
@@ -1964,28 +2109,6 @@ function buildSubmissionStoryText(
   }
 
   return parts.join('\n\n').trim();
-}
-
-function fitStoryTextForProject(text: string): string {
-  const normalized = text.trim();
-  if (countStoryCharacters(normalized) <= STORY_MAX_LENGTH) {
-    return normalized;
-  }
-
-  let count = 0;
-  let end = 0;
-  for (const character of normalized) {
-    if (!/\s/.test(character)) {
-      count += 1;
-    }
-
-    end += character.length;
-    if (count >= STORY_MAX_LENGTH) {
-      break;
-    }
-  }
-
-  return normalized.slice(0, end).trim();
 }
 
 function formatReferenceAttachmentSummary(attachments: ComposerAttachment[]): string {
@@ -2670,18 +2793,6 @@ function formatProjectStatus(status: ProjectStatus): string {
   return labels[status];
 }
 
-function formatJobStatus(status: ProductionJobStatus): string {
-  const labels: Record<ProductionJobStatus, string> = {
-    completed: '已完成',
-    failed: '失败',
-    paused: '已暂停',
-    queued: '排队中',
-    running: '进行中',
-  };
-
-  return labels[status];
-}
-
 function formatTaskStatus(status: GenerationTaskRecordStatus): string {
   const labels: Record<GenerationTaskRecordStatus, string> = {
     completed: '已完成',
@@ -2795,10 +2906,6 @@ function formatFieldName(value: string): string {
     .filter(Boolean)
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(' ');
-}
-
-function countStoryCharacters(storyText: string): number {
-  return Array.from(storyText).filter((character) => !/\s/.test(character)).length;
 }
 
 function clampProgress(value: number): number {

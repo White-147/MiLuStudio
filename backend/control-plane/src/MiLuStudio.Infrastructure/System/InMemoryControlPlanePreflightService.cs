@@ -27,12 +27,12 @@ public sealed class InMemoryControlPlanePreflightService : IControlPlanePrefligh
             new(
                 "database",
                 "skipped",
-                "PostgreSQL is not required while RepositoryProvider=InMemory.",
+                "SQLite is not required while RepositoryProvider=InMemory.",
                 new Dictionary<string, string>()),
             new(
                 "migrations",
                 "skipped",
-                "SQL migrations are checked only when RepositoryProvider=PostgreSQL.",
+                "SQLite schema initialization is checked only when RepositoryProvider=SQLite.",
                 new Dictionary<string, string> { ["migrationsPath"] = _options.MigrationsPath }),
             new(
                 "storage_root",
@@ -55,7 +55,7 @@ public sealed class InMemoryControlPlanePreflightService : IControlPlanePrefligh
             RepositoryProviderNames.InMemory,
             Healthy: true,
             checks,
-            ["Switch ControlPlane:RepositoryProvider to PostgreSQL only after local database configuration is ready."]));
+            ["Switch ControlPlane:RepositoryProvider to SQLite only after local database configuration is ready."]));
     }
 
     public Task<MigrationStatusDto> GetStatusAsync(CancellationToken cancellationToken)

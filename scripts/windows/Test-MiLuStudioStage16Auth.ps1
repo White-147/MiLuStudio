@@ -14,6 +14,10 @@ $ProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
 $buildOutput = Join-Path $ProjectRoot ".tmp\stage16-auth-build"
 $solution = Join-Path $ProjectRoot "backend\control-plane\MiLuStudio.ControlPlane.sln"
 $apiDll = Join-Path $buildOutput "MiLuStudio.Api.dll"
+$testRoot = Join-Path $ProjectRoot (".tmp\stage16-auth\" + ([guid]::NewGuid().ToString("N")))
+$storageRoot = Join-Path $testRoot "storage"
+$uploadsRoot = Join-Path $testRoot "uploads"
+$sqlitePath = Join-Path $testRoot "milu-stage16-auth.sqlite3"
 $startedProcesses = New-Object System.Collections.Generic.List[System.Diagnostics.Process]
 
 function Invoke-Api {
@@ -95,6 +99,10 @@ function Wait-ApiHealthy {
 function Start-ControlApi {
     $env:ASPNETCORE_ENVIRONMENT = "Development"
     $env:ASPNETCORE_URLS = $ApiBaseUrl
+    $env:ControlPlane__RepositoryProvider = "SQLite"
+    $env:ConnectionStrings__MiLuStudioControlPlane = "Data Source=$sqlitePath"
+    $env:ControlPlane__StorageRoot = $storageRoot
+    $env:ControlPlane__UploadsRoot = $uploadsRoot
     $process = Start-Process -FilePath $DotnetPath -ArgumentList @($apiDll) -WorkingDirectory $buildOutput -WindowStyle Hidden -PassThru
     $startedProcesses.Add($process)
     Wait-ApiHealthy
@@ -129,7 +137,6 @@ function Stop-IntegrationBuildProcesses {
 
 try {
     Stop-IntegrationBuildProcesses
-    powershell -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot "scripts\windows\Initialize-MiLuStudioPostgreSql.ps1")
 
     if (-not $SkipBuild) {
         & $DotnetPath build $solution --no-restore "-p:OutputPath=$buildOutput\"

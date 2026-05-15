@@ -310,6 +310,27 @@ export interface ProviderConnectionTestResponse {
   details: Record<string, string>;
 }
 
+export type SystemDependencyStatus = 'ok' | 'warning' | 'error' | 'skipped';
+
+export interface SystemDependencyCheck {
+  id: string;
+  status: SystemDependencyStatus;
+  message: string;
+  details: Record<string, string>;
+}
+
+export interface SystemDependenciesReport {
+  status: 'ready' | 'attention_required';
+  repositoryProvider: string;
+  installStrategy: {
+    preferred: string;
+    onlineDownload: string;
+    managedBy: string;
+  };
+  dependencies: SystemDependencyCheck[];
+  recommendations: string[];
+}
+
 export interface ProjectAssetRecord {
   id: string;
   projectId: string;

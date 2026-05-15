@@ -1,11 +1,11 @@
-namespace MiLuStudio.Infrastructure.Persistence.PostgreSql;
+namespace MiLuStudio.Infrastructure.Persistence.Sqlite;
 
 using Microsoft.EntityFrameworkCore;
 using MiLuStudio.Application.Abstractions;
 using MiLuStudio.Domain;
 using MiLuStudio.Domain.Entities;
 
-public sealed class PostgreSqlControlPlaneRepository :
+public sealed class SqliteControlPlaneRepository :
     IProjectRepository,
     IProductionJobRepository,
     IAssetRepository,
@@ -13,9 +13,10 @@ public sealed class PostgreSqlControlPlaneRepository :
 {
     private readonly MiLuStudioDbContext _db;
 
-    public PostgreSqlControlPlaneRepository(MiLuStudioDbContext db)
+    public SqliteControlPlaneRepository(MiLuStudioDbContext db)
     {
         _db = db;
+        _db.Database.EnsureCreated();
     }
 
     public async Task<IReadOnlyList<Project>> ListAsync(CancellationToken cancellationToken)
@@ -175,29 +176,20 @@ public sealed class PostgreSqlControlPlaneRepository :
         CancellationToken cancellationToken)
     {
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
-        var task = await _db.GenerationTasks
-            .FromSqlInterpolated(
-                $"""
-                select gt.*
-                from generation_tasks gt
-                join production_jobs pj on pj.id = gt.job_id
-                where (
-                    gt.status = 'waiting'
-                    or (gt.status = 'running' and (gt.locked_until is null or gt.locked_until <= {now}))
-                  )
-                  and pj.status in ('queued', 'running')
-                  and not exists (
-                    select 1
-                    from generation_tasks previous
-                    where previous.job_id = gt.job_id
-                      and previous.queue_index < gt.queue_index
-                      and previous.status <> 'completed'
-                  )
-                order by pj.started_at, gt.queue_index, gt.id
-                for update skip locked
-                limit 1
-                """
-            )
+        var task = await (
+                from candidate in _db.GenerationTasks.AsNoTracking()
+                join job in _db.ProductionJobs.AsNoTracking() on candidate.JobId equals job.Id
+                where
+                    (candidate.Status == GenerationTaskStatus.Waiting ||
+                        (candidate.Status == GenerationTaskStatus.Running &&
+                            (candidate.LockedUntil == null || candidate.LockedUntil <= now))) &&
+                    (job.Status == ProductionJobStatus.Queued || job.Status == ProductionJobStatus.Running) &&
+                    !_db.GenerationTasks.Any(previous =>
+                        previous.JobId == candidate.JobId &&
+                        previous.QueueIndex < candidate.QueueIndex &&
+                        previous.Status != GenerationTaskStatus.Completed)
+                orderby job.StartedAt, candidate.QueueIndex, candidate.Id
+                select candidate)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (task is null)
@@ -206,20 +198,38 @@ public sealed class PostgreSqlControlPlaneRepository :
             return null;
         }
 
-        task.Status = GenerationTaskStatus.Running;
-        task.AttemptCount++;
-        task.StartedAt ??= now;
-        task.FinishedAt = null;
-        task.LockedBy = workerId;
-        task.LockedUntil = now.Add(leaseDuration);
-        task.LastHeartbeatAt = now;
-        task.ErrorMessage = null;
+        var claimedUntil = now.Add(leaseDuration);
+        var startedAt = task.StartedAt ?? now;
+        var updated = await _db.GenerationTasks
+            .Where(candidate =>
+                candidate.Id == task.Id &&
+                (candidate.Status == GenerationTaskStatus.Waiting ||
+                    (candidate.Status == GenerationTaskStatus.Running &&
+                        (candidate.LockedUntil == null || candidate.LockedUntil <= now))))
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(candidate => candidate.Status, GenerationTaskStatus.Running)
+                .SetProperty(candidate => candidate.AttemptCount, candidate => candidate.AttemptCount + 1)
+                .SetProperty(candidate => candidate.StartedAt, startedAt)
+                .SetProperty(candidate => candidate.FinishedAt, (DateTimeOffset?)null)
+                .SetProperty(candidate => candidate.LockedBy, workerId)
+                .SetProperty(candidate => candidate.LockedUntil, claimedUntil)
+                .SetProperty(candidate => candidate.LastHeartbeatAt, now)
+                .SetProperty(candidate => candidate.ErrorMessage, (string?)null),
+                cancellationToken);
 
-        await _db.SaveChangesAsync(cancellationToken);
+        if (updated == 0)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return null;
+        }
+
+        var claimed = await _db.GenerationTasks
+            .AsNoTracking()
+            .FirstAsync(candidate => candidate.Id == task.Id, cancellationToken);
+
         await transaction.CommitAsync(cancellationToken);
-        _db.Entry(task).State = EntityState.Detached;
 
-        return task;
+        return claimed;
     }
 
     public async Task<IReadOnlyList<Asset>> ListAssetsByProjectAsync(string projectId, CancellationToken cancellationToken)

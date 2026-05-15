@@ -5,7 +5,8 @@ public sealed record ProjectAssetUploadRequest(
     string OriginalFileName,
     string ContentType,
     long FileSize,
-    Stream Content);
+    Stream Content,
+    string? UploadMode = null);
 
 public sealed record ProjectAssetUploadResponse(
     string Id,

@@ -8,7 +8,7 @@ using MiLuStudio.Infrastructure.Assets;
 using MiLuStudio.Infrastructure.Auth;
 using MiLuStudio.Infrastructure.Configuration;
 using MiLuStudio.Infrastructure.Persistence.InMemory;
-using MiLuStudio.Infrastructure.Persistence.PostgreSql;
+using MiLuStudio.Infrastructure.Persistence.Sqlite;
 using MiLuStudio.Infrastructure.Settings;
 using MiLuStudio.Infrastructure.Skills;
 using MiLuStudio.Infrastructure.System;
@@ -28,9 +28,13 @@ public static class ServiceCollectionExtensions
             configured.StorageRoot = options.StorageRoot;
             configured.UploadsRoot = options.UploadsRoot;
             configured.FfmpegBinPath = options.FfmpegBinPath;
+            configured.OcrTesseractPath = options.OcrTesseractPath;
+            configured.OcrTessdataPath = options.OcrTessdataPath;
+            configured.OcrLanguages = options.OcrLanguages;
             configured.AssetParseTimeoutSeconds = options.AssetParseTimeoutSeconds;
             configured.AssetTranscodeTimeoutSeconds = options.AssetTranscodeTimeoutSeconds;
             configured.AssetVideoFrameLimit = options.AssetVideoFrameLimit;
+            configured.OcrTimeoutSeconds = options.OcrTimeoutSeconds;
             configured.ProviderSettingsPath = options.ProviderSettingsPath;
             configured.ProviderSecretStorePath = options.ProviderSecretStorePath;
             configured.WorkerId = options.WorkerId;
@@ -51,26 +55,28 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProviderSecretStore, FileProviderSecretStore>();
         services.AddSingleton<IProviderConnectivityTester, OpenAiCompatibleProviderConnectivityTester>();
         services.AddSingleton<IProjectAssetFileStore, LocalProjectAssetFileStore>();
+        services.AddSingleton<IProjectAssetUploadSessionStore, LocalProjectAssetUploadSessionStore>();
         services.AddSingleton<IAssetTechnicalAnalyzer, FfmpegAssetTechnicalAnalyzer>();
         services.AddScoped<IProductionSkillRunner, PythonProductionSkillRunner>();
 
-        if (string.Equals(options.RepositoryProvider, RepositoryProviderNames.PostgreSql, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(options.RepositoryProvider, RepositoryProviderNames.Sqlite, StringComparison.OrdinalIgnoreCase))
         {
             var connectionString = configuration.GetConnectionString("MiLuStudioControlPlane");
             if (string.IsNullOrWhiteSpace(connectionString))
             {
-                throw new InvalidOperationException("ConnectionStrings:MiLuStudioControlPlane is required when ControlPlane:RepositoryProvider=PostgreSQL.");
+                connectionString = BuildDefaultSqliteConnectionString(options);
             }
 
-            services.AddDbContext<MiLuStudioDbContext>(db => db.UseNpgsql(connectionString));
-            services.AddScoped<PostgreSqlControlPlaneRepository>();
-            services.AddScoped<IProjectRepository>(provider => provider.GetRequiredService<PostgreSqlControlPlaneRepository>());
-            services.AddScoped<IProductionJobRepository>(provider => provider.GetRequiredService<PostgreSqlControlPlaneRepository>());
-            services.AddScoped<IAssetRepository>(provider => provider.GetRequiredService<PostgreSqlControlPlaneRepository>());
-            services.AddScoped<ICostLedgerRepository>(provider => provider.GetRequiredService<PostgreSqlControlPlaneRepository>());
-            services.AddScoped<IAuthRepository, PostgreSqlAuthRepository>();
-            services.AddScoped<IControlPlaneMigrationService, PostgreSqlMigrationService>();
-            services.AddScoped<IControlPlanePreflightService, PostgreSqlControlPlanePreflightService>();
+            EnsureSqliteDirectory(connectionString);
+            services.AddDbContext<MiLuStudioDbContext>(db => db.UseSqlite(connectionString));
+            services.AddScoped<SqliteControlPlaneRepository>();
+            services.AddScoped<IProjectRepository>(provider => provider.GetRequiredService<SqliteControlPlaneRepository>());
+            services.AddScoped<IProductionJobRepository>(provider => provider.GetRequiredService<SqliteControlPlaneRepository>());
+            services.AddScoped<IAssetRepository>(provider => provider.GetRequiredService<SqliteControlPlaneRepository>());
+            services.AddScoped<ICostLedgerRepository>(provider => provider.GetRequiredService<SqliteControlPlaneRepository>());
+            services.AddScoped<IAuthRepository, SqliteAuthRepository>();
+            services.AddScoped<IControlPlaneMigrationService, SqliteMigrationService>();
+            services.AddScoped<IControlPlanePreflightService, SqliteControlPlanePreflightService>();
         }
         else if (string.Equals(options.RepositoryProvider, RepositoryProviderNames.InMemory, StringComparison.OrdinalIgnoreCase))
         {
@@ -88,7 +94,7 @@ public static class ServiceCollectionExtensions
         else
         {
             throw new InvalidOperationException(
-                $"Unsupported ControlPlane:RepositoryProvider '{options.RepositoryProvider}'. Use PostgreSQL by default or explicitly set InMemory for smoke tests.");
+                $"Unsupported ControlPlane:RepositoryProvider '{options.RepositoryProvider}'. Use SQLite by default or explicitly set InMemory for smoke tests.");
         }
 
         return services;
@@ -99,11 +105,14 @@ public static class ServiceCollectionExtensions
         var section = configuration.GetSection(ControlPlaneOptions.SectionName);
         return new ControlPlaneOptions
         {
-            RepositoryProvider = section["RepositoryProvider"] ?? RepositoryProviderNames.PostgreSql,
-            MigrationsPath = section["MigrationsPath"] ?? "backend/control-plane/db/migrations",
+            RepositoryProvider = section["RepositoryProvider"] ?? RepositoryProviderNames.Sqlite,
+            MigrationsPath = section["MigrationsPath"] ?? "backend/control-plane/db/sqlite",
             StorageRoot = section["StorageRoot"] ?? "D:\\code\\MiLuStudio\\storage",
             UploadsRoot = section["UploadsRoot"] ?? "D:\\code\\MiLuStudio\\uploads",
             FfmpegBinPath = section["FfmpegBinPath"] ?? "D:\\code\\MiLuStudio\\runtime\\ffmpeg\\bin",
+            OcrTesseractPath = section["OcrTesseractPath"] ?? string.Empty,
+            OcrTessdataPath = section["OcrTessdataPath"] ?? string.Empty,
+            OcrLanguages = section["OcrLanguages"] ?? "chi_sim+eng;eng",
             AssetParseTimeoutSeconds = int.TryParse(section["AssetParseTimeoutSeconds"], out var assetParseTimeoutSeconds)
                 ? Math.Clamp(assetParseTimeoutSeconds, 5, 300)
                 : 60,
@@ -113,6 +122,9 @@ public static class ServiceCollectionExtensions
             AssetVideoFrameLimit = int.TryParse(section["AssetVideoFrameLimit"], out var assetVideoFrameLimit)
                 ? Math.Clamp(assetVideoFrameLimit, 1, 8)
                 : 8,
+            OcrTimeoutSeconds = int.TryParse(section["OcrTimeoutSeconds"], out var ocrTimeoutSeconds)
+                ? Math.Clamp(ocrTimeoutSeconds, 5, 180)
+                : 45,
             ProviderSettingsPath = section["ProviderSettingsPath"] ?? string.Empty,
             ProviderSecretStorePath = section["ProviderSecretStorePath"] ?? string.Empty,
             WorkerId = section["WorkerId"] ?? Environment.MachineName,
@@ -133,5 +145,27 @@ public static class ServiceCollectionExtensions
                 ? Math.Max(1, maxDevices)
                 : 2
         };
+    }
+
+    private static string BuildDefaultSqliteConnectionString(ControlPlaneOptions options)
+    {
+        var databasePath = Path.Combine(options.StorageRoot, "milu-control-plane.sqlite3");
+        return $"Data Source={databasePath}";
+    }
+
+    private static void EnsureSqliteDirectory(string connectionString)
+    {
+        var builder = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(connectionString);
+        if (string.IsNullOrWhiteSpace(builder.DataSource) ||
+            string.Equals(builder.DataSource, ":memory:", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var directory = Path.GetDirectoryName(Path.GetFullPath(builder.DataSource));
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
     }
 }

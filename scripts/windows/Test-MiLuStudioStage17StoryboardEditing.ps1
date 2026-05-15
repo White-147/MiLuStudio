@@ -15,6 +15,10 @@ $buildOutput = Join-Path $ProjectRoot ".tmp\stage17-integration-build"
 $solution = Join-Path $ProjectRoot "backend\control-plane\MiLuStudio.ControlPlane.sln"
 $apiDll = Join-Path $buildOutput "MiLuStudio.Api.dll"
 $workerDll = Join-Path $buildOutput "MiLuStudio.Worker.dll"
+$testRoot = Join-Path $ProjectRoot (".tmp\stage17-integration\" + ([guid]::NewGuid().ToString("N")))
+$storageRoot = Join-Path $testRoot "storage"
+$uploadsRoot = Join-Path $testRoot "uploads"
+$sqlitePath = Join-Path $testRoot "milu-stage17-integration.sqlite3"
 $startedProcesses = New-Object System.Collections.Generic.List[System.Diagnostics.Process]
 $script:AuthHeaders = @{}
 
@@ -69,6 +73,10 @@ function Wait-ApiHealthy {
 function Start-ControlApi {
     $env:ASPNETCORE_ENVIRONMENT = "Development"
     $env:ASPNETCORE_URLS = $ApiBaseUrl
+    $env:ControlPlane__RepositoryProvider = "SQLite"
+    $env:ConnectionStrings__MiLuStudioControlPlane = "Data Source=$sqlitePath"
+    $env:ControlPlane__StorageRoot = $storageRoot
+    $env:ControlPlane__UploadsRoot = $uploadsRoot
     $process = Start-Process -FilePath $DotnetPath -ArgumentList @($apiDll) -WorkingDirectory $buildOutput -WindowStyle Hidden -PassThru
     $startedProcesses.Add($process)
     Wait-ApiHealthy
@@ -80,6 +88,10 @@ function Start-ControlApi {
 
 function Start-Worker {
     $env:DOTNET_ENVIRONMENT = "Development"
+    $env:ControlPlane__RepositoryProvider = "SQLite"
+    $env:ConnectionStrings__MiLuStudioControlPlane = "Data Source=$sqlitePath"
+    $env:ControlPlane__StorageRoot = $storageRoot
+    $env:ControlPlane__UploadsRoot = $uploadsRoot
     $process = Start-Process -FilePath $DotnetPath -ArgumentList @($workerDll) -WorkingDirectory $buildOutput -WindowStyle Hidden -PassThru
     $startedProcesses.Add($process)
     Start-Sleep -Seconds 2
@@ -110,8 +122,7 @@ function Stop-StartedProcess {
 function Stop-IntegrationBuildProcesses {
     Get-CimInstance Win32_Process -Filter "Name = 'dotnet.exe'" |
         Where-Object {
-            $_.CommandLine -like "*$buildOutput*" -or
-            ($_.CommandLine -like "*$ProjectRoot*" -and ($_.CommandLine -like "*MiLuStudio.Api.dll*" -or $_.CommandLine -like "*MiLuStudio.Worker.dll*"))
+            $_.CommandLine -like "*$buildOutput*"
         } |
         ForEach-Object {
             Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
@@ -202,8 +213,6 @@ function Convert-ToShotEdits {
 
 try {
     Stop-IntegrationBuildProcesses
-
-    powershell -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot "scripts\windows\Initialize-MiLuStudioPostgreSql.ps1")
 
     if (-not $SkipBuild) {
         & $DotnetPath build $solution --no-restore "-p:OutputPath=$buildOutput\"

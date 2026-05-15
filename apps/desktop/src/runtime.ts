@@ -182,9 +182,9 @@ export class DesktopRuntime {
     return {
       ...process.env,
       ConnectionStrings__MiLuStudioControlPlane: process.env.ConnectionStrings__MiLuStudioControlPlane ??
-        'Host=127.0.0.1;Port=5432;Database=milu;Username=root;Password=root',
-      ControlPlane__RepositoryProvider: 'PostgreSQL',
-      ControlPlane__MigrationsPath: this.paths.migrationsRoot,
+        `Data Source=${path.join(this.paths.storageRoot, 'milu-control-plane.sqlite3')}`,
+      ControlPlane__RepositoryProvider: 'SQLite',
+      ControlPlane__MigrationsPath: this.paths.sqliteRoot,
       ControlPlane__DesktopMode: 'true',
       ControlPlane__AllowedDesktopOrigin: this.webHost?.url ?? '',
       ControlPlane__DesktopSessionToken: this.sessionToken,

@@ -80,7 +80,7 @@ MiLuStudio 是 Windows 原生 AI 漫剧 Agent 产品。
 
 - 前端：React / Vite / TypeScript。
 - 后端：.NET 8 / ASP.NET Core。
-- 数据库：PostgreSQL。
+- 数据库：SQLite 本地文件数据库。
 - Worker：Windows Worker。
 - Sidecar：Python Skills Runtime。
 - 桌面：Electron / electron-builder / NSIS。

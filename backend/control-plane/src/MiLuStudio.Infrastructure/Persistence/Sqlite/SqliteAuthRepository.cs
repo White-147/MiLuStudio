@@ -1,17 +1,18 @@
-namespace MiLuStudio.Infrastructure.Persistence.PostgreSql;
+namespace MiLuStudio.Infrastructure.Persistence.Sqlite;
 
 using Microsoft.EntityFrameworkCore;
 using MiLuStudio.Application.Abstractions;
 using MiLuStudio.Domain;
 using MiLuStudio.Domain.Entities;
 
-public sealed class PostgreSqlAuthRepository : IAuthRepository
+public sealed class SqliteAuthRepository : IAuthRepository
 {
     private readonly MiLuStudioDbContext _db;
 
-    public PostgreSqlAuthRepository(MiLuStudioDbContext db)
+    public SqliteAuthRepository(MiLuStudioDbContext db)
     {
         _db = db;
+        _db.Database.EnsureCreated();
     }
 
     public async Task<Account?> FindAccountByIdentifierAsync(string normalizedIdentifier, CancellationToken cancellationToken)

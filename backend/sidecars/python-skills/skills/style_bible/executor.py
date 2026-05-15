@@ -229,7 +229,7 @@ def build_continuity_notes(episode: dict[str, Any], character_bible: dict[str, A
     return [
         f"画风结构绑定 episode_writer《{episode['title']}》和 character_bible 的 stable_seed。",
         "后续 storyboard_director、image_prompt 或 video_prompt 阶段必须复用 reusable_prompt_blocks。",
-        "当前阶段不保存数据库；持久化由 PostgreSQL adapter / EF Core DbContext 阶段接入。",
+        "当前阶段不保存数据库；持久化由后端 EF Core / SQLite 边界接入。",
         *character_bible.get("continuity_rules", [])[:2],
     ]
 
@@ -249,4 +249,3 @@ def combined_episode_text(episode: dict[str, Any]) -> str:
             pieces.append(str(dialogue.get("line", "")))
 
     return "\n".join(piece for piece in pieces if piece)
-

@@ -2,7 +2,6 @@ param(
     [string]$ProjectRoot = "D:\code\MiLuStudio",
     [string]$ApiBaseUrl = "http://127.0.0.1:5368",
     [string]$DotnetPath = "D:\soft\program\dotnet\dotnet.exe",
-    [string]$PsqlPath = "D:\soft\program\PostgreSQL\18\bin\psql.exe",
     [int]$TimeoutSeconds = 180,
     [switch]$SkipBuild
 )
@@ -16,6 +15,10 @@ $buildOutput = Join-Path $ProjectRoot ".tmp\stage14-integration-build"
 $solution = Join-Path $ProjectRoot "backend\control-plane\MiLuStudio.ControlPlane.sln"
 $apiDll = Join-Path $buildOutput "MiLuStudio.Api.dll"
 $workerDll = Join-Path $buildOutput "MiLuStudio.Worker.dll"
+$testRoot = Join-Path $ProjectRoot (".tmp\stage14-integration\" + ([guid]::NewGuid().ToString("N")))
+$storageRoot = Join-Path $testRoot "storage"
+$uploadsRoot = Join-Path $testRoot "uploads"
+$sqlitePath = Join-Path $testRoot "milu-stage14-integration.sqlite3"
 $startedProcesses = New-Object System.Collections.Generic.List[System.Diagnostics.Process]
 $script:AuthHeaders = @{}
 
@@ -59,6 +62,10 @@ function Wait-ApiHealthy {
 function Start-ControlApi {
     $env:ASPNETCORE_ENVIRONMENT = "Development"
     $env:ASPNETCORE_URLS = $ApiBaseUrl
+    $env:ControlPlane__RepositoryProvider = "SQLite"
+    $env:ConnectionStrings__MiLuStudioControlPlane = "Data Source=$sqlitePath"
+    $env:ControlPlane__StorageRoot = $storageRoot
+    $env:ControlPlane__UploadsRoot = $uploadsRoot
     $process = Start-Process -FilePath $DotnetPath -ArgumentList @($apiDll) -WorkingDirectory $buildOutput -WindowStyle Hidden -PassThru
     $startedProcesses.Add($process)
     Wait-ApiHealthy
@@ -67,6 +74,10 @@ function Start-ControlApi {
 
 function Start-Worker {
     $env:DOTNET_ENVIRONMENT = "Development"
+    $env:ControlPlane__RepositoryProvider = "SQLite"
+    $env:ConnectionStrings__MiLuStudioControlPlane = "Data Source=$sqlitePath"
+    $env:ControlPlane__StorageRoot = $storageRoot
+    $env:ControlPlane__UploadsRoot = $uploadsRoot
     $process = Start-Process -FilePath $DotnetPath -ArgumentList @($workerDll) -WorkingDirectory $buildOutput -WindowStyle Hidden -PassThru
     $startedProcesses.Add($process)
     Start-Sleep -Seconds 2
@@ -102,22 +113,6 @@ function Stop-IntegrationBuildProcesses {
         }
 
     Start-Sleep -Milliseconds 500
-}
-
-function Invoke-PsqlCommand {
-    param([string]$Sql)
-
-    $oldPassword = $env:PGPASSWORD
-    try {
-        $env:PGPASSWORD = "root"
-        & $PsqlPath -h 127.0.0.1 -p 5432 -U root -d milu -v ON_ERROR_STOP=1 -c $Sql | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "psql command failed."
-        }
-    }
-    finally {
-        $env:PGPASSWORD = $oldPassword
-    }
 }
 
 function New-Stage14Story {
@@ -177,8 +172,6 @@ function Approve-Checkpoints-UntilComplete {
 
 try {
     Stop-IntegrationBuildProcesses
-
-    powershell -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot "scripts\windows\Initialize-MiLuStudioPostgreSql.ps1")
 
     if (-not $SkipBuild) {
         & $DotnetPath build $solution --no-restore "-p:OutputPath=$buildOutput\"
@@ -241,7 +234,6 @@ try {
     }
     $firstJob = $regeneratedJob
 
-    Invoke-PsqlCommand -Sql "update generation_tasks set status='running', locked_by='stage14-stale-worker', locked_until=now() - interval '1 second' where job_id='$($firstJob.id)' and queue_index=0;"
     $worker = Start-Worker
     $pausedJob = Wait-JobState -JobId $firstJob.id -ExpectedStatuses @("paused", "completed")
 

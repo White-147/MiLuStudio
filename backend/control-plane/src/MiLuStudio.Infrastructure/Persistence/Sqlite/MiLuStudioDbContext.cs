@@ -1,4 +1,4 @@
-namespace MiLuStudio.Infrastructure.Persistence.PostgreSql;
+namespace MiLuStudio.Infrastructure.Persistence.Sqlite;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -10,6 +10,11 @@ public sealed class MiLuStudioDbContext : DbContext
     public MiLuStudioDbContext(DbContextOptions<MiLuStudioDbContext> options)
         : base(options)
     {
+    }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTimeOffset>().HaveConversion<DateTimeOffsetToStringConverter>();
     }
 
     public DbSet<Project> Projects => Set<Project>();
@@ -136,8 +141,8 @@ public sealed class MiLuStudioDbContext : DbContext
             entity.Property(task => task.QueueIndex).HasColumnName("queue_index");
             entity.Property(task => task.SkillName).HasColumnName("skill_name");
             entity.Property(task => task.Provider).HasColumnName("provider");
-            entity.Property(task => task.InputJson).HasColumnName("input_json").HasColumnType("jsonb");
-            entity.Property(task => task.OutputJson).HasColumnName("output_json").HasColumnType("jsonb");
+            entity.Property(task => task.InputJson).HasColumnName("input_json").HasColumnType("TEXT");
+            entity.Property(task => task.OutputJson).HasColumnName("output_json").HasColumnType("TEXT");
             entity.Property(task => task.Status).HasColumnName("status").HasConversion(statusConverter);
             entity.Property(task => task.AttemptCount).HasColumnName("attempt_count");
             entity.Property(task => task.CostEstimate).HasColumnName("cost_estimate");
@@ -165,7 +170,7 @@ public sealed class MiLuStudioDbContext : DbContext
             entity.Property(asset => asset.MimeType).HasColumnName("mime_type");
             entity.Property(asset => asset.FileSize).HasColumnName("file_size");
             entity.Property(asset => asset.Sha256).HasColumnName("sha256");
-            entity.Property(asset => asset.MetadataJson).HasColumnName("metadata_json").HasColumnType("jsonb");
+            entity.Property(asset => asset.MetadataJson).HasColumnName("metadata_json").HasColumnType("TEXT");
             entity.Property(asset => asset.CreatedAt).HasColumnName("created_at");
         });
     }
@@ -223,7 +228,7 @@ public sealed class MiLuStudioDbContext : DbContext
             entity.Property(shot => shot.SceneSummary).HasColumnName("scene_summary");
             entity.Property(shot => shot.Dialogue).HasColumnName("dialogue");
             entity.Property(shot => shot.Narration).HasColumnName("narration");
-            entity.Property(shot => shot.CharactersJson).HasColumnName("characters_json").HasColumnType("jsonb");
+            entity.Property(shot => shot.CharactersJson).HasColumnName("characters_json").HasColumnType("TEXT");
             entity.Property(shot => shot.CameraAngle).HasColumnName("camera_angle");
             entity.Property(shot => shot.CameraMotion).HasColumnName("camera_motion");
             entity.Property(shot => shot.Lighting).HasColumnName("lighting");

@@ -37,6 +37,8 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<ProjectAssetUploadService>();
+builder.Services.AddScoped<ProjectAssetChunkUploadService>();
+builder.Services.AddScoped<ProjectAssetAnalysisService>();
 builder.Services.AddScoped<AuthLicensingService>();
 builder.Services.AddScoped<ProductionJobService>();
 builder.Services.AddScoped<ProductionSkillExecutionService>();
@@ -120,7 +122,7 @@ app.MapGet("/health", (IConfiguration configuration) => Results.Ok(new
     status = "ok",
     mode = "stage-16-auth-session",
     defaultApiBaseUrl = "http://127.0.0.1:5368",
-    repositoryProvider = configuration["ControlPlane:RepositoryProvider"] ?? RepositoryProviderNames.PostgreSql
+    repositoryProvider = configuration["ControlPlane:RepositoryProvider"] ?? RepositoryProviderNames.Sqlite
 }));
 
 app.MapPost("/api/auth/register", async Task<IResult> (
@@ -225,6 +227,32 @@ app.MapPost("/api/system/migrations/apply", async (
 {
     var result = await migrations.ApplyPendingAsync(cancellationToken);
     return Results.Ok(result);
+});
+
+app.MapGet("/api/system/dependencies", async (
+    IControlPlanePreflightService preflight,
+    CancellationToken cancellationToken) =>
+{
+    var report = await preflight.CheckAsync(cancellationToken);
+    return Results.Ok(new
+    {
+        status = report.Healthy ? "ready" : "attention_required",
+        repositoryProvider = report.RepositoryProvider,
+        installStrategy = new
+        {
+            preferred = "bundled_or_offline_runtime",
+            onlineDownload = "auxiliary_only",
+            managedBy = "Control API"
+        },
+        dependencies = report.Checks.Select(check => new
+        {
+            id = check.Name,
+            check.Status,
+            check.Message,
+            check.Details
+        }),
+        report.Recommendations
+    });
 });
 
 app.MapGet("/api/settings/providers", async (
@@ -332,6 +360,94 @@ app.MapGet("/api/projects/{projectId}/assets", async (
 {
     var results = await assets.ListAssetsByProjectAsync(projectId, cancellationToken);
     return Results.Ok(results);
+});
+
+app.MapGet("/api/projects/{projectId}/assets/{assetId}/analysis", async (
+    string projectId,
+    string assetId,
+    ProjectAssetAnalysisService assets,
+    CancellationToken cancellationToken) =>
+{
+    var result = await assets.GetAsync(projectId, assetId, cancellationToken);
+    return result is null ? Results.NotFound() : Results.Ok(result);
+});
+
+app.MapPost("/api/projects/{projectId}/assets/upload-sessions", async Task<IResult> (
+    string projectId,
+    ProjectAssetUploadSessionCreateRequest request,
+    ProjectAssetChunkUploadService uploads,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var session = await uploads.CreateAsync(projectId, request, cancellationToken);
+        return session is null ? Results.NotFound() : Results.Created($"/api/projects/{projectId}/assets/upload-sessions/{session.Id}", session);
+    }
+    catch (ProjectAssetUploadException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+});
+
+app.MapGet("/api/projects/{projectId}/assets/upload-sessions/{sessionId}", async (
+    string projectId,
+    string sessionId,
+    ProjectAssetChunkUploadService uploads,
+    CancellationToken cancellationToken) =>
+{
+    var session = await uploads.GetAsync(projectId, sessionId, cancellationToken);
+    return session is null ? Results.NotFound() : Results.Ok(session);
+});
+
+app.MapPut("/api/projects/{projectId}/assets/upload-sessions/{sessionId}/chunks/{chunkIndex:int}", async Task<IResult> (
+    string projectId,
+    string sessionId,
+    int chunkIndex,
+    HttpRequest request,
+    ProjectAssetChunkUploadService uploads,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var expectedSha256 = request.Headers["X-MiLuStudio-Chunk-Sha256"].FirstOrDefault();
+        var uploaded = await uploads.UploadChunkAsync(
+            projectId,
+            sessionId,
+            chunkIndex,
+            request.Body,
+            expectedSha256,
+            cancellationToken);
+        return uploaded is null ? Results.NotFound() : Results.Ok(uploaded);
+    }
+    catch (ProjectAssetUploadException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+    catch (InvalidDataException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+});
+
+app.MapPost("/api/projects/{projectId}/assets/upload-sessions/{sessionId}/complete", async Task<IResult> (
+    string projectId,
+    string sessionId,
+    ProjectAssetChunkUploadService uploads,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var completed = await uploads.CompleteAsync(projectId, sessionId, cancellationToken);
+        return completed is null ? Results.NotFound() : Results.Created($"/api/projects/{projectId}/assets/{completed.Asset.Id}", completed);
+    }
+    catch (ProjectAssetUploadException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+    catch (InvalidDataException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
 });
 
 app.MapPost("/api/projects/{projectId}/assets/upload", async Task<IResult> (

@@ -3220,7 +3220,7 @@ Scope:
 
 Deferred:
 
-- Stage 23C：provider adapter 真实接入前 dry-run / audit contract、审计日志、预算流水、超时和失败隔离。
+- Stage 23D：provider adapter 真实接入前 dry-run / audit contract、审计日志、预算流水、超时和失败隔离。
 - Stage 24：工作台高级编辑，包括提示词批量操作、镜头增删、更细粒度 diff 和重算策略。
 - 发布回归阶段：拿到正式 Authenticode 证书后再做 `verify:release:signed` 和干净 Windows 虚拟机安装 / 卸载回归。
 
@@ -3315,3 +3315,729 @@ Remaining work:
 Next phase:
 
 - 继续 Stage 23B，小步补真实 OCR runtime 调用或可恢复分片上传 endpoint，二者优先选风险更低、验证闭环更短的一项。
+
+### 2026-05-14 Stage 23B 可恢复分片上传 Endpoint 落地
+
+Date:
+
+- 2026-05-14
+
+Stage:
+
+- Stage 23B：文档 / 媒体深度解析与上传策略加固。
+
+Trigger:
+
+- 根据 Stage 23B 第一轮剩余项，选择风险更低、验证闭环更短的“可恢复分片上传 endpoint”继续推进；真实 OCR runtime 调用后置到下一小步。
+
+Action:
+
+- 新增 `IProjectAssetUploadSessionStore` 抽象，负责创建 session、保存 chunk、组装临时文件和标记完成。
+- 新增 `LocalProjectAssetUploadSessionStore`，将 session manifest、chunks 和 assembled 临时文件限制在 `uploads\.upload-sessions` 内，并保护路径不逃逸上传根。
+- 新增 `ProjectAssetChunkUploadService`，保持 Application 层编排职责：
+  - 校验项目存在、文件类型、大小上限和 chunk size。
+  - 创建 24 小时有效 session。
+  - 支持乱序上传 chunk，并按 `X-MiLuStudio-Chunk-Sha256` 可选校验。
+  - complete 时检查 chunk 是否完整，合并后交给既有 `ProjectAssetUploadService` 保存、解析和登记 assets。
+- Control API 新增：
+  - `POST /api/projects/{projectId}/assets/upload-sessions`
+  - `GET /api/projects/{projectId}/assets/upload-sessions/{sessionId}`
+  - `PUT /api/projects/{projectId}/assets/upload-sessions/{sessionId}/chunks/{chunkIndex}`
+  - `POST /api/projects/{projectId}/assets/upload-sessions/{sessionId}/complete`
+- `ProjectAssetUploadRequest` 新增可选 `UploadMode`，分片 complete 后的 metadata 记录 `upload.mode=control_api_resumable_chunks`。
+- `ProjectAssetUploadService` 的 chunk policy 从 `contract_recorded` 更新为 `endpoint_available`，并暴露 min / preferred / max chunk bytes 常量供 session service 复用。
+- 新增 `scripts\windows\Test-MiLuStudioStage23BChunkedUpload.ps1`，覆盖 1MB chunk session、乱序上传、resume status、complete、asset 解析、chunk manifest 和 no-provider 边界。
+
+Boundary:
+
+- 未新增数据库 migration；session 状态使用本地 manifest 文件，后续如需跨机器审计再考虑数据库化。
+- 未改 UI / Electron；前端后续只能通过新增 Control API 使用分片上传，不得直接访问 chunks 或文件系统。
+- complete 后仍复用现有上传解析链路；不复制 analyzer，不接真实模型生成，不发送 generation payload。
+- 未引入 Linux / Docker / Redis / Celery。
+
+Verification:
+
+```powershell
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore
+
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1 -SkipBuild
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage23BChunkedUpload.ps1
+
+git diff --check
+```
+
+Verification result:
+
+- .NET build：通过，0 warning / 0 error。
+- Web build：通过；本次未改 Web，但已跑 `tsc -b && vite build` 回归。
+- Stage 23B asset parsing：通过；确认第一轮 txt / DOCX / PDF / DOC / PNG / MP4 上传解析仍兼容。
+- Stage 23B chunked upload：通过；临时 InMemory Control API 完成 session 创建、chunk 1/0/2 乱序上传、resume status、complete、asset metadata `control_api_resumable_chunks`、chunk manifest 和 no-provider 边界验证。
+- `git diff --check`：通过，仅有既有 LF/CRLF 替换提示。
+
+Remaining work:
+
+- 真实 OCR runtime 调用仍待补。
+- DOC/PDF 更深解析、页码 / 段落级来源信息仍待补。
+- chunk manifest 尚未接入后续生产链路消费和 UI 展示。
+- 分片上传 UI 尚未接入；当前仅后端 API 与脚本验证通过。
+
+Next phase:
+
+- 继续 Stage 23B，优先补真实 OCR runtime 调用；如果 OCR runtime 不可控，则先让 chunk manifest 被工作台详情或后续生产链路稳定消费。
+### 2026-05-15 Stage 23B Asset Analysis 消费接口落地
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B：文档 / 媒体深度解析与上传策略加固。
+
+Trigger:
+
+- 本机未发现 `D:\code\MiLuStudio\runtime\tesseract\tesseract.exe` 或 `D:\tools\tesseract\tesseract.exe`，`Get-Command tesseract.exe` 也不可用；按 Stage 23B fallback，先让 chunk manifest 被后续链路通过 Control API 稳定消费。
+
+Action:
+
+- 新增 `ProjectAssetAnalysisService`，通过 `IAssetRepository.ListAssetsByProjectAsync` 查找项目资产，并只解析现有 `assets.metadata_json`。
+- 新增 `ProjectAssetAnalysisResponse` / `ProjectAssetAnalysisBoundary` / `ProjectAssetChunkManifestSummary` / `ProjectAssetDerivativeSummary` / `ProjectAssetOcrSummary` DTO。
+- 新增 `GET /api/projects/{projectId}/assets/{assetId}/analysis`，返回 asset 基本信息、schema version、parse / upload metadata、parser、OCR summary、text summary、content blocks、chunk manifest、limits、derivative summary 和 no-provider / no-UI-file-access 边界。
+- OCR summary 不返回 Tesseract 候选本地路径，只返回 engine、status、candidate、runtimeAvailable、checkedPathCount 和边界标记。
+- derivative summary 不返回 `uploads/storage` 本地路径，只返回 count、kind 和 `backend_adapter_only` access policy。
+- 更新 `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1`，在 txt / DOCX / PDF / DOC / PNG / MP4 上传后断言 analysis endpoint 可读、chunk manifest 可消费、no-provider 边界未破坏且响应不泄漏本地 uploads/storage 路径。
+- 更新 `scripts\windows\Test-MiLuStudioStage23BChunkedUpload.ps1`，在 chunked complete 后断言 analysis endpoint 保留 `control_api_resumable_chunks` mode 并暴露 manifest chunks。
+- 同步 README、建设方案、阶段计划和短棒交接，后续不再把“chunk manifest 可通过 Control API 消费”作为未落地项。
+
+Boundary:
+
+- 未接真实模型生成 provider，未发送 generation payload。
+- 未新增数据库 migration，继续复用 `assets.metadata_json`。
+- 未改 UI / Electron；后续工作台详情只能调用 analysis endpoint，不得直接读取本地路径。
+- 未读取媒体文件、未执行 FFmpeg、未调用 OCR runtime；本次接口是 metadata consumption API。
+- 未引入 Linux / Docker / Redis / Celery。
+
+Verification:
+
+```powershell
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage23BChunkedUpload.ps1
+
+git diff --check
+```
+
+Verification result:
+
+- .NET build：通过，0 warning / 0 error。
+- Stage 23B asset parsing：通过；analysis endpoint 已覆盖 txt / DOCX / PDF / DOC / PNG / MP4，确认 manifest 与边界可消费。
+- Stage 23B chunked upload：通过；complete 后 asset analysis endpoint 可读取 `control_api_resumable_chunks` mode 与 chunk manifest。
+- `git diff --check`：通过，仅有既有 LF/CRLF 替换提示。
+
+Remaining work:
+
+- 真实 OCR runtime 调用仍待补；当前环境未安装可控 Tesseract-compatible runtime。
+- DOC/PDF 更深解析、页码 / 段落级来源信息仍待补。
+- 工作台详情尚未接入 analysis endpoint；生产链路也尚未实际消费 chunk manifest。
+- 分片上传 UI 尚未接入；当前仍是后端 API 与脚本验证通过。
+
+Next phase:
+
+- 继续 Stage 23B，优先补真实 OCR runtime 调用；如果 OCR runtime 仍不可控，则推进工作台详情展示或生产链路实际消费 analysis endpoint。
+### 2026-05-15 Stage 23B 图片 OCR Runtime 调用路径落地
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B：文档 / 媒体深度解析与上传策略加固。
+
+Trigger:
+
+- 用户要求继续 Stage 23B，并优先补真实 OCR runtime；开工前已重新读取 README、建设方案、阶段计划、任务记录和短棒交接。
+
+Action:
+
+- 检查本机 OCR runtime：`D:\code\MiLuStudio\runtime\tesseract\tesseract.exe`、`D:\tools\tesseract\tesseract.exe` 和 PATH 中的 `tesseract.exe` 均不存在。
+- `ControlPlaneOptions` 新增 `OcrTesseractPath`、`OcrTessdataPath`、`OcrLanguages` 和 `OcrTimeoutSeconds`；`ServiceCollectionExtensions` 同步读取配置。
+- `FfmpegAssetTechnicalAnalyzer` 新增 Tesseract-compatible runtime 探测：优先使用配置路径，其次使用项目 `runtime\tesseract` 和 `D:\tools\tesseract`。
+- 图片上传在 Infrastructure adapter 内尝试真实调用 Tesseract CLI：输入为后端保存的上传文件，输出走 `stdout`，默认语言候选为 `chi_sim+eng;eng`，默认 `--psm 6`。
+- OCR 成功时写入 `technical.ocr.status=ok`、`invoked=true`、语言、文本长度，并把 OCR 文本写成 `technical.text`、`technical.contentBlocks` 和 `technical.chunkManifest`，sourceType 为 `image_ocr`。
+- OCR runtime 缺失、语言包缺失、超时、运行失败或无文本时，上传仍成功并返回结构化 metadata；当前本机验证的是 `runtime_not_configured` 降级路径。
+- PDF 仍只做 embedded text probe；扫描 PDF 不直接传给 Tesseract，metadata 明确 `pdfRasterizerRequired=true`，后续需补 PDF rasterizer / page image extraction。
+- `ProjectAssetOcrSummary` 增加 `invoked`、`language` 和 `extractedTextLength`，analysis endpoint 可看见 OCR 调用状态但不暴露本地候选路径为 UI 契约。
+- `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1` 新增带文字 PNG fixture：runtime 可用时要求 OCR 成功并生成 manifest；runtime 缺失时要求 `runtime_not_configured`、不越界、不失败。
+- 同步 README、建设方案、阶段计划和短棒交接。
+
+Boundary:
+
+- 未接真实模型生成 provider，未发送 generation payload。
+- 未新增数据库 migration，继续复用 `assets.metadata_json`。
+- 未改 UI / Electron；OCR 只在后端 Infrastructure adapter 内读取上传文件和调用本地 runtime。
+- 未引入 Linux / Docker / Redis / Celery。
+- 当前不生成最终 MP4 / WAV / SRT / ZIP。
+
+Verification:
+
+```powershell
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1
+
+powershell -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage23BChunkedUpload.ps1
+
+git diff --check
+```
+
+Verification result:
+
+- .NET build：通过，0 warning / 0 error。
+- Stage 23B asset parsing：通过；txt / DOCX / PDF / DOC / PNG / OCR PNG / MP4 上传解析兼容，OCR PNG 在当前无 runtime 环境下返回 `runtime_not_configured` 降级 metadata，未触发 provider 或 UI/Electron 文件边界。
+- Stage 23B chunked upload：通过；确认 OCR DTO 扩展后可恢复分片上传和 analysis endpoint 仍兼容。
+- `git diff --check`：通过，仅有既有 LF/CRLF 替换提示。
+
+Remaining work:
+
+- 当前本机仍未安装可控 Tesseract-compatible runtime；OCR 正向路径已实现但尚未在真实 runtime 下验证。
+- 需要补 `runtime\tesseract` 安装 / 固化脚本或手工安装说明，并补 eng / chi_sim tessdata 正向 OCR 验证。
+- 扫描 PDF 仍需 PDF rasterizer / page image extraction 后才能进入 OCR。
+- DOC/PDF 更深解析、页码 / 段落级来源信息仍待补。
+- 工作台详情和生产链路仍未实际消费 OCR / chunk manifest。
+
+Next phase:
+
+- 继续 Stage 23B，优先固化 Tesseract-compatible runtime 安装和正向 OCR 验证；如果 runtime 仍不可控，则推进 PDF rasterizer、工作台详情展示或生产链路实际消费 analysis endpoint。
+
+### 2026-05-15 Stage 23B-P0 SQLite 与安装包依赖路线确认
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P0：SQLite 本地持久化与开发稳定化补丁。
+
+Trigger:
+
+- 用户确认不需要保留 PostgreSQL 相关路线，要求按安装包产品方向把当前项目数据库全面转向 SQLite。
+- 用户补充要求同步此前产品判断：安装包尽量自带可控 runtime；设置里的依赖中心负责检测、修复、启用和导入离线包，不把在线下载作为基础体验前提。
+
+Decision:
+
+- SQLite 足以承载当前单机安装包路线的项目、账号、会话、任务、资产索引、JSON envelope、metadata、成本 / 审计流水和 provider 配置指纹。
+- 图片、视频、音频、字幕、最终导出、缩略图、抽帧、OCR 中间文件、本地模型权重和模型缓存不进入 SQLite，只由后端 adapter 管理文件路径、hash、大小、格式、派生关系和状态。
+- 后续如增加本地大模型，数据库只记录模型配置、启用状态、任务请求、日志、成本估算和产物索引；大模型文件与缓存继续走文件目录和依赖中心。
+- 安装包优先自带可控 runtime；无法随主包携带的大体积依赖走离线依赖包导入。在线下载只作为用户明确触发的辅助修复路径。
+
+Action:
+
+- 同步更新 README：当前阶段、技术栈、数据库与持久化说明、桌面打包、当前边界、下一阶段、项目亮点和文档导航口径。
+- 同步更新建设方案：主干技术判断、安装包依赖路线、技术栈、架构边界和 Stage 23B-P0 补丁范围。
+- 同步更新阶段计划：当前焦点改为 Stage 23B-P0，并说明 OCR / PDF / DOC 深度解析顺延。
+- 同步更新短棒交接：下一棒优先执行 SQLite 迁移、依赖中心契约和后端开发稳定化补丁。
+
+Boundary:
+
+- 本次只同步文档，不修改后端、前端、Electron 或脚本实现。
+- 不接真实模型生成 provider，不引入 Linux / Docker / Redis / Celery。
+- 不让 UI 或 Electron 直接访问 SQLite、业务文件系统、FFmpeg、OCR runtime、Python 脚本或模型 SDK。
+- 不把 SQLite schema 初始化、migration 或数据库文件管理交给 Electron；仍由 Control API / Infrastructure 负责。
+
+Next phase:
+
+- 进入 Stage 23B-P0 实现补丁：替换 PostgreSQL provider / Npgsql / SQL migration runner / 默认配置为 SQLite，修复阶段脚本误杀开发后端，并设计依赖中心后端契约。
+- Stage 23B 原 OCR runtime 固化、PDF rasterizer、DOC/PDF 深度解析、工作台详情和生产链路消费顺延到补丁后继续。
+
+### 2026-05-15 Stage 23B-P0 SQLite 实现补丁完成
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P0：SQLite 本地持久化与开发稳定化补丁。
+
+Action:
+
+- 将 Infrastructure 默认 provider 从 PostgreSQL / Npgsql 切换为 EF Core SQLite，运行时默认连接 `storage\milu-control-plane.sqlite3`，InMemory 仅保留为显式 smoke 备选。
+- 将原 PostgreSQL DbContext / repository / auth repository / migration / preflight 实现收敛为 SQLite 版本；JSON envelope 字段改为 SQLite `TEXT`，migration service 使用后端 `EnsureCreated` 初始化 schema。
+- 将 Worker durable claiming 从 `FOR UPDATE SKIP LOCKED` 改为 SQLite 查询候选任务 + 乐观 `ExecuteUpdate` 领取策略，继续保持 Worker / Control API 共享同一份本地状态。
+- 更新 API / Worker appsettings、Desktop runtime 路径和 Web 文案；桌面端只注入 SQLite 连接路径和 Control API 配置，不定义表、不执行 migration、不读取数据库文件。
+- 新增 `GET /api/system/dependencies`，基于后端 preflight 返回 SQLite、storage、uploads、FFmpeg、OCR、Python runtime 和 skills root 状态，并明确 bundled / offline runtime 优先、在线下载仅辅助。
+- 移除运行时 Npgsql package reference 和 `scripts\windows\Initialize-MiLuStudioPostgreSql.ps1`；Stage14 / Stage16 / Stage17 / Stage21 / Stage23B 验证脚本改为临时 SQLite 数据库。
+- 收窄 Stage17 / Stage21 / Stage23B 脚本的 dotnet 进程清理规则，只清理脚本 build output 启动的进程，避免误杀正在 5368 端口运行的开发后端。
+
+Boundary:
+
+- 未接真实模型生成 provider，未引入 Linux / Docker / Redis / Celery。
+- SQLite 初始化、preflight、真实上传、OCR、FFmpeg 和依赖检测仍只在 Control API / Infrastructure adapter 边界内执行。
+- UI / Electron 仍不得直接访问 SQLite、媒体文件、业务文件系统、FFmpeg、OCR runtime、Python 脚本或模型 SDK。
+
+Verification:
+
+- `D:\soft\program\dotnet\dotnet.exe restore backend\control-plane\MiLuStudio.ControlPlane.sln`：通过。
+- `D:\soft\program\dotnet\dotnet.exe build backend\control-plane\MiLuStudio.ControlPlane.sln --no-restore`：通过，0 warning / 0 error。
+- SQLite smoke：临时 Control API 通过 `/health`、`/api/system/migrations/apply`、`/api/auth/register`、`/api/system/dependencies`，并创建本地 `.sqlite3` 文件。
+- `powershell -ExecutionPolicy Bypass -File scripts\windows\Test-MiLuStudioStage23BChunkedUpload.ps1`：通过，临时 SQLite Control API 完成分片上传、resume、complete 和 analysis endpoint。
+- `powershell -ExecutionPolicy Bypass -File scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1`：通过，临时 SQLite Control API 完成 txt / DOCX / PDF / DOC / PNG / MP4 解析验证。
+- `npm run build` in `apps\web`：通过。
+- `npm run build` in `apps\desktop`：通过。
+
+Next phase:
+
+- 回到 Stage 23B 原顺延项：Tesseract-compatible OCR runtime 固化和正向 OCR 验证、PDF rasterizer、DOC/PDF 更深解析、工作台详情展示和生产链路实际消费。
+- 分片上传 UI 与依赖中心 UI / 修复动作仍后续推进，但必须只通过 Control API / 后端 adapter 管理。
+
+### 2026-05-15 Stage 23B-P1 检查与阶段切分完成
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P1：PostgreSQL 残留检查、Web dev 启动问题诊断和 P2 / P3 切分判断。
+
+Decision:
+
+- PostgreSQL 清理 1/2/3/4 与 Web dev 后端启动编排都属于 Stage 23B-P0 SQLite 迁移后的稳定化收尾，应该合并进入 Stage 23B-P2。
+- 原 Stage 23B 的 OCR runtime 固化、PDF rasterizer、DOC/PDF 深度解析、工作台详情和生产链路实际消费不取消，补丁结束后恢复为正式 Stage 23C。
+- 不把 P2 拆成 PostgreSQL 清理和 Web 启动两轮，原因是两者都会触碰本地开发入口、文档口径、旧生成物和 Desktop runtime；分开做会让旧 runtime / 旧说明继续干扰下一轮验证。
+
+Findings:
+
+- 后端运行时源码已切到 SQLite：API / Worker 默认 provider、EF provider、preflight、migration service、Worker claiming 和桌面 runtime 路径均已走 SQLite；`Npgsql` 运行时 package 已移除。
+- 使用全新临时 SQLite 在 5368 启动 Control API 时，`/health` 返回 SQLite，`/api/auth/me` 可返回未登录状态，并且 schema 可自动初始化为 `up_to_date`。
+- 截图中的登录页问题不是 SQLite 后端启动失败，而是浏览器 Web dev 入口只启动 Vite，没有同时编排默认 `http://127.0.0.1:5368` Control API；前端请求 `/api/auth/me` 失败后进入 `control_api_unavailable` 降级状态。
+- 当前仍存在需要 P2 清理的 PostgreSQL 残留：旧 SQL migration 目录、Stage12 PostgreSQL setup 文档、当前文档里的历史 / 当前路线混杂描述、Python skill README / examples 中的旧描述，以及 `.tmp`、`apps\desktop\runtime`、`outputs\desktop` 等旧生成物中的历史配置。
+
+Planned P2 scope:
+
+- 删除或归档旧 PostgreSQL SQL migration 目录和 Stage12 setup 文档。
+- 清理当前非归档文档和 Python skill 示例中的 PostgreSQL 当前路线描述，统一为 SQLite / Control API / repository-neutral 口径；历史归档和必要历史阶段记录可保留事实背景。
+- 清理 `.tmp`、`apps\desktop\runtime`、`outputs\desktop` 后重新生成 Desktop runtime，避免旧 runtime 继续携带 PostgreSQL / Npgsql 文本或配置。
+- 为浏览器 Web dev 增加本地服务启动 / 停止编排，稳定启动 5368 Control API 与同库 Worker，并只停止脚本自己记录的进程。
+- 改善 Web `control_api_unavailable` 展示，把 Control API 不可达与普通登录态区分开。
+
+Boundary:
+
+- 本轮只做判断和文档同步，不执行删除、清理、runtime 重新生成或代码修复。
+- 后续 P2 仍不得让 UI / Electron 绕过 Control API / Worker 边界；Electron 不执行 migrations、不定义数据库表、不负责 SQLite 初始化。
+- 后续 P2 不接真实模型生成 provider，不引入 Linux / Docker / Redis / Celery。
+
+Documentation updates:
+
+- 更新 `README.md`：同步 P1 判断、P2 / P3 切分、下一阶段和 Web dev 只启动 Vite 的当前说明。
+- 更新 `docs\MILUSTUDIO_BUILD_PLAN.md`：新增阶段切分判断、P2 范围和 P2 验收。
+- 更新 `docs\MILUSTUDIO_PHASE_PLAN.md`：当前焦点改为 Stage 23B-P2 pending，并保留原 Stage 23B 任务顺延到 P3。
+- 更新 `docs\MILUSTUDIO_HANDOFF.md`：下一棒交接改为 P2 收尾稳定化，并更新下一棒提示词。
+
+Next phase:
+
+- 等用户确认后执行 Stage 23B-P2 收尾稳定化。
+- Stage 23C 再继续 OCR runtime 固化、PDF rasterizer、DOC/PDF 深度解析、工作台详情和生产链路消费。
+
+### 2026-05-15 Stage 23B-P2 收尾稳定化完成
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P2：SQLite 迁移后的稳定化收尾。
+
+Trigger:
+
+- 用户要求在 P1 判断基础上继续推进 P2：清理 PostgreSQL 残留、确认运行内容已迁移到 SQLite、稳定后端启动，并修复截图中浏览器 Web 入口只显示 `Control API 未连接` 的问题。
+
+Action:
+
+- 删除旧 SQL migration 文件：`backend\control-plane\db\migrations\001_initial_control_plane.sql`、`002_stage12_postgresql_claiming.sql`、`003_stage14_checkpoint_notes.sql`、`004_stage16_auth_licensing.sql`。
+- 删除旧 PostgreSQL setup 文档：`docs\POSTGRESQL_STAGE12_SETUP.md`。
+- 清理 Python skill README、`auto_editor` / `style_bible` executor 和 examples 中仍指向 PostgreSQL 的说明，统一改为 SQLite / 后端 EF Core / Control API persistence boundary 口径。
+- 清理旧 `.tmp`、`apps\desktop\runtime`、`outputs\desktop`、后端 `bin/obj` 和项目内 `.nuget` 的 Npgsql package cache；停止旧 `.tmp\stage22-build` Worker 和旧 Vite dev 进程后再删除占用日志。
+- 新增 `scripts\windows\Start-MiLuStudioLocalServices.ps1`：构建 Control Plane 到 `.tmp\dev-services\build`，启动 5368 Control API，等待 `/health`，调用后端 migration apply，启动同库 Worker，并写入 `services.json` 记录 PID / build output / logs / SQLite path。
+- 新增 `scripts\windows\Stop-MiLuStudioLocalServices.ps1`：只停止 `services.json` 记录且命令行同时匹配 `MiLuStudio.Api.dll` / `MiLuStudio.Worker.dll` 与记录 build output 的进程，避免误杀用户其他后端。
+- 新增 `scripts\windows\Start-MiLuStudioWebDev.ps1`，并在 `apps\web\package.json` 增加 `dev:local`、`services:start`、`services:stop`；浏览器开发入口可先启动本地 Control API / Worker 再启动 Vite。
+- 修复 P1 后端启动稳定性遗漏点：旧逻辑遇到 stale `services.json` 且 API health 不通时会直接退出，导致 Web 继续未连接；P2 改为先清理脚本自己记录的 stale 服务再重启。停止脚本同时避开 PowerShell 内置 `$PID` 变量名冲突。
+- Web `App` 新增 `ControlApiUnavailableGate`，把 `control_api_unavailable` 与普通未登录态拆开，展示本地服务未连接、当前 Control API 地址和重试入口；普通未登录仍进入登录 / 注册入口。
+- `controlPlaneClient` 暴露 `getControlApiBaseUrl()`，供不可达提示展示当前 API 地址。
+- 重新生成 Desktop runtime：`apps\desktop\runtime` 下的 Web dist、Control API runtime、Worker runtime、SQLite metadata、Python skills、Python runtime 和 icon 均重新生成；runtime 文本配置无 Npgsql / PostgreSQL 残留。
+- 同步更新 README、建设方案、阶段计划和短棒交接；Stage 23B 原 OCR runtime 固化、PDF rasterizer、DOC/PDF 深度解析、工作台详情和生产链路消费在补丁结束后恢复为正式 Stage 23C。
+
+Findings:
+
+- 运行源码中未发现 Npgsql / UseNpgsql / PostgreSQL 配置入口；残留主要来自历史文档记录、旧生成物和旧 NuGet cache。
+- 截图问题的直接原因不是 SQLite 后端启动失败，而是浏览器 Web dev 只启动 Vite；P2 通过 `dev:local` 给出自动编排路径，并通过不可达专用页面避免误导用户继续停在普通登录卡片。
+- `npm run services:start` 可稳定拉起 5368 Control API / Worker；`/health` 返回 `repositoryProvider=SQLite`，`/api/system/preflight` 返回 healthy，OCR runtime 当前仍是 warning，属于 P3 待处理。
+
+Design check:
+
+- cohesion: 本地服务编排集中在 `scripts\windows\Start/Stop-MiLuStudioLocalServices.ps1`，Web 只负责显示不可达状态和触发重试。
+- coupling: Web 仍只通过 `controlPlaneClient` 调 Control API；Electron、Web、UI 均未直接读 SQLite、媒体文件、FFmpeg、OCR 或业务文件系统。
+- boundaries: SQLite 初始化、migration apply、真实上传、OCR、FFmpeg 和依赖检测仍在后端 Control API / Infrastructure adapter 边界内；桌面端不执行 migrations、不定义数据库表。
+- temporary debt: `dev:local` 依赖本机 D 盘 dotnet / npm 路径，后续依赖中心 UI 和正式安装包自带 runtime 仍需继续收敛；OCR runtime 缺失仍留到 P3。
+
+Environment check:
+
+- project-local files: 新增脚本位于 `scripts\windows`，Web 修改位于 `apps\web`，Desktop runtime 重新生成到 `apps\desktop\runtime`；生成日志和服务 build 输出位于 `.tmp`。
+- D drive only: 构建、SQLite dev 文件、NuGet cache、npm cache、Python cache 和运行时目录继续使用 `D:\code\MiLuStudio` 或明确 D 盘工具路径。
+- C drive risk: 未引入新的 C 盘依赖；未安装全局工具；未引入 Linux / Docker / Redis / Celery。
+
+Verification:
+
+```powershell
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+
+. D:\code\MiLuStudio\scripts\windows\Set-MiLuStudioEnv.ps1
+D:\soft\program\dotnet\dotnet.exe build D:\code\MiLuStudio\backend\control-plane\MiLuStudio.ControlPlane.sln
+
+Push-Location D:\code\MiLuStudio\backend\sidecars\python-skills
+D:\soft\program\Python\Python313\python.exe -m compileall -q milu_studio_skills skills tests
+D:\soft\program\Python\Python313\python.exe -m unittest discover -s tests -v
+Pop-Location
+
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Start-MiLuStudioLocalServices.ps1 -ProjectRoot D:\code\MiLuStudio
+Invoke-RestMethod -Uri http://127.0.0.1:5368/health
+Invoke-RestMethod -Uri http://127.0.0.1:5368/api/system/preflight
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Stop-MiLuStudioLocalServices.ps1 -ProjectRoot D:\code\MiLuStudio
+
+Push-Location D:\code\MiLuStudio\apps\web
+D:\soft\program\nodejs\npm.ps1 run services:start
+D:\soft\program\nodejs\npm.ps1 run services:stop
+Pop-Location
+
+Push-Location D:\code\MiLuStudio\apps\desktop
+D:\soft\program\nodejs\npm.ps1 run prepare:runtime
+D:\soft\program\nodejs\npm.ps1 run build
+Pop-Location
+
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage14Integration.ps1 -ProjectRoot D:\code\MiLuStudio
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage16Auth.ps1 -ProjectRoot D:\code\MiLuStudio
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1 -ProjectRoot D:\code\MiLuStudio
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioStage23BChunkedUpload.ps1 -ProjectRoot D:\code\MiLuStudio
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\code\MiLuStudio\scripts\windows\Test-MiLuStudioDesktopApiSecurity.ps1 -ProjectRoot D:\code\MiLuStudio -SkipPrepareRuntime
+git diff --check
+```
+
+Verification result:
+
+- Web build：通过。
+- .NET build：通过，0 warning / 0 error。
+- Python compileall / unittest：通过，30 tests。
+- 本地服务脚本：通过；5368 `/health` 返回 SQLite provider，preflight healthy，`services:stop` 成功停止脚本记录的 API / Worker。
+- Desktop runtime prepare：通过；runtime 文本配置无 Npgsql / PostgreSQL 残留。
+- Desktop TypeScript build：通过。
+- Stage14 integration：通过。
+- Stage16 auth：通过。
+- Stage23B asset parsing：通过。
+- Stage23B chunked upload：通过。
+- Desktop API security：通过。
+- `git diff --check`：通过，仅输出 LF/CRLF 换行提示。
+
+Remaining work:
+
+- Stage 23C 继续处理 Tesseract-compatible OCR runtime 安装 / 正向验证、PDF rasterizer、DOC/PDF 深度解析、工作台详情展示、生产链路实际消费 analysis endpoint 和媒体派生策略回归。
+- 分片上传 UI 尚未接入，后续仍必须只通过 Control API upload-sessions。
+- 设置依赖中心 UI、离线包导入、修复动作和启用 / 禁用状态管理尚未实现。
+
+Next phase:
+
+- Stage 23C。
+
+### 2026-05-15 Stage 23B 补丁编号修正与本地启动检查
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P2 后编号修正 / Stage 23C 前置检查。
+
+Trigger:
+
+- 用户指出 `Stage 23B-*P` 应只作为补丁阶段，当前文档里的 `Stage 23B-P3` 应恢复为原正式阶段编号 Stage 23C。
+- 用户要求检查当前项目是否已启动；如果未启动，则清理旧启动残留并启动。
+
+Action:
+
+- 检查本地端口和进程：5368 / 5173 / 5174 / 4173 均未监听，`.tmp\dev-services\services.json` 不存在，确认项目未启动。
+- 执行 `Stop-MiLuStudioLocalServices.ps1` 清理可能的旧服务状态，然后通过 `apps\web` 的 `npm run services:start` 启动 5368 Control API 与 Worker。
+- 通过隐藏 PowerShell 进程启动 Vite Web dev，日志写入 `.tmp\web-dev.out.log` 和 `.tmp\web-dev.err.log`。
+- 验证 `http://127.0.0.1:5368/health` 返回 SQLite provider，`http://127.0.0.1:5173` 返回 HTTP 200。
+- 修正文档编号：`Stage 23B-P0/P1/P2` 保留为补丁阶段；下一正式阶段改为 Stage 23C，内容为 OCR runtime 固化、PDF rasterizer、DOC/PDF 深度解析、工作台详情和生产链路消费；原 provider dry-run / audit contract 顺延为 Stage 23D。
+
+Verification:
+
+- Web dev URL：`http://127.0.0.1:5173`
+- Control API URL：`http://127.0.0.1:5368`
+- SQLite dev database：`D:\code\MiLuStudio\storage\milu-control-plane.dev.sqlite3`
+- Control API health：通过，`repositoryProvider=SQLite`。
+- Web root：通过，HTTP 200。
+
+Next phase:
+
+- Stage 23C。
+
+### 2026-05-15 Stage 23B-P3 设置入口与依赖入口补丁（开始）
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P3。
+
+Trigger:
+
+- 用户确认继续推进设置入口补丁：模型入口只保留在左下设置菜单内；新增设置菜单“依赖”入口，位置在“模型”下方、“剩余额度”上方。
+- 本补丁只收尾 Stage 23B-P0/P1/P2 后的设置入口和依赖中心入口，不覆盖 Stage 23C 的 OCR runtime、PDF rasterizer、DOC/PDF 深度解析、工作台详情和生产链路消费任务。
+
+Planned action:
+
+- 删除工作台主侧栏遗留“模型”按钮，避免 `hidden` 被按钮 class display 覆盖后继续可见。
+- 新增前端 `GET /api/system/dependencies` client / 类型，并在设置面板新增“依赖”页面。
+- “依赖”页面只通过 Control API 展示 SQLite、storage、uploads、FFmpeg、OCR、Python runtime 和 skills root 检测状态；Web / Electron 不直接读取文件系统、不执行 FFmpeg / OCR、不访问 SQLite。
+- 完成后同步 README、阶段计划、任务记录和短棒交接。
+
+### 2026-05-15 Stage 23B-P3 设置入口与依赖入口补丁（完成）
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P3。
+
+Action:
+
+- 删除 `StudioWorkspacePage.tsx` 主侧栏遗留“模型”按钮，模型配置只保留在左下设置菜单内。
+- 在左下设置菜单新增“依赖”入口，顺序为个人账户、模型、依赖、剩余额度、退出登录。
+- 新增 `DependencySettingsPage`，通过 `GET /api/system/dependencies` 展示 SQLite、storage、uploads、FFmpeg、OCR、Python runtime 和 skills root 状态，并显示安装策略与后端建议。
+- 新增 Web system dependencies 类型与 `getSystemDependencies` client 方法；依赖面板不直接读取文件系统、不执行 FFmpeg / OCR、不访问 SQLite。
+- 同步 README、建设方案、阶段计划、任务记录和短棒交接，明确 Stage 23C 主线任务继续顺延。
+
+Verification:
+
+- `D:\soft\program\nodejs\npm.ps1 run build`：通过。
+- Vite 当前源码检查：通过；主侧栏只剩新项目、搜索、诊断，设置菜单包含依赖入口。
+- `http://127.0.0.1:5368/api/system/dependencies`：通过，返回 `repositoryProvider=SQLite` 和 10 个依赖检查项。
+- `git diff --check`：通过，仅输出 LF/CRLF 换行提示。
+- Playwright 不在当前 web workspace，未执行截图级自动化检查。
+
+Remaining work:
+
+- 依赖修复动作、离线包导入、启用 / 禁用状态管理后续仍必须通过 Control API / 后端 adapter 实现。
+- Stage 23C 继续处理 Tesseract-compatible OCR runtime 固化、PDF rasterizer、DOC/PDF 深度解析、工作台详情和生产链路消费。
+
+Next phase:
+
+- Stage 23C。
+
+### 2026-05-15 Stage 23B-P3 项目区快捷按钮收口
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P3 follow-up UI polish。
+
+Trigger:
+
+- 用户要求参考 Codex 项目标题旁添加按钮的逻辑，把左上角“搜索”和“新项目”统合到“项目”右侧，仅保留图标；从右往左第一个为新项目，第二个为搜索。
+
+Action:
+
+- 从工作台顶部命令列表移除“新项目”和“搜索”文字按钮。
+- 在“项目”标题右侧新增两个 icon-only 按钮：左侧为搜索项目，右侧为新项目。
+- 保留“诊断”入口不变，避免扩大本次请求范围。
+- 同步 README 和短棒交接中的左侧栏说明。
+
+Verification:
+
+- `D:\soft\program\nodejs\npm.ps1 run build`：通过。
+- Vite 当前源码检查：通过；顶部命令区不再包含新项目 / 搜索按钮，项目标题右侧存在 `workspace-section-action` 搜索和新项目图标。
+- `git diff --check`：通过，仅输出 LF/CRLF 换行提示。
+
+Next phase:
+
+- Stage 23C。
+
+### 2026-05-15 Stage 23B-P3 诊断入口归拢与项目区顶置
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P3 follow-up UI polish。
+
+Trigger:
+
+- 用户要求将左上角剩余的“诊断”归拢到设置二级菜单里，位置放在第一个；完成后让左上角“项目”顶置。
+
+Action:
+
+- 从工作台左侧顶部命令区移除“诊断”按钮，左侧栏顶部现在直接显示“项目”标题行。
+- 将“诊断”加入左下设置菜单的第一个可点击项，位于“个人账户”上方。
+- 保持项目标题右侧图标按钮顺序不变：右侧第一个为新项目，第二个为搜索。
+- 同步 README、建设方案、阶段计划、任务记录和短棒交接中的入口描述。
+
+Verification:
+
+- `D:\soft\program\nodejs\npm.ps1 run build`：通过。
+- Vite 当前源码检查：通过；左侧栏顶部直接是 `workspace-history` / 项目区，设置菜单中 `openSettingsPanel("diagnostics")` 位于 `openSettingsPanel("account")` 之前。
+- `git diff --check`：通过，仅输出 LF/CRLF 换行提示。
+
+Next phase:
+
+- Stage 23C。
+
+### 2026-05-15 Stage 23B-P3 左侧栏品牌栏补齐
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P3 follow-up UI polish。
+
+Trigger:
+
+- 用户要求在项目区上方添加类似 XiaoLouAI 的 logo 和项目名称，项目名字为“麋鹿”，logo 位于名称左侧。
+
+Action:
+
+- 在 `StudioWorkspacePage.tsx` 的项目区上方新增 `workspace-brand` 品牌栏。
+- 复用 Web public 目录下现有 `/brand/logo.png`，名称显示为“麋鹿”。
+- 新增品牌栏样式，保持与当前暗色侧栏、项目标题和左下设置入口的间距层级一致。
+- 同步 README、建设方案、阶段计划、任务记录和短棒交接中的左侧栏描述。
+
+Verification:
+
+- `D:\soft\program\nodejs\npm.ps1 run build`：通过。
+- Vite 当前源码检查：通过；左侧栏包含 `workspace-brand`、`workspace-brand-logo` 和“麋鹿”，项目区位于其下。
+
+Next phase:
+
+- Stage 23C。
+
+### 2026-05-15 Stage 23B-P4 工作台 UI 视觉轻量化
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P4 follow-up UI polish。
+
+Trigger:
+
+- 用户指出右侧进度栏的文本样式接近 Codex 前端，但设置菜单、开始生成、历史项目条目、模型配置、依赖和诊断界面的文本与按钮外框显得过于粗犷，要求先按检查判断后的方案直接修改。
+
+Action:
+
+- 调整共享按钮样式：降低 `primary` / `secondary` / `ghost` 的默认高度、字重、填充和边框存在感。
+- 轻量化左下设置菜单：缩小菜单项高度和字重，弱化边框、阴影、hover 背景和分隔线。
+- 轻量化历史项目条目：降低行高、左缩进、active 背景和删除按钮重量。
+- 单独收敛工作台 `开始生成` 按钮，使其比旧通用主按钮更紧凑。
+- 轻量化设置弹窗、模型配置、依赖和诊断面板：降低标题字号、卡片 padding、边框、圆角、状态 pill 和输入框重量。
+- 右侧进度卡片当前节奏保持不变，作为本次统一视觉基准。
+- 同步 README、建设方案、阶段计划、任务记录和短棒交接。
+
+Verification:
+
+- `D:\soft\program\nodejs\npm.ps1 run build`：通过。
+- Vite 当前 CSS 检查：通过；源码中已包含轻量化后的 `workspace-settings-menu`、`workspace-composer-footer .primary-button`、`settings-panel-sheet`、`provider-summary-strip` 和 `provider-adapter-card` 样式。
+
+Next phase:
+
+- Stage 23C。
+
+### 2026-05-15 Stage 23B-P5 composer 与品牌栏细节收尾
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P5 follow-up UI polish。
+
+Trigger:
+
+- 用户确认将品牌栏、composer 输入框、生成按钮和上传限制提示作为 P5 收口：缩小并弱化“麋鹿”logo / 字样，不改“项目”标题；输入框加高并更明确提示“上传剧本文档后，写下本次制作要求”；按真实文件大小限制落地，不新增文本字数硬限制；新项目只有上传故事文本附件后才启用生成。
+
+Action:
+
+- 移除当前 Web 工作台 composer 的旧 `500-2000` 字符提交拦截、`0/2000` 计数展示和自动截断逻辑；故事正文继续来自 Control API 上传解析后的文本附件或既有项目故事文本。
+- 新项目 submit 启用条件改为必须存在故事文本附件；制作要求输入框只作为制作要求补充，不再单独作为新项目故事来源。
+- 上传菜单描述展示真实文件大小限制：文本 50 MB、图片 50 MB、视频 1 GB；不新增文本字数硬限制，避免把旧输入框限制误当上传解析限制。
+- 左侧品牌栏减重：缩小并降低 logo 饱和 / 亮度和不透明度，降低“麋鹿”字号与字重；不改“项目”标题样式。
+- composer 输入区加高到多行制作要求形态，placeholder 改为“上传剧本文档后，写下本次制作要求”。
+- `开始生成 / 更新生成` 改为 composer 专用轻按钮样式，不再复用通用主按钮外观。
+- 同步 README、建设方案、阶段计划、任务记录和短棒交接，继续声明 Stage 23C 主线顺延。
+
+Verification:
+
+- `D:\soft\program\nodejs\npm.ps1 run build`：通过。
+- Web source check：通过；当前工作台源码已无 `STORY_MIN_LENGTH` / `STORY_MAX_LENGTH` / `count-badge` / `fitStoryTextForProject` / `0/2000` / `500-2000` 残留，保留 `composer-submit-button`、真实上传大小提示和减重后的 `workspace-brand` 样式。
+- `git diff --check`：通过，仅输出 LF/CRLF 换行提示。
+
+Next phase:
+
+- Stage 23C。
+
+### 2026-05-15 Stage 23B-P6 进度卡去重与侧栏宽度控制
+
+Date:
+
+- 2026-05-15
+
+Stage:
+
+- Stage 23B-P6 follow-up UI polish。
+
+Trigger:
+
+- 用户指出右侧进度卡顶部摘要与第一阶段右侧重复显示“未开始”，应只保留下方阶段状态；同时左侧项目栏偏宽，需要在桌面和移动端都支持拖拽调整宽度，并参考 Codex 逻辑增加完全收缩 / 展开侧栏能力。收缩图标放在左侧栏顶部右边缘，展开按钮放在左上边缘，图标 UI 需与当前项目 UI 保持一致。
+
+Action:
+
+- 移除右侧进度卡顶部摘要右侧状态文案，只保留 `completed/total` 和进度条；阶段状态仍由各流程项右侧标签判断。
+- 为左侧项目栏新增可拖拽宽度，桌面与移动端都启用，宽度写入 `localStorage`，默认 320px，范围 260px-420px。
+- 新增左侧栏完全收缩能力：收缩后不保留图标 rail，主内容扩展；左上边缘显示展开按钮；展开后恢复上次宽度。
+- 新增键盘可访问的宽度调整：拖拽柄支持左右方向键、Home 和 End；双击拖拽柄恢复默认宽度。
+- 同步 README、建设方案、阶段计划、任务记录和短棒交接，继续声明 Stage 23C 主线顺延。
+
+Verification:
+
+- `D:\soft\program\nodejs\npm.ps1 run build`：通过。
+- Web source check：通过；当前源码包含 `workspace-sidebar-resizer`、`workspace-sidebar-collapse-button`、`workspace-sidebar-expand-button`、`sidebar-collapsed` 和进度摘要去重后的 `project-progress-summary`，已无未使用的 `formatJobStatus` / `ProductionJobStatus`。
+- `git diff --check`：通过，仅输出 LF/CRLF 换行提示。
+
+Next phase:
+
+- Stage 23C。

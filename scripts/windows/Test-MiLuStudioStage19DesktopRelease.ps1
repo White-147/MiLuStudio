@@ -91,6 +91,19 @@ function Assert-RequiredFile {
     Write-Stage19Pass -Label $Label
 }
 
+function Assert-RequiredDirectory {
+    param(
+        [string]$Path,
+        [string]$Label
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        throw "$Label not found: $Path"
+    }
+
+    Write-Stage19Pass -Label $Label
+}
+
 function Assert-AnyFile {
     param(
         [string[]]$Paths,
@@ -273,7 +286,7 @@ Assert-RequiredText -Text $pathsText -Pattern "path\.dirname\(process\.execPath\
 Assert-RequiredText -Text $pathsText -Pattern "path\.join\(dataRoot, 'storage'\)" -Label "storage stays under desktop data root"
 Assert-RequiredText -Text $pathsText -Pattern "path\.join\(dataRoot, 'logs', 'desktop'\)" -Label "logs stay under desktop data root"
 Assert-RequiredText -Text $pathsText -Pattern "path\.join\(dataRoot, 'outputs'\)" -Label "outputs stay under desktop data root"
-Assert-RequiredText -Text $pathsText -Pattern "path\.join\(controlPlaneRoot, 'db', 'migrations'\)" -Label "migrations bundled as API resource only"
+Assert-RequiredText -Text $pathsText -Pattern "path\.join\(controlPlaneRoot, 'db', 'sqlite'\)" -Label "SQLite metadata root bundled as API resource only"
 
 Assert-RequiredText -Text $installerScriptText -Pattern "!macro customWelcomePage" -Label "installer custom integration page"
 Assert-RequiredText -Text $installerScriptText -Pattern "DesktopShortcutCheckbox" -Label "desktop shortcut option"
@@ -296,7 +309,8 @@ Assert-AnyFile -Paths @(
     (Join-Path $resourcesRoot "control-plane\worker\MiLuStudio.Worker.exe"),
     (Join-Path $resourcesRoot "control-plane\worker\MiLuStudio.Worker.dll")
 ) -Label "packaged Worker runtime"
-Assert-RequiredFile -Path (Join-Path $resourcesRoot "control-plane\db\migrations\004_stage16_auth_licensing.sql") -Label "packaged latest backend migration" -MinimumBytes 1
+Assert-RequiredDirectory -Path (Join-Path $resourcesRoot "control-plane\db\sqlite") -Label "packaged SQLite metadata root"
+Assert-RequiredFile -Path (Join-Path $resourcesRoot "control-plane\db\sqlite\README.txt") -Label "packaged SQLite metadata marker" -MinimumBytes 1
 Assert-RequiredFile -Path (Join-Path $resourcesRoot "python-runtime\python.exe") -Label "packaged Python runtime" -MinimumBytes 1
 Assert-RequiredFile -Path (Join-Path $resourcesRoot "python-skills\milu_studio_skills\gateway.py") -Label "packaged Python skill gateway" -MinimumBytes 1
 Assert-RequiredFile -Path (Join-Path $resourcesRoot "python-skills\skills\storyboard_director\skill.yaml") -Label "packaged storyboard director skill" -MinimumBytes 1

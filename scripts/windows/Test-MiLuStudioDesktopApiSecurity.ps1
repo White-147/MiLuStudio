@@ -20,7 +20,7 @@ $connectionString = if ($env:ConnectionStrings__MiLuStudioControlPlane) {
     $env:ConnectionStrings__MiLuStudioControlPlane
 }
 else {
-    "Host=127.0.0.1;Port=5432;Database=milu;Username=root;Password=root"
+    "Data Source=$(Join-Path $ProjectRoot '.tmp\desktop-api-security\milu-desktop-api-security.sqlite3')"
 }
 
 function Invoke-HttpStatus {
@@ -88,8 +88,8 @@ $processInfo.EnvironmentVariables["ASPNETCORE_ENVIRONMENT"] = "Production"
 $processInfo.EnvironmentVariables["DOTNET_ENVIRONMENT"] = "Production"
 $processInfo.EnvironmentVariables["ASPNETCORE_URLS"] = $apiBaseUrl
 $processInfo.EnvironmentVariables["ConnectionStrings__MiLuStudioControlPlane"] = $connectionString
-$processInfo.EnvironmentVariables["ControlPlane__RepositoryProvider"] = "PostgreSQL"
-$processInfo.EnvironmentVariables["ControlPlane__MigrationsPath"] = Join-Path $desktopRoot "runtime\control-plane\db\migrations"
+$processInfo.EnvironmentVariables["ControlPlane__RepositoryProvider"] = "SQLite"
+$processInfo.EnvironmentVariables["ControlPlane__MigrationsPath"] = Join-Path $desktopRoot "runtime\control-plane\db\sqlite"
 $processInfo.EnvironmentVariables["ControlPlane__DesktopMode"] = "true"
 $processInfo.EnvironmentVariables["ControlPlane__AllowedDesktopOrigin"] = $AllowedOrigin
 $processInfo.EnvironmentVariables["ControlPlane__DesktopSessionToken"] = $DesktopSessionToken

@@ -13,7 +13,7 @@ export interface DesktopPaths {
   controlPlaneRoot: string;
   apiRoot: string;
   workerRoot: string;
-  migrationsRoot: string;
+  sqliteRoot: string;
   pythonSkillsRoot: string;
   pythonRuntimeRoot: string;
   storageRoot: string;
@@ -67,7 +67,7 @@ export function resolveDesktopPaths(): DesktopPaths {
     controlPlaneRoot,
     apiRoot: path.join(controlPlaneRoot, 'api'),
     workerRoot: path.join(controlPlaneRoot, 'worker'),
-    migrationsRoot: path.join(controlPlaneRoot, 'db', 'migrations'),
+    sqliteRoot: path.join(controlPlaneRoot, 'db', 'sqlite'),
     pythonSkillsRoot: process.env.MILUSTUDIO_PYTHON_SKILLS_ROOT
       ? path.resolve(process.env.MILUSTUDIO_PYTHON_SKILLS_ROOT)
       : path.join(resourceRoot, 'python-skills'),
@@ -98,7 +98,7 @@ export function assertRequiredRuntime(paths: DesktopPaths): void {
     ['Web dist', paths.webRoot],
     ['Control API runtime', paths.apiRoot],
     ['Worker runtime', paths.workerRoot],
-    ['SQL migrations', paths.migrationsRoot],
+    ['SQLite metadata', paths.sqliteRoot],
     ['Python skills root', paths.pythonSkillsRoot],
     ['Python runtime', paths.pythonExecutable]
   ] as const;

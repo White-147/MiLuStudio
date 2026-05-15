@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "dev:local": "powershell -ExecutionPolicy Bypass -File ../../scripts/windows/Start-MiLuStudioWebDev.ps1",
+    "services:start": "powershell -ExecutionPolicy Bypass -File ../../scripts/windows/Start-MiLuStudioLocalServices.ps1",
+    "services:stop": "powershell -ExecutionPolicy Bypass -File ../../scripts/windows/Stop-MiLuStudioLocalServices.ps1",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1"
   },

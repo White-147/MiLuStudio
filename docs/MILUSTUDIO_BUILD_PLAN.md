@@ -1,6 +1,6 @@
 # MiLuStudio 建设方案与下一会话实施手册
 
-更新时间：2026-05-14
+更新时间：2026-05-15
 定位：给下一次开发会话使用的详细执行依据。  
 硬约束：MiLuStudio 是新的 Windows 原生 AI 漫剧 Agent 产品，不继续套壳旧 MiLuAssistantWeb / MiLuAssistantDesktop，也不把 ArcReel、LumenX、AIComicBuilder 等项目整体搬进来。
 
@@ -56,7 +56,7 @@ MiLuStudio 要做的是：
 - React / Vite / TypeScript 前端。
 - Windows 原生部署和交付。
 - `.NET 8 / ASP.NET Core` Control API。
-- PostgreSQL 作为业务事实来源。
+- SQLite 本地文件数据库作为安装包路线下的业务事实来源。
 - Windows Worker 负责长任务。
 - Python Sidecar 负责模型工具、文件处理、FFmpeg、AI provider 适配等。
 - Electron / electron-builder / NSIS 负责最终桌面安装包。
@@ -84,6 +84,18 @@ MiLuStudio 要做的是：
 MiLuStudio 不应问“继续二开 ArcReel 还是 LumenX”，而应定为：
 
 > XiaoLouAI / MiLu 自研 Windows 原生主干 + AIComicBuilder 漫剧流程 + LocalMiniDrama 一键桌面体验 + LumenX 行业 SOP + ArcReel / Toonflow / OpenMontage 的 Agent / Skills 调度思想。
+
+2026-05-15 数据库路线更新：
+
+> 老板已确认安装包方案，且公司当前没有可访问公网服务器。MiLuStudio 当前和后续默认数据库路线全面转向 SQLite 本地文件数据库，不再保留 PostgreSQL 作为产品依赖。Stage 12-14 中 PostgreSQL 相关内容作为历史落地记录保留；Stage 23B-P0 已把运行时实现、脚本和当前文档口径迁移到 SQLite。
+
+2026-05-15 安装包依赖路线更新：
+
+> 最稳定的产品方案不是让首次运行依赖在线下载，而是安装包尽量自带可控 runtime；无法随主包携带的大体积依赖，以离线依赖包形式交付。设置页新增“依赖中心”方向，负责检测、修复、启用、禁用和导入离线包。在线下载只能作为用户明确触发的辅助修复路径，不能成为干净 Windows 机器可用性的唯一前提。
+
+2026-05-15 阶段切分更新：
+
+> Stage 23B-P0 已完成 SQLite 迁移和开发稳定化主体补丁。Stage 23B-P1 检查确认：PostgreSQL 清理 1/2/3/4 与 Web dev 后端启动编排同属迁移后的稳定化收尾，合并为 Stage 23B-P2。Stage 23B-P2 已完成旧 SQL migration / setup 文档删除、Python skill 示例口径清理、旧生成物清理、Desktop runtime 重新生成、Web dev 本地服务编排和 Control API 不可达提示。`Stage 23B-*P` 均为补丁阶段；原 OCR runtime 固化、PDF rasterizer、DOC/PDF 深度解析、工作台详情和生产链路消费不取消，恢复为正式 Stage 23C。
 
 ## 4. 产品形态
 
@@ -159,6 +171,9 @@ MiLuStudio 不应问“继续二开 ArcReel 还是 LumenX”，而应定为：
 - 用户可选择开机自启动。
 - 安装过程必须有可见实时进度条。
 - 安装完成页可选择立即启动应用。
+- 安装包尽量携带可控 runtime：self-contained .NET API / Worker、Python runtime、稳定验证过的 FFmpeg / OCR / 文档解析运行时优先随包或离线依赖包交付。
+- 设置页必须预留“依赖中心”：展示 SQLite、storage、FFmpeg、OCR、Python runtime、文档解析 runtime、本地模型目录等依赖状态，支持检测、修复、启用、禁用和导入离线包。Stage 23B-P3 已先落地设置菜单“依赖”入口和 Control API 只读检测面板，修复动作、启用 / 禁用和离线包导入继续后置。
+- 依赖中心可以提供在线下载作为辅助，但不能把公网服务器可用性作为产品启动、登录、项目持久化和基础上传解析的前置条件。
 - 安装器可加入付费码 / 激活码输入页，校验通过后才能继续安装。
 - 任务栏固定不能作为静默强制行为实现；Windows pin 列表属于用户控制。必须保证 AppUserModelID、图标和快捷方式正确，让用户能手动固定，并在安装完成页或首次启动时给出用户可控引导。
 
@@ -167,13 +182,13 @@ MiLuStudio 不应问“继续二开 ArcReel 还是 LumenX”，而应定为：
 - `.NET 8`
 - ASP.NET Core Minimal API 或 Controller API
 - EF Core / Dapper 二选一，优先 EF Core 建模，关键查询可 Dapper
-- PostgreSQL
+- SQLite
 
 Worker：
 
 - .NET BackgroundService / Windows Service
-- PostgreSQL `FOR UPDATE SKIP LOCKED` 任务领取
-- PostgreSQL `LISTEN/NOTIFY` 或轮询退化策略
+- SQLite 可控事务 / 乐观更新任务领取
+- 本地轮询与 lease 过期接管策略
 - 不依赖 Linux、Docker、Celery、Redis 作为核心链路
 
 Python Sidecar：
@@ -189,6 +204,7 @@ Python Sidecar：
 打包：
 
 - 生产目标为 Windows 安装包。
+- 安装包优先自带可控 runtime；大体积或授权敏感依赖以离线包导入为主，在线下载为辅助。
 - 不把 Linux / Docker 写成主要部署方式。
 - 开发期可保留脚本，但产品 README 必须以 Windows 为主。
 
@@ -203,7 +219,7 @@ React/Vite UI
   ↓
 ASP.NET Core Control API
   ↓
-PostgreSQL: projects / jobs / tasks / assets / skills / costs
+SQLite: projects / jobs / tasks / assets / skills / costs
   ↓
 Windows Worker
   ↓
@@ -219,7 +235,7 @@ Artifacts: MP4 / SRT / storyboards / character bible / asset pack
 - Electron 只是桌面宿主、安装与本地进程管理层，不替代 Web UI 和 Control API。
 - Web 前端和 Control API 必须继续保持可独立迭代，桌面端只通过本地 HTTP / DTO 使用 Control API。
 - 数据库属于后端基础设施，必须先在 Control API / Worker / Infrastructure 内完成，不和桌面安装器绑定。
-- Electron 不直接访问 PostgreSQL，不直接执行 migrations，不定义数据库表，不承担数据库初始化职责。
+- Electron 不直接访问 SQLite，不直接执行 migrations，不定义数据库表，不承担数据库初始化职责。
 - UI 只负责展示、确认、编辑，不直接跑模型。
 - Control API 负责权限、项目、任务、状态、成本、资产索引。
 - Worker 负责编排任务和阶段流转。
@@ -1523,11 +1539,53 @@ Stage 23A 当前落地状态：
 Stage 23B 正式安排：
 
 - Stage 23B 已正式确认为“文档 / 媒体深度解析与上传策略加固”，不再作为候选方向反复确认。
+- 2026-05-15 已完成 Stage 23B-P0 SQLite 本地持久化与开发稳定化补丁：当前项目数据库全面转向 SQLite，不再保留 PostgreSQL 后续路线。
+- 2026-05-15 已完成 Stage 23B-P1 检查与切分：确认后端 SQLite 启动与 schema 初始化可用；截图中的 Web 未连接问题来自浏览器 Web dev 只启动 Vite、没有编排 5368 Control API，不是 SQLite 后端启动失败。
+- Stage 23B-P2 已完成：PostgreSQL 残留清理、旧生成物清理、Desktop runtime 重新生成、Web dev 本地服务启动编排和 Control API 不可达提示。
+- Stage 23B-P5 已完成：左侧品牌栏减重、composer 制作要求输入区加高、旧 500-2000 字输入限制移除、生成按钮改为 composer 专用轻按钮，以及上传菜单展示文本 50 MB / 图片 50 MB / 视频 1 GB 的真实文件大小限制。
+- Stage 23B-P6 已完成：右侧进度卡顶部摘要去除重复状态文案，只保留完成计数；左侧项目栏支持桌面 / 移动端拖拽宽度、localStorage 持久化、完全收缩和左上边缘展开。
+- Stage 23C 回到 OCR runtime 固化、PDF rasterizer、DOC/PDF 深度解析、工作台详情和生产链路消费，原任务顺延不覆盖。
 - 优先补 OCR、PDF / DOC 深度解析、文本切片、上传分片、图片 / 视频压缩策略和更完整媒体抽帧。
 - Stage 23B 继续复用 Stage 23A 的 Control API / Application service / Infrastructure adapter 边界，默认把解析 metadata、切片 manifest、派生文件和降级原因写入现有资产索引。
 - 若 OCR、PDF 或 DOC 解析运行时暂不可用，必须返回结构化降级 metadata，而不是让上传失败成裸异常。
 - Stage 23B 不接真实模型生成 provider，不发送生成 payload，不生成最终 MP4 / WAV / SRT / ZIP，不引入 Linux / Docker / Redis / Celery。
-- 后续顺序固定为：Stage 23C 做 provider dry-run / audit contract；Stage 24 做工作台高级编辑；正式证书到位后再做 signed release 回归。
+- 后续顺序固定为：Stage 23D 做 provider dry-run / audit contract；Stage 24 做工作台高级编辑；正式证书到位后再做 signed release 回归。
+
+Stage 23B-P0 补丁范围：
+
+- 将默认 `RepositoryProvider`、DbContext、migration service、preflight、API / Worker 启动脚本和阶段验证脚本切换到 SQLite。
+- 把 PostgreSQL `jsonb` 字段收敛为 SQLite `TEXT` JSON envelope / metadata 存储，Application 层继续通过强 DTO 或 JSON 字符串读写。
+- 用 SQLite 可控事务 / 乐观更新策略替代 `FOR UPDATE SKIP LOCKED`，保证 Worker 领取 waiting task、lease 过期接管和失败重试仍可验证。
+- 资产文件、缩略图、抽帧、OCR 中间产物、本地模型权重和模型缓存继续存文件系统；SQLite 只保存索引、hash、路径引用、metadata 和状态。
+- 同步确立安装包依赖策略：主安装包尽量携带可控 runtime，设置依赖中心负责状态检测、修复、启用和离线包导入；在线下载只作为辅助，不作为默认可用性前提。
+- 修复阶段验证脚本的进程清理范围，避免测试脚本误杀用户正在运行的 5368 开发后端。
+- PostgreSQL 初始化脚本、Npgsql provider、PostgreSQL migration 文档在实现补丁中移除或归档；不再要求本机安装 PostgreSQL 服务。
+
+Stage 23B-P2 收尾稳定化完成状态：
+
+- 已删除旧 PostgreSQL SQL migration 文件和 Stage12 PostgreSQL setup 文档；当前运行源码不再保留 Npgsql provider、PostgreSQL 初始化脚本或 PostgreSQL 配置入口。
+- 已清理 Python skill README / examples 中仍指向 PostgreSQL 的说明，改为 SQLite / Control API / backend persistence boundary 表述。
+- 已清理 `.tmp`、`apps\desktop\runtime`、`outputs\desktop` 等旧生成物并重新生成 Desktop runtime，重新生成后的 runtime 文本配置不包含 Npgsql / PostgreSQL 残留。
+- 已新增 `scripts\windows\Start-MiLuStudioLocalServices.ps1`、`Stop-MiLuStudioLocalServices.ps1` 和 `Start-MiLuStudioWebDev.ps1`，浏览器 Web dev 可通过 `npm run dev:local` 启动 5368 Control API、同库 Worker、PID / log 记录和停止路径；停止脚本只停自己记录且命令行匹配的进程。
+- 已改善 Web 的 `control_api_unavailable` 展示，把“本地 Control API 不可达”和普通登录态区分开，显示检测到的 API 地址和重试入口。
+
+Stage 23B-P2 验收结果：
+
+- Web build、.NET build、Python skills unittest、Stage14 integration、Stage16 auth、Stage23B asset parsing、Stage23B chunked upload、Desktop runtime prepare、Desktop TypeScript build 和 Desktop API security 均通过。
+- Web dev 本地启动路径可稳定让浏览器入口连接到 5368 Control API；只启动 Vite 时也能给出清晰不可达提示。
+- Desktop runtime 清理后已重新生成，仍只由 Electron 启动 Control API / Worker 并注入 API base URL，不执行 migrations、不访问 SQLite 文件。
+- 原 Stage 23B 的 OCR / PDF / DOC / 工作台详情 / 生产链路消费任务恢复为正式 Stage 23C 排队，不被 P2 清理动作覆盖。
+
+Stage 23B-P3 设置入口补丁完成状态：
+
+- 工作台主侧栏已移除遗留“模型”入口，避免按钮 class 覆盖 `hidden` 后继续显示。
+- 左下设置菜单新增“依赖”入口，位置固定在“模型”下方、“剩余额度”上方。
+- 新增 Web 依赖面板，只通过 `GET /api/system/dependencies` 展示 SQLite、storage、uploads、FFmpeg、OCR、Python runtime 和 skills root 状态。
+- 后续 UI 收口已将“诊断”归入设置二级菜单第一项；左侧栏顶部展示“麋鹿”品牌栏，复用 Web public brand logo，项目区置于品牌栏下方，项目标题右侧仅保留“搜索”和“新项目”图标按钮。
+- Stage 23B-P4 已完成工作台 UI 视觉轻量化：共享按钮、左下设置菜单、历史项目条目、设置弹窗、Provider / 依赖 / 诊断面板统一降低字重、边框、圆角、按钮填充和卡片重量，右侧进度卡片样式保持为当前基准。
+- Stage 23B-P5 已完成 composer 与品牌栏细节统一：缩小并弱化“麋鹿”logo / 字样，不改“项目”标题；制作要求输入框高度提高到多行输入形态，placeholder 改为“上传剧本文档后，写下本次制作要求”；新项目只有添加故事文本附件后才启用生成；上传菜单展示真实文件大小限制，不新增文本字数硬限制。
+- Stage 23B-P6 已完成侧栏与进度卡交互补丁：进度摘要不再重复显示“未开始 / 进行中”等任务状态，流程状态只由每个阶段右侧标签表达；左侧项目栏增加与当前图标 UI 一致的收缩、展开和拖拽宽度控制。
+- Web / Electron 不直接读取文件系统、不执行 FFmpeg / OCR、不访问 SQLite；后续修复、离线包导入和启用 / 禁用必须继续落在 Control API / 后端 adapter 边界内。
 
 Stage 23B 第一轮落地状态：
 
@@ -1535,9 +1593,33 @@ Stage 23B 第一轮落地状态：
 - 文本 / DOCX / PDF 嵌入文本解析结果会生成 `contentBlocks` 和 `chunkManifest`；切片策略为固定字符窗口 + overlap，先写入现有 `assets.metadata_json`。
 - PDF 已有轻量嵌入文本探测路径；扫描版、压缩复杂流和复杂编码 PDF 仍通过 `ocr_required` / warnings 结构化降级。
 - DOC 仍不在 UI / Electron 里调用 Office 自动化，当前返回 `parser_unavailable`、后端 runtime 建议路径和 unavailable chunk manifest。
-- OCR 当前先落地为后端 runtime 能力检测 metadata；缺少 `runtime\tesseract` 或 D 盘工具时不阻塞上传，真实 OCR 调用后续继续补。
+- OCR 已从后端 runtime 能力检测推进到图片 OCR 调用路径：`FfmpegAssetTechnicalAnalyzer` 会查找 `ControlPlane:OcrTesseractPath`、`runtime\tesseract\tesseract.exe` 或 `D:\tools\tesseract\tesseract.exe`，runtime 可用时对图片上传调用 Tesseract-compatible CLI，写入 OCR 文本、content blocks 和 chunk manifest；runtime 缺失时不阻塞上传，记录 `runtime_not_configured`。
 - 图片 / 视频压缩策略已在后端 FFmpeg adapter 内落地为派生文件 metadata：图片生成 `preview_1280.jpg`，视频生成均匀抽帧和短 `review_proxy_720p.mp4`，原文件保留。
 - 新增 `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1`，覆盖 txt / DOCX / PDF / DOC / PNG / MP4 上传、chunk manifest、结构化降级、媒体派生 metadata 和 no-provider 边界。
+
+Stage 23B 可恢复分片上传落地状态：
+
+- 新增 `POST /api/projects/{projectId}/assets/upload-sessions` 创建后端 session，返回 chunk size、total chunks、uploaded chunks、status 和过期时间。
+- 新增 `GET /api/projects/{projectId}/assets/upload-sessions/{sessionId}` 查询 resume 状态；session manifest 持久化在项目 `uploads\.upload-sessions` 下，不新增数据库 migration。
+- 新增 `PUT /api/projects/{projectId}/assets/upload-sessions/{sessionId}/chunks/{chunkIndex}` 接收 raw chunk，可校验 `X-MiLuStudio-Chunk-Sha256`，支持乱序重传。
+- 新增 `POST /api/projects/{projectId}/assets/upload-sessions/{sessionId}/complete`，后端合并 chunk 后复用现有 `ProjectAssetUploadService` 保存、解析和登记 assets，并在 metadata 中记录 `upload.mode=control_api_resumable_chunks`。
+- 新增 `scripts\windows\Test-MiLuStudioStage23BChunkedUpload.ps1`，覆盖 session 创建、乱序 chunk、resume status、complete、chunked upload mode、chunk manifest、analysis 消费接口和 no-provider 边界。
+
+Stage 23B 解析详情消费接口落地状态：
+
+- 新增 `ProjectAssetAnalysisService` 和 `GET /api/projects/{projectId}/assets/{assetId}/analysis`，只读取现有 `assets.metadata_json`，不读取媒体文件、不执行 FFmpeg、不调用 provider。
+- 响应固定暴露 asset 基本信息、schema version、parse / upload metadata、parser、OCR summary、text summary、content blocks、chunk manifest、limits、derivative summary 和 no-provider / no-UI-file-access 边界。
+- OCR 响应只返回 engine、status、candidate、runtimeAvailable、checkedPathCount、UI/Electron file boundary 和 provider boundary，不把 Tesseract 候选本地路径作为 UI 契约。
+- 派生文件只返回 count、kind 和 `backend_adapter_only` access policy，不把 `uploads/storage` 本地路径暴露为工作台详情或生产链路消费契约。
+- `scripts\windows\Test-MiLuStudioStage23BAssetParsing.ps1` 与 `scripts\windows\Test-MiLuStudioStage23BChunkedUpload.ps1` 已加入 analysis endpoint 断言，确认 chunk manifest 可经 Control API 稳定消费且响应不泄漏本地上传 / 存储路径。
+
+Stage 23B OCR runtime 调用落地状态：
+
+- `ControlPlaneOptions` 新增 `OcrTesseractPath`、`OcrTessdataPath`、`OcrLanguages` 和 `OcrTimeoutSeconds`，默认语言候选为 `chi_sim+eng;eng`。
+- 图片上传在后端 Infrastructure adapter 内尝试调用 Tesseract CLI，调用参数限定在上传文件、`stdout`、`--psm 6` 和语言候选内；不发送 provider payload，不让 UI / Electron 读取文件或执行 OCR。
+- OCR 成功时把识别文本写入 `technical.text`、`technical.contentBlocks` 和 `technical.chunkManifest`，sourceType 为 `image_ocr`，可被 analysis endpoint 消费。
+- OCR runtime 缺失、语言包缺失、超时或无可用文本时返回结构化 metadata，上传仍成功；脚本会区分 runtime 可用正向路径和当前环境的 `runtime_not_configured` 降级路径。
+- PDF 当前仍只做 embedded text probe；扫描 PDF 需要后续补 PDF rasterizer / page image extraction 后再交给 OCR，不直接把 PDF 文件传给 Tesseract。
 
 ## 13. 模型与供应商策略
 
@@ -1870,7 +1952,7 @@ TRANSFORMERS_CACHE=D:\code\MiLuStudio\.cache\huggingface\transformers
 
 - 不使用默认会写入 `C:\Users\...\AppData` 的全局 npm / pip / NuGet / Electron 缓存。
 - 不使用全局 `npm install -g`、全局 pip 安装或写入用户目录的工具配置。
-- 不把 PostgreSQL、Redis、任务队列、模型缓存、上传素材和生成结果放到 C 盘。
+- 不把 SQLite 数据库、模型缓存、上传素材和生成结果放到 C 盘；也不引入 Redis 或外部任务队列作为第一版生产依赖。
 - 不把 Windows 安装包生成过程中的临时目录、下载缓存和构建产物放到 C 盘。
 - 不把真实用户数据、素材、模型密钥和运行日志提交到 Git。
 

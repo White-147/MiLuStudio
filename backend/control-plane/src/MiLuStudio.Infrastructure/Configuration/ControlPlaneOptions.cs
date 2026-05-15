@@ -4,9 +4,9 @@ public sealed class ControlPlaneOptions
 {
     public const string SectionName = "ControlPlane";
 
-    public string RepositoryProvider { get; set; } = "PostgreSQL";
+    public string RepositoryProvider { get; set; } = RepositoryProviderNames.Sqlite;
 
-    public string MigrationsPath { get; set; } = "backend/control-plane/db/migrations";
+    public string MigrationsPath { get; set; } = "backend/control-plane/db/sqlite";
 
     public string StorageRoot { get; set; } = "D:\\code\\MiLuStudio\\storage";
 
@@ -14,11 +14,19 @@ public sealed class ControlPlaneOptions
 
     public string FfmpegBinPath { get; set; } = "D:\\code\\MiLuStudio\\runtime\\ffmpeg\\bin";
 
+    public string OcrTesseractPath { get; set; } = string.Empty;
+
+    public string OcrTessdataPath { get; set; } = string.Empty;
+
+    public string OcrLanguages { get; set; } = "chi_sim+eng;eng";
+
     public int AssetParseTimeoutSeconds { get; set; } = 60;
 
     public int AssetTranscodeTimeoutSeconds { get; set; } = 180;
 
     public int AssetVideoFrameLimit { get; set; } = 8;
+
+    public int OcrTimeoutSeconds { get; set; } = 45;
 
     public string ProviderSettingsPath { get; set; } = string.Empty;
 

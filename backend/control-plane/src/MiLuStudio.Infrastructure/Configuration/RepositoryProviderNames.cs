@@ -4,5 +4,5 @@ public static class RepositoryProviderNames
 {
     public const string InMemory = "InMemory";
 
-    public const string PostgreSql = "PostgreSQL";
+    public const string Sqlite = "SQLite";
 }

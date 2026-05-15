@@ -10,7 +10,9 @@ public sealed class ProjectAssetUploadService
     public const long MaxTextBytes = 50L * 1024 * 1024;
     public const long MaxImageBytes = 50L * 1024 * 1024;
     public const long MaxVideoBytes = 1024L * 1024 * 1024;
+    public const long MinUploadChunkBytes = 1024L * 1024;
     public const long PreferredUploadChunkBytes = 8L * 1024 * 1024;
+    public const long MaxUploadChunkBytes = 16L * 1024 * 1024;
 
     private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -58,7 +60,7 @@ public sealed class ProjectAssetUploadService
             return null;
         }
 
-        var kind = Classify(request.OriginalFileName, request.ContentType, request.Intent);
+        var kind = ClassifyKind(request.OriginalFileName, request.ContentType, request.Intent);
         ValidateSize(kind, request.FileSize, request.OriginalFileName);
 
         var assetId = CreateId("asset");
@@ -107,7 +109,7 @@ public sealed class ProjectAssetUploadService
             analysis.Message);
     }
 
-    private static string Classify(string fileName, string contentType, string? intent)
+    public static string ClassifyKind(string fileName, string contentType, string? intent)
     {
         var extension = Path.GetExtension(fileName).TrimStart('.').ToLowerInvariant();
         var normalizedIntent = intent?.Trim();
@@ -145,7 +147,7 @@ public sealed class ProjectAssetUploadService
         return "reference";
     }
 
-    private static void ValidateSize(string kind, long fileSize, string fileName)
+    public static void ValidateSize(string kind, long fileSize, string fileName)
     {
         var limit = kind switch
         {
@@ -184,18 +186,18 @@ public sealed class ProjectAssetUploadService
             sha256 = stored.Sha256,
             upload = new
             {
-                mode = "control_api_multipart",
+                mode = string.IsNullOrWhiteSpace(request.UploadMode) ? "control_api_multipart" : request.UploadMode,
                 uiElectronFileAccess = false,
                 chunkingPolicy = new
                 {
-                    status = "contract_recorded",
+                    status = "endpoint_available",
                     strategy = "stage23b_resumable_upload_contract_v1",
                     preferredChunkBytes = PreferredUploadChunkBytes,
-                    minChunkBytes = 1024L * 1024,
-                    maxChunkBytes = 16L * 1024 * 1024,
+                    minChunkBytes = MinUploadChunkBytes,
+                    maxChunkBytes = MaxUploadChunkBytes,
                     mergeBoundary = "backend_application_service",
                     directFilesystemAccessFromUi = false,
-                    endpointPlanned = "/api/projects/{projectId}/assets/upload-sessions"
+                    endpoint = "/api/projects/{projectId}/assets/upload-sessions"
                 }
             },
             parse = new

@@ -12,6 +12,7 @@ import type {
   ProviderSettingsPreflight,
   ProviderSettingsResponse,
   ProviderSettingsUpdateRequest,
+  SystemDependenciesReport,
   ProductionJob,
   ProductionJobEvent,
   ProjectAssetUploadIntent,
@@ -62,6 +63,10 @@ export function getStoredAccessToken(): string | undefined {
 
 export function getStoredRefreshToken(): string | undefined {
   return refreshToken;
+}
+
+export function getControlApiBaseUrl(): string {
+  return apiBaseUrl;
 }
 
 export function storeAuthSession(session: AuthSession) {
@@ -353,6 +358,10 @@ export async function checkProviderSpendGuard(
     body: JSON.stringify(payload),
     signal,
   });
+}
+
+export async function getSystemDependencies(signal?: AbortSignal): Promise<SystemDependenciesReport> {
+  return request<SystemDependenciesReport>('/api/system/dependencies', { signal });
 }
 
 export function watchProductionJob(
